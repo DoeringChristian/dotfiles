@@ -7,6 +7,7 @@ export ZSH="$HOME/.oh-my-zsh"
 export PATH=/home/doeringc/bin:$PATH
 export PATH=/home/doeringc/.local/bin:$PATH
 export DOCKER_HOST=unix:///run/user/1000/docker.sock
+export EDITOR=nvim
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
