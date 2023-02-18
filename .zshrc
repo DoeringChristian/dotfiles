@@ -124,3 +124,4 @@ unset __conda_setup
 
 eval "$(starship init zsh)"
 alias config='/usr/bin/git --git-dir=/home/doeringc/.cfg/ --work-tree=/home/doeringc'
+eval "$(zellij setup --generate-auto-start zsh)"
