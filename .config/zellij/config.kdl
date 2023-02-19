@@ -8,7 +8,10 @@ keybinds clear-defaults=true{
         bind "Ctrl g" { SwitchToMode "Normal"; }
         
         // Alt commands also allowed in locked mode.
+        bind "Alt q" { CloseFocus; }
+        bind "Alt x" { CloseFocus; }
         bind "Alt n" { NewPane; }
+        bind "Alt N" { NewTab; }
         bind "Alt h" "Alt Left" { MoveFocusOrTab "Left"; }
         bind "Alt l" "Alt Right" { MoveFocusOrTab "Right"; }
         bind "Alt j" "Alt Down" { MoveFocus "Down"; }
