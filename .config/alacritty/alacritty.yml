@@ -22,6 +22,8 @@
   # check the local terminfo database and use `alacritty` if it is
   # available, otherwise `xterm-256color` is used.
   #TERM: alacritty
+env:
+  TERM: xterm-256color
 
 # window:
   # Window dimensions (changes require restart)
@@ -450,6 +452,12 @@ font:
 #  program: /bin/bash
 #  args:
 #    - --login
+shell:
+  program: /bin/zsh
+  args:
+    - -l
+    - -c
+    - "tmux new-session -A -s main"
 
 # Startup directory
 #
