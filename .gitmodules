@@ -1,3 +1,6 @@
 [submodule ".config/nvim"]
 	path = .config/nvim
 	url = https://github.com/DoeringChristian/nvim-config.git
+[submodule ".config/kitty/themes/kitty-gruvbox-theme"]
+	path = .config/kitty/themes/kitty-gruvbox-theme
+	url = https://github.com/wdomitrz/kitty-gruvbox-theme.git
