@@ -128,7 +128,7 @@ font:
     #   - (macOS) Menlo
     #   - (Linux/BSD) monospace
     #   - (Windows) Consolas
-    family: DroidSansMono Nerd Font
+    family: DroidSansMono Nerd Font Mono
     size: 10
 
     # The `style` can be specified to pick a specific face.
