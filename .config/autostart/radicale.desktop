@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Radicale
+Exec=bash -c "/home/doeringc/.config/radicale/start.sh"
+Terminal=false
+Type=Application
