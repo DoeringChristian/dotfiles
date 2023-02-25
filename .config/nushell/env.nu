@@ -6,6 +6,7 @@ def create_left_prompt [] {
     } else {
         $"(ansi green_bold)($env.PWD)"
     }
+    # starship prompt --cmd-duration $env.CMD_DURATION_MS $'--status=($env.LAST_EXIT_CODE)'
 
     $path_segment
 }
@@ -61,5 +62,6 @@ let-env NU_PLUGIN_DIRS = [
 # To add entries to PATH (on Windows you might use Path), you can use the following pattern:
 # let-env PATH = ($env.PATH | split row (char esep) | prepend '/some/path')
 mkdir ~/.cache/starship
-starship init nu | save ~/.cache/starship/init.nu
-alias config = "/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME"
+starship init nu | save ~/.cache/starship/init.nu -f
+alias config = bash -c '/usr/bin/git --git-dir="$HOME/.cfg/" --work-tree="$HOME"'
+alias l = ls -la
