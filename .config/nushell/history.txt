@@ -14,3 +14,18 @@ l
 ls
 cd .config/nushell
 config add .
+config
+config status
+config
+alias config="/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME"
+alias
+alias config = "/usr/bin/git --git-dir=$HOME/.cfg/ --work-tree=$HOME"
+config status
+config
+config diff
+dot
+$nu.scope.aliases
+config
+config status
+alias config = "/usr/bin/git --git-dir=/home/doeringc/.cfg/ --work-tree=/home/doeringc"
+config status
