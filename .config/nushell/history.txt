@@ -1,0 +1,16 @@
+l
+ls
+ls -la
+cd .config/
+l
+ls -la
+cd nushell/
+ls
+echo $nu.env-path
+nvim env.nu
+nu
+nvim $nu.config-path
+l
+ls
+cd .config/nushell
+config add .
