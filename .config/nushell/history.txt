@@ -64,3 +64,26 @@ bash --help
 bash -c "echo test"
 config status
 nvim
+l
+nvim
+l
+starship
+starship init
+starship init nu
+source --help
+ls
+l
+config status
+alias config = bash -c '/usr/bin/git --git-dir="$HOME/.cfg/" --work-tree="$HOME"'
+bash -c '/usr/bin/git --git-dir="$HOME/.cfg/" --work-tree="$HOME"'
+bash -c '/usr/bin/git --git-dir=/home/doeringc/.cfg/ --work-tree=/home/doeringc'
+config status
+env
+config status
+$env.HOME
+echo "$env.HOME"
+echo "$'env.HOME'"
+echo $'env.HOME'
+echo $env.HOME
+config
+config status
