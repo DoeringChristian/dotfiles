@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Blender330lts
+Comment=Blender
+Exec=/home/doeringc/programms/blender-3.3.0-linux-x64/blender
+Icon=/home/doeringc/programms/blender-3.3.0-linux-x64/blender.svg
+
