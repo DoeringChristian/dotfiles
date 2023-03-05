@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Blender350beta
+Comment=Blender 3.50
+Exec=/home/doeringc/programms/blender-3.5.0-beta-linux-x64/blender
+Icon=/home/doeringc/programms/blender-3.5.0-beta-linux-x64/blender.svg
+
