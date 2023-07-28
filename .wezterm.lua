@@ -124,9 +124,20 @@ config.keys = {
     { key = 'k', mods = 'ALT|SHIFT', action = a.ScrollByLine(-1) },
     { key = 'k', mods = 'LEADER',    action = a.ActivateCopyMode },
     { key = ' ', mods = 'LEADER',    action = a.ActivateCopyMode },
-
 }
 
+
+local copy_mode = nil
+if wezterm.gui then
+    copy_mode = wezterm.gui.default_key_tables().copy_mode
+    table.insert(
+        copy_mode,
+        { key = 'i', mods = 'NONE', action = a.CopyMode 'Close' }
+    )
+end
+config.key_tables = {
+    copy_mode = copy_mode,
+}
 
 -- and finally, return the configuration to wezterm
 return config
