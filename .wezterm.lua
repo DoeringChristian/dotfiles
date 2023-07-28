@@ -19,6 +19,16 @@ config.font = wezterm.font 'FiraCode Nerd Font'
 config.font_size = 10.
 
 config.hide_tab_bar_if_only_one_tab = true
+config.use_fancy_tab_bar = false
+config.tab_bar_at_bottom = true
+
+config.window_padding = {
+    top = 0,
+    bottom = 0,
+    left = 0,
+    right = 0,
+}
+
 
 -- Spawn a nu shell in login mode
 config.default_prog = { 'nu' }
@@ -60,14 +70,34 @@ config.keys = {
         action = a.SpawnTab 'CurrentPaneDomain',
     },
     {
+        key = "k",
+        mods = "ALT",
+        action = a.SplitPane { direction = 'Up', command = { domain = 'CurrentPaneDomain' } },
+    },
+    {
         key = "j",
         mods = "ALT",
-        action = a.SplitVertical { domain = 'CurrentPaneDomain' },
+        action = a.SplitPane { direction = 'Down', command = { domain = 'CurrentPaneDomain' } },
+    },
+    {
+        key = "l",
+        mods = "ALT",
+        action = a.ActivateTabRelative(1),
+    },
+    {
+        key = "h",
+        mods = "ALT",
+        action = a.ActivateTabRelative(-1),
     },
     {
         key = "l",
         mods = "LEADER",
-        action = a.SplitHorizontal { domain = 'CurrentPaneDomain' },
+        action = a.SplitPane { direction = "Right", command = { domain = 'CurrentPaneDomain' } },
+    },
+    {
+        key = "h",
+        mods = "LEADER",
+        action = a.SplitPane { direction = "Left", command = { domain = 'CurrentPaneDomain' } },
     },
     {
         key = "q",
@@ -88,6 +118,12 @@ config.keys = {
     bind_if(is_outside_vim, 'l', 'CTRL', a.ActivatePaneDirection('Right')),
     bind_if(is_outside_vim, 'j', 'CTRL', a.ActivatePaneDirection('Down')),
     bind_if(is_outside_vim, 'k', 'CTRL', a.ActivatePaneDirection('Up')),
+    { key = 'd', mods = 'ALT',       action = a.ScrollByPage(1) },
+    { key = 'u', mods = 'ALT',       action = a.ScrollByPage(-1) },
+    { key = 'j', mods = 'ALT|SHIFT', action = a.ScrollByLine(1) },
+    { key = 'k', mods = 'ALT|SHIFT', action = a.ScrollByLine(-1) },
+    { key = 'k', mods = 'LEADER',    action = a.ActivateCopyMode },
+    { key = ' ', mods = 'LEADER',    action = a.ActivateCopyMode },
 
 }
 
