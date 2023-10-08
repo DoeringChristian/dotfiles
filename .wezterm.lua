@@ -13,7 +13,8 @@ end
 -- This is where you actually apply your config choices
 
 -- For example, changing the color scheme:
-config.color_scheme = 'GruvboxDarkHard'
+-- config.color_scheme = 'GruvboxDarkHard'
+config.color_scheme = "Catppuccin Mocha"
 
 config.font = wezterm.font 'FiraCode Nerd Font'
 config.font_size = 10.
