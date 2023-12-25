@@ -3,12 +3,13 @@ if status is-interactive
 end
 
 function l
-    ls -la
+    ls -l -g
 end
 
-if type -q exa
-  alias l "exa -l -g --icons -a"
-  # alias l "ll -a"
+if type -q eza
+  alias l "eza -l -g --icons"
+  alias ll "l -a"
+  alias la "ll"
 end
 
 # Emulates vim's cursor shape behavior
