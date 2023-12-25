@@ -27,4 +27,8 @@ bind --mode insert --sets-mode default jk repaint
 # Mapping for jj to j
 bind -M insert jj 'commandline -i j'
 
+# Ocaml
+source /home/doeringc/.opam/opam-init/init.fish > /dev/null 2> /dev/null; or true
+
+# Starship
 starship init fish | source
