@@ -2,15 +2,7 @@ if status is-interactive
     # Commands to run in interactive sessions can go here
 end
 
-function l
-    ls -l -g
-end
-
-if type -q eza
-  alias l "eza -l -g --icons"
-  alias ll "l -a"
-  alias la "ll"
-end
+#----------- config -----------
 
 # Emulates vim's cursor shape behavior
 # Set the normal and visual mode cursors to a block
@@ -23,10 +15,10 @@ set fish_cursor_replace_one underscore
 # visual mode, but due to fish_cursor_default, is redundant here
 set fish_cursor_visual block
 
-# Mapping for jk to escape
-bind --mode insert --sets-mode default jk repaint
-# Mapping for jj to j
-bind -M insert jj 'commandline -i j'
+# Set timeout
+set -g fish_sequence_key_delay_ms 200
+
+#----------- sourcing external stuff -----------
 
 # Ocaml
 source /home/doeringc/.opam/opam-init/init.fish > /dev/null 2> /dev/null; or true
