@@ -1,0 +1,7 @@
+[core]
+	editor = nvim
+[user]
+	name = Christian Döring
+	email = christian.doering@tum.de
+[credential]
+	helper = store
