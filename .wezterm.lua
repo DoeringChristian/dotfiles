@@ -16,7 +16,7 @@ end
 -- config.color_scheme = 'GruvboxDarkHard'
 config.color_scheme = "Catppuccin Mocha"
 
-config.enable_wayland = false
+-- config.enable_wayland = false
 
 config.font = wezterm.font 'FiraCode Nerd Font'
 config.font_size = 10.
