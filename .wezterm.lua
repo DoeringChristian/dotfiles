@@ -16,6 +16,8 @@ end
 -- config.color_scheme = 'GruvboxDarkHard'
 config.color_scheme = "Catppuccin Mocha"
 
+config.enable_wayland = false
+
 config.font = wezterm.font 'FiraCode Nerd Font'
 config.font_size = 10.
 
@@ -31,8 +33,8 @@ config.window_padding = {
 }
 
 
--- Spawn a nu shell in login mode
-config.default_prog = { 'nu' }
+-- Spawn a fish shell in login mode
+config.default_prog = { 'fish' }
 
 local a = wezterm.action
 
