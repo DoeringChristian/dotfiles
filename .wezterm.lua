@@ -17,6 +17,9 @@ end
 config.color_scheme = "Catppuccin Mocha"
 
 -- config.enable_wayland = false
+-- config.front_end = 'WebGpu'
+
+-- config.default_cursor_style = 'BlinkingBar'
 
 config.font = wezterm.font 'FiraCode Nerd Font'
 config.font_size = 10.
