@@ -25,3 +25,9 @@ source /home/doeringc/.opam/opam-init/init.fish > /dev/null 2> /dev/null; or tru
 
 # Starship
 starship init fish | source
+
+# Autin
+atuin init fish | source
+
+# nix
+source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
