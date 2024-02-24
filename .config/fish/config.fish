@@ -21,7 +21,7 @@ set -g fish_sequence_key_delay_ms 200
 #----------- sourcing external stuff -----------
 
 # Ocaml
-source /home/doeringc/.opam/opam-init/init.fish > /dev/null 2> /dev/null; or true
+# source /home/doeringc/.opam/opam-init/init.fish > /dev/null 2> /dev/null; or true
 
 # Starship
 starship init fish | source
@@ -31,3 +31,7 @@ atuin init fish | source
 
 # nix
 source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+
+# direnv
+direnv hook fish | source
+set -g direnv_fish_mode eval_on_arrow
