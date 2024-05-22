@@ -70,41 +70,11 @@ end
 
 config.leader = { key = " ", mods = "CTRL", timeout_milliseconds = 1000 }
 config.keys = {
-    {
-        key = "n",
-        mods = "ALT",
-        action = a.SpawnTab 'CurrentPaneDomain',
-    },
-    {
-        key = "k",
-        mods = "ALT",
-        action = a.SplitPane { direction = 'Up', command = { domain = 'CurrentPaneDomain' } },
-    },
-    {
-        key = "j",
-        mods = "ALT",
-        action = a.SplitPane { direction = 'Down', command = { domain = 'CurrentPaneDomain' } },
-    },
-    {
-        key = "l",
-        mods = "ALT",
-        action = a.ActivateTabRelative(1),
-    },
-    {
-        key = "h",
-        mods = "ALT",
-        action = a.ActivateTabRelative(-1),
-    },
-    {
-        key = "l",
-        mods = "LEADER",
-        action = a.SplitPane { direction = "Right", command = { domain = 'CurrentPaneDomain' } },
-    },
-    {
-        key = "h",
-        mods = "LEADER",
-        action = a.SplitPane { direction = "Left", command = { domain = 'CurrentPaneDomain' } },
-    },
+    -- panes: navigation
+    { key = 'k', mods = "ALT", action = a.ActivatePaneDirection('Up') },
+    { key = 'j', mods = "ALT", action = a.ActivatePaneDirection('Down') },
+    { key = 'h', mods = "ALT", action = a.ActivatePaneDirection('Left') },
+    { key = 'l', mods = "ALT", action = a.ActivatePaneDirection('Right') },
     {
         key = "q",
         mods = "ALT",
