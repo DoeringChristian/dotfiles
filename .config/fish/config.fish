@@ -27,11 +27,17 @@ set -g fish_sequence_key_delay_ms 200
 starship init fish | source
 
 # Autin
-atuin init fish | source
+if type -q atuin
+    atuin init fish | source
+end
 
 # nix
-source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+if type -q nix
+    source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+end
 
 # direnv
-direnv hook fish | source
-set -g direnv_fish_mode eval_on_arrow
+if type -q direnv 
+    direnv hook fish | source
+    set -g direnv_fish_mode eval_on_arrow
+end
