@@ -5,18 +5,21 @@ keybinds {
         bind "Ctrl g" { SwitchToMode "Tmux"; }
         unbind "Ctrl b"
         
-        bind "Alt n" { NewPane; }
+        // bind "Alt f" { NewPane; }
+        bind "Alt ;" { NewPane; }
         bind "Alt x" { CloseFocus; }
-        bind "Alt h" { MoveFocusOrTab "Left"; }
-        bind "Alt j" { MoveFocusOrTab "Down"; }
-        bind "Alt k" { MoveFocusOrTab "Up"; }
-        bind "Alt l" { MoveFocusOrTab "Right"; }
+        bind "Alt h" { MoveFocus "Left"; }
+        bind "Alt j" { MoveFocus "Down"; }
+        bind "Alt k" { MoveFocus "Up"; }
+        bind "Alt l" { MoveFocus "Right"; }
         bind "Alt m" { ToggleFocusFullscreen; }
         
-        bind "Alt t" { NewTab; }
+        // bind "Alt t" { NewTab; }
         bind "Alt w" { NewTab; }
-        bind "Alt u" { HalfPageScrollUp; SwitchToMode "search"; }
-        bind "Alt d" { HalfPageScrollDown; SwitchToMode "search"; }
+        bind "Alt n" { GoToNextTab; }
+        bind "Alt p" { GoToPreviousTab; }
+        // bind "Alt u" { HalfPageScrollUp; SwitchToMode "search"; }
+        // bind "Alt d" { HalfPageScrollDown; SwitchToMode "search"; }
         // bind "Alt u" { HalfPageScrollUp; SwitchToMode "tmux"; }
         // bind "Alt d" { HalfPageScrollDown; SwitchToMode "tmux"; }
         bind "Alt e" { EditScrollback; }
