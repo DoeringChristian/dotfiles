@@ -18,8 +18,8 @@ keybinds {
         bind "Alt w" { NewTab; }
         bind "Alt n" { GoToNextTab; }
         bind "Alt p" { GoToPreviousTab; }
-        // bind "Alt u" { HalfPageScrollUp; SwitchToMode "search"; }
-        // bind "Alt d" { HalfPageScrollDown; SwitchToMode "search"; }
+        bind "Alt u" { HalfPageScrollUp; }
+        bind "Alt d" { HalfPageScrollDown; }
         // bind "Alt u" { HalfPageScrollUp; SwitchToMode "tmux"; }
         // bind "Alt d" { HalfPageScrollDown; SwitchToMode "tmux"; }
         bind "Alt e" { EditScrollback; }
