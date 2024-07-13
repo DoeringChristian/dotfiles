@@ -41,33 +41,6 @@ config.default_prog = { 'fish' }
 
 local a = wezterm.action
 
-local function is_inside_vim(pane)
-    local tty = pane:get_tty_name()
-    if tty == nil then return true end
-
-    local success, stdout, stderr = wezterm.run_child_process
-        { 'sh', '-c',
-            'ps -o state= -o comm= -t' .. wezterm.shell_quote_arg(tty) .. ' | ' ..
-            'grep -iqE \'^[^TXZ ]+ +(\\S+\\/)?g?(view|l?n?vim?x?)(diff)?$\'' }
-
-
-    return success
-end
-
-local function is_outside_vim(pane) return not is_inside_vim(pane) end
-
-local function bind_if(cond, key, mods, action)
-    local function callback(win, pane)
-        if cond(pane) then
-            win:perform_action(action, pane)
-        else
-            win:perform_action(a.SendKey({ key = key, mods = mods }), pane)
-        end
-    end
-
-    return { key = key, mods = mods, action = wezterm.action_callback(callback) }
-end
-
 config.leader = { key = " ", mods = "CTRL", timeout_milliseconds = 1000 }
 config.keys = {
     -- panes: navigation
@@ -75,8 +48,9 @@ config.keys = {
     { key = 'j', mods = "ALT", action = a.ActivatePaneDirection('Down') },
     { key = 'h', mods = "ALT", action = a.ActivatePaneDirection('Left') },
     { key = 'l', mods = "ALT", action = a.ActivatePaneDirection('Right') },
+
     {
-        key = "q",
+        key = "x",
         mods = "ALT",
         action = a.CloseCurrentPane { confirm = false },
     },
@@ -90,16 +64,9 @@ config.keys = {
         mods = "ALT",
         action = a.IncreaseFontSize,
     },
-    bind_if(is_outside_vim, 'h', 'CTRL', a.ActivatePaneDirection('Left')),
-    bind_if(is_outside_vim, 'l', 'CTRL', a.ActivatePaneDirection('Right')),
-    bind_if(is_outside_vim, 'j', 'CTRL', a.ActivatePaneDirection('Down')),
-    bind_if(is_outside_vim, 'k', 'CTRL', a.ActivatePaneDirection('Up')),
-    { key = 'd', mods = 'ALT',       action = a.ScrollByPage(1) },
-    { key = 'u', mods = 'ALT',       action = a.ScrollByPage(-1) },
-    { key = 'j', mods = 'ALT|SHIFT', action = a.ScrollByLine(1) },
-    { key = 'k', mods = 'ALT|SHIFT', action = a.ScrollByLine(-1) },
-    { key = 'k', mods = 'LEADER',    action = a.ActivateCopyMode },
-    { key = ' ', mods = 'LEADER',    action = a.ActivateCopyMode },
+    { key = 'd', mods = 'ALT',    action = a.ScrollByPage(1) },
+    { key = 'u', mods = 'ALT',    action = a.ScrollByPage(-1) },
+    { key = ' ', mods = 'LEADER', action = a.ActivateCopyMode },
 }
 
 
