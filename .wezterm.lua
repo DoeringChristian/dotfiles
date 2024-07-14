@@ -24,7 +24,7 @@ config.color_scheme = "Catppuccin Mocha"
 config.font = wezterm.font 'FiraCode Nerd Font'
 config.font_size = 10.
 
-config.hide_tab_bar_if_only_one_tab = true
+config.hide_tab_bar_if_only_one_tab = false
 config.use_fancy_tab_bar = false
 config.tab_bar_at_bottom = true
 
@@ -34,10 +34,11 @@ config.window_padding = {
     left = 0,
     right = 0,
 }
+config.front_end = "WebGpu"
 
 
 -- Spawn a fish shell in login mode
-config.default_prog = { 'fish' }
+config.default_prog = { "fish" }
 
 local a = wezterm.action
 
@@ -64,9 +65,12 @@ config.keys = {
         mods = "ALT",
         action = a.IncreaseFontSize,
     },
+
     { key = 'd', mods = 'ALT',    action = a.ScrollByPage(1) },
     { key = 'u', mods = 'ALT',    action = a.ScrollByPage(-1) },
     { key = ' ', mods = 'LEADER', action = a.ActivateCopyMode },
+
+    { key = ":", mods = "ALT",    action = a.ActivateCommandPalette },
 }
 
 
