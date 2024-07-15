@@ -9,3 +9,5 @@
 	defaultBranch = main
 [push]
 	autoSetupRemote = true
+[alias]
+lg = log --all --decorate --graph --abbrev-commit
