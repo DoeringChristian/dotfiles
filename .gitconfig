@@ -11,3 +11,4 @@
 	autoSetupRemote = true
 [alias]
 lg = log --all --decorate --graph --abbrev-commit
+adog = log --all --decorate --oneline --graph --abbrev-commit
