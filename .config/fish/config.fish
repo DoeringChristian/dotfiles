@@ -41,3 +41,17 @@ if type -q direnv
     direnv hook fish | source
     set -g direnv_fish_mode eval_on_arrow
 end
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+if test -f /usr/bin/conda
+    eval /usr/bin/conda "shell.fish" "hook" $argv | source
+else
+    if test -f "/usr/etc/fish/conf.d/conda.fish"
+        . "/usr/etc/fish/conf.d/conda.fish"
+    else
+        set -x PATH "/usr/bin" $PATH
+    end
+end
+# <<< conda initialize <<<
+
