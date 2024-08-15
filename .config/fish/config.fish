@@ -29,6 +29,8 @@ starship init fish | source
 # Autin
 if type -q atuin
     atuin init fish | source
+    bind \cr _atuin_search
+    bind -M insert \cr _atuin_search
 end
 
 # nix
