@@ -142,7 +142,7 @@ state.Gen {
 	control.13 {
 		iface MIXER
 		name 'Line In 1 Gain Capture Volume'
-		value 44
+		value 63
 		comment {
 			access 'read write'
 			type INTEGER
@@ -150,7 +150,7 @@ state.Gen {
 			range '0 - 70 (step 1)'
 			dbmin 0
 			dbmax 6900
-			dbvalue.0 4337
+			dbvalue.0 6210
 		}
 	}
 	control.14 {
@@ -444,7 +444,7 @@ state.Gen {
 	control.31 {
 		iface MIXER
 		name 'PCM 01 Capture Enum'
-		value 'DSP 1'
+		value 'Mix C'
 		comment {
 			access 'read write'
 			type ENUMERATED
@@ -465,7 +465,7 @@ state.Gen {
 	control.32 {
 		iface MIXER
 		name 'PCM 02 Capture Enum'
-		value 'DSP 2'
+		value 'Mix D'
 		comment {
 			access 'read write'
 			type ENUMERATED
@@ -668,7 +668,7 @@ state.Gen {
 	control.45 {
 		iface MIXER
 		name 'Mix C Input 03 Playback Volume'
-		value 0
+		value 160
 		comment {
 			access 'read write'
 			type INTEGER
@@ -676,7 +676,7 @@ state.Gen {
 			range '0 - 184 (step 1)'
 			dbmin -8000
 			dbmax 1200
-			dbvalue.0 -8000
+			dbvalue.0 0
 		}
 	}
 	control.46 {
@@ -738,7 +738,7 @@ state.Gen {
 	control.50 {
 		iface MIXER
 		name 'Mix D Input 04 Playback Volume'
-		value 0
+		value 160
 		comment {
 			access 'read write'
 			type INTEGER
@@ -746,21 +746,21 @@ state.Gen {
 			range '0 - 184 (step 1)'
 			dbmin -8000
 			dbmax 1200
-			dbvalue.0 -8000
+			dbvalue.0 0
 		}
 	}
 	control.51 {
 		iface PCM
 		name 'Level Meter'
-		value.0 22
-		value.1 23
-		value.2 22
-		value.3 23
-		value.4 0
+		value.0 0
+		value.1 0
+		value.2 0
+		value.3 0
+		value.4 15
 		value.5 0
-		value.6 0
+		value.6 7
 		value.7 0
-		value.8 0
+		value.8 15
 		value.9 0
 		value.10 0
 		value.11 0
