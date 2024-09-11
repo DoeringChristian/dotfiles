@@ -10,5 +10,11 @@
 [push]
 	autoSetupRemote = true
 [alias]
-lg = log --all --decorate --graph --abbrev-commit
+lg = log --decorate --graph --abbrev-commit
 adog = log --all --decorate --oneline --graph --abbrev-commit
+dog = log --decorate --oneline --graph --abbrev-commit
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
