@@ -12,7 +12,9 @@
 [alias]
 lg = log --decorate --graph --abbrev-commit
 adog = log --all --decorate --oneline --graph --abbrev-commit
+adogs = log --all --decorate --oneline --graph --abbrev-commit --stat
 dog = log --decorate --oneline --graph --abbrev-commit
+dogs = log --decorate --oneline --graph --abbrev-commit --stat
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
