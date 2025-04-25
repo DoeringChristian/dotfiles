@@ -7,8 +7,6 @@
 	helper = store
 [init]
 	defaultBranch = main
-[push]
-	autoSetupRemote = true
 [alias]
 lg = log --decorate --graph --abbrev-commit
 adog = log --all --decorate --oneline --graph --abbrev-commit
