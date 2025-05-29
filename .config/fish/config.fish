@@ -37,7 +37,9 @@ end
 
 # nix
 if type -q nix
-    source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+    if test -f /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+        source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+    end
 end
 
 # direnv
