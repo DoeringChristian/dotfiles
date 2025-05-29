@@ -50,3 +50,10 @@ end
 
 # pixi
 pixi completion --shell fish | source
+
+# eza
+if type -q eza
+    alias l "eza -l -g --icons"
+    alias ll "l -a"
+    alias la ll
+end
