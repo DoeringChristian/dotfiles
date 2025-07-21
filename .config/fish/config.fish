@@ -57,3 +57,11 @@ if type -q eza
     alias ll "l -a"
     alias la ll
 end
+
+# ... alias
+function ...
+    ../..
+end
+function ....
+    ../../..
+end
