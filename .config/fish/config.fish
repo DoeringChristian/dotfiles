@@ -65,3 +65,12 @@ end
 function ....
     ../../..
 end
+
+# Jupyter aliases
+function jn
+    jupyter notebook
+end
+
+function jt
+    jupytext --update --to notebook $argv
+end
