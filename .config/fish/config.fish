@@ -74,3 +74,7 @@ end
 function jt
     jupytext --update --to notebook $argv
 end
+
+function je
+    jupyter execute
+end
