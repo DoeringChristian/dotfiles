@@ -80,5 +80,5 @@ function je
 end
 
 function tb
-    tensorboard --samples_per_plugin images=1000000
+    tensorboard $argv --samples_per_plugin images=1000000
 end
