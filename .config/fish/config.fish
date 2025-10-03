@@ -78,3 +78,7 @@ end
 function je
     jupyter execute
 end
+
+function tb
+    tensorboard --samples_per_plugin images=1000000
+end
