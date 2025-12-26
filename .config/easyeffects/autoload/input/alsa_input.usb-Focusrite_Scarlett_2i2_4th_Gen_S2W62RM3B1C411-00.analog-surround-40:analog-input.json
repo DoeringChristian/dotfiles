@@ -1,6 +1,0 @@
-{
-    "device": "alsa_input.usb-Focusrite_Scarlett_2i2_4th_Gen_S2W62RM3B1C411-00.analog-surround-40",
-    "device-description": "Scarlett 2i2 4th Gen Analog Surround 4.0",
-    "device-profile": "analog-input",
-    "preset-name": "main"
-}

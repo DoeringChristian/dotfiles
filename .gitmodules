@@ -1,7 +1,0 @@
-[submodule ".config/kitty/themes/kitty-gruvbox-theme"]
-	path = .config/kitty/themes/kitty-gruvbox-theme
-	url = https://github.com/wdomitrz/kitty-gruvbox-theme.git
-[submodule ".tmux/plugins/tpm"]
-	path = .tmux/plugins/tpm
-	url = https://github.com/tmux-plugins/tpm.git
-	branch = master
