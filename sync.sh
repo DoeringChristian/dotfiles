@@ -12,7 +12,7 @@ mkdir -p ~/.ssh
 # First, use homemanager to install the required commands
 echo "Installing packages with Nix:"
 export NIX_CONFIG="experimental-features = nix-command flakes"
-nix profile install .
+nix profile install .#default
 
 # This stow comes before the others to ensure global ignore list is respected before other stow commands
 echo "Applying configs with GNU Stow:"

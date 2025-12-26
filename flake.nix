@@ -78,6 +78,7 @@
           fzf
           gh
           git
+          git-lfs
           kitty
           zathura
           claudepod.packages.${system}.default
