@@ -79,7 +79,7 @@
           gh
           git
           git-lfs
-          kitty
+          (nixGLWrap kitty)
           zathura
           claudepod.packages.${system}.default
 
