@@ -5,54 +5,103 @@
     # Nixpkgs
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    # Home Manager
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # NixGL - using PR #187 with nvidia version detection fix
     nixgl = {
       url = "github:nix-community/nixGL/pull/187/head";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    catppuccin.url = "github:catppuccin/nix";
-
     claudepod = {
       url = "github:doeringchristian/claudepod";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = {
     nixpkgs,
-    home-manager,
     nixgl,
-    catppuccin,
     claudepod,
+    flake-utils,
     ...
-  }: let
-    system = "x86_64-linux";
-    pkgs = import nixpkgs {
-      inherit system;
-      overlays = [nixgl.overlay];
-    };
-  in {
-    homeConfigurations."doeringc" = home-manager.lib.homeManagerConfiguration {
-      inherit pkgs;
-
-      # Specify your home configuration modules here
-      modules = [
-        ./home.nix
-        catppuccin.homeModules.catppuccin
-      ];
-
-      # Pass nixGL and claudepod to home.nix
-      extraSpecialArgs = {
-        nixgl = nixgl;
-        claudepod = claudepod;
+  }:
+    flake-utils.lib.eachDefaultSystem (system: let
+      pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfree = true;
+        overlays = [nixgl.overlay];
       };
-    };
-  };
+      nixGLWrap = pkg:
+        pkgs.writeShellScriptBin pkg.pname ''
+          exec ${pkgs.nixgl.nixGLIntel}/bin/nixGLIntel ${pkg}/bin/${pkg.pname} "$@"
+        '';
+    in {
+      packages.default = pkgs.buildEnv {
+        name = "dotfiles";
+        paths = with pkgs; [
+          # Development tools
+          vim
+          neovim
+          tree
+          ripgrep
+          fd
+          curl
+          wget
+          stow
+
+          # Utilities
+          unzip
+          zip
+          gzip
+          which
+          file
+          less
+          wl-clipboard
+          xsel
+
+          # System monitoring
+          btop
+          ncdu
+          duf
+
+          # Utilities
+          starship
+          direnv
+          eza
+          bat
+          btop
+          claude-code
+          atuin
+          zoxide
+          fish
+          fzf
+          gh
+          git
+          kitty
+          zathura
+          claudepod.packages.${system}.default
+
+          (nixGLWrap tev)
+
+          # Network tools
+          net-tools
+          inetutils
+          nmap
+          traceroute
+
+          # Fonts
+          nerd-fonts.fira-code
+
+          # Inkscape with TexText extension
+          (pkgs.inkscape-with-extensions.override {
+            inkscapeExtensions = [
+              pkgs.inkscape-extensions.textext
+            ];
+          })
+
+          (nixGLWrap darktable)
+        ];
+      };
+    });
 }
