@@ -50,6 +50,8 @@
     which
     file
     less
+    wl-clipboard
+    xsel
 
     # System monitoring
     btop
