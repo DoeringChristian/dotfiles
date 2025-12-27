@@ -24,10 +24,10 @@ status is-interactive; and begin
     # Aliases
     alias cookie 'cookiecutter my --directory'
     alias eza 'eza --git'
-    alias je 'jupyter execute'
+    alias je 'jupyter execute --inplace'
     alias jn 'jupyter notebook'
-    alias jpg2webm 'ffmpeg -r 30 -i %d.jpg output.webmm'
     alias jt 'jupytext --update --to notebook'
+    alias jpg2webm 'ffmpeg -r 30 -i %d.jpg output.webmm'
     alias l 'eza -l -g --icons'
     alias la ll
     alias ll 'l -a'
