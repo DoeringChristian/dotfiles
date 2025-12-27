@@ -81,6 +81,7 @@
           git-lfs
           (nixGLWrap kitty)
           zathura
+          tectonic
           claudepod.packages.${system}.default
 
           (nixGLWrap tev)
