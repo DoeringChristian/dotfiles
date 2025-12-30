@@ -49,6 +49,7 @@
           curl
           wget
           stow
+          ripgrep
 
           # Utilities
           unzip
@@ -82,7 +83,7 @@
           (nixGLWrap kitty)
           zathura
           tectonic
-          distrobox
+          distrobox # run `distrobox create --nvidia --name ubuntu --image ubuntu:latest` to create ubuntu nvidia container
           claudepod.packages.${system}.default
 
           (nixGLWrap tev)
