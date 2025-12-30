@@ -1,11 +1,6 @@
-# ~/.config/fish/config.fish: DO NOT EDIT -- this file has been generated
-# automatically by home-manager.
-
 # Only execute this file once per shell.
 set -q __fish_home_manager_config_sourced; and exit
 set -g __fish_home_manager_config_sourced 1
-
-source /nix/store/y58snd6ysxnbp4d6lr4h281ddkr0q3fy-hm-session-vars.fish
 
 fish_config theme choose "Catppuccin Macchiato"
 
