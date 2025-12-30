@@ -3,4 +3,5 @@ set -e
 
 jupytext --update --to notebook "$1"
 FILE="$(dirname "$1")/$(basename "$1" .py).ipynb"
-jupyter execute --inplace "$FILE"
+papermill $FILE $FILE --log-output
+# jupyter execute --inplace "$FILE"

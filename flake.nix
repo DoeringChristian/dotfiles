@@ -82,6 +82,7 @@
           (nixGLWrap kitty)
           zathura
           tectonic
+          distrobox
           claudepod.packages.${system}.default
 
           (nixGLWrap tev)
