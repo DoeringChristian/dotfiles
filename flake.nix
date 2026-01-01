@@ -50,6 +50,7 @@
           wget
           stow
           ripgrep
+          pixi
 
           # Utilities
           unzip
