@@ -74,6 +74,7 @@
           bat
           btop
           claude-code
+          gemini-cli
           atuin
           zoxide
           fish
