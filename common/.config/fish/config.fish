@@ -29,16 +29,17 @@ status is-interactive; and begin
     alias lla 'eza -la'
     alias ls eza
     alias lt 'eza --tree'
+    alias s 'kitten ssh'
 
     # Interactive shell initialisation
-    /nix/store/lc3zmvfh5cyzdgijm8f5sjgd0q3hl9pk-fzf-0.67.0/bin/fzf --fish | source
+    fzf --fish | source
 
     set -gx fish_key_bindings fish_user_key_bindings
 
-    /nix/store/5g10iizw7yacs5kr8s7l3v6hirjw9i15-zoxide-0.9.8/bin/zoxide init fish | source
+    zoxide init fish | source
 
     if test "$TERM" != dumb
-        /nix/store/lfw8yb2nhj04fcfb7lc5zl6mh6m6n5l1-starship-1.24.1/bin/starship init fish | source
+        starship init fish | source
 
     end
 
@@ -58,8 +59,8 @@ status is-interactive; and begin
         set fish_complete_path $prev "/home/doeringc/.local/share/fish/home-manager/generated_completions" $post
     end
 
-    /nix/store/pgpzq3waplzadryhxigjk2l1s33a2yj9-atuin-18.10.0/bin/atuin init fish | source
+    atuin init fish | source
 
-    /nix/store/wpj4la1jgf0p8aimfzx49gfr3228vk8f-direnv-2.37.1/bin/direnv hook fish | source
+    direnv hook fish | source
 
 end
