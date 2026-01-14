@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a stow-based dotfiles repository using GNU Stow for symlink management and Nix Home Manager for package management. The setup is designed to be portable across machines.
+This is a stow-based dotfiles repository using GNU Stow for symlink management and Nix (via flake.nix) for package management. The setup is designed to be portable across machines.
 
 ## Key Commands
 
@@ -13,7 +13,7 @@ This is a stow-based dotfiles repository using GNU Stow for symlink management a
 ./sync.sh
 ```
 This runs the complete setup process:
-1. Nix Home Manager (installs packages)
+1. Nix (installs packages from flake.nix)
 2. GNU Stow (creates symlinks)
 3. dconf (loads GNOME settings)
 
@@ -29,10 +29,10 @@ stow -D common
 stow -R common
 ```
 
-### Nix/Home Manager
+### Nix/Flake
 ```bash
-# Rebuild home manager configuration
-home-manager switch --flake .
+# Rebuild/reinstall packages
+nix profile remove dotfiles && nix profile install .#default
 
 # Update flake inputs
 nix flake update
@@ -48,7 +48,6 @@ dotfiles/
 │   └── .local/share/applications/  # Desktop entries
 ├── stow/             # Stow global ignore rules
 ├── flake.nix         # Nix flakes configuration
-├── home.nix          # Home Manager package definitions
 ├── dconf.ini         # GNOME desktop settings
 └── sync.sh           # Setup/installation script
 ```
@@ -57,12 +56,11 @@ dotfiles/
 
 - **`common/`**: The main stow package containing all portable configuration files. Files here are symlinked to `~` maintaining their directory structure.
 - **`stow/.stow-global-ignore`**: Applied first via `stow stow` to set up ignore patterns before symlinking common.
-- **`home.nix`**: Defines packages installed via Nix Home Manager including development tools, terminal emulators, and fonts.
-- **`flake.nix`**: Nix flakes entry point with NixGL support for GPU applications and Catppuccin theming.
+- **`flake.nix`**: Nix flakes entry point with NixGL support for GPU applications (kitty, darktable, tev). Packages are installed via `nix profile install`.
 
 ## Conventions
 
 - **Git LFS**: Binary files in `.local/bin/` are tracked with Git LFS (see `.gitattributes`)
-- **Catppuccin Macchiato**: Consistent dark theme used across starship, fish, and other tools
-- **Fish shell**: Default shell with vi-mode keybindings (`jk` for escape)
-- **Branches**: `main` is default, `stow` is current working branch, `nvim` contains Neovim configs
+- **Catppuccin Macchiato**: Consistent dark theme used across starship, fish, bat, btop, kitty, and eza
+- **Fish shell**: Default shell with vi-mode keybindings (`jk` for escape, `l` accepts autosuggestions)
+- **NixGL wrapping**: GPU-accelerated apps (kitty, darktable, tev) use nixGLIntel wrapper for compatibility
