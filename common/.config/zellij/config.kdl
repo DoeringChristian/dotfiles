@@ -1,0 +1,82 @@
+// If you'd like to override the default keybindings completely, be sure to change "keybinds" to "keybinds clear-defaults=true"
+keybinds {
+    normal clear-defaults=true {
+        // tmux
+        bind "Ctrl g" { SwitchToMode "Tmux"; }
+        unbind "Ctrl b"
+
+        // bind "Alt f" { NewPane; }
+        bind "Alt Enter" { NewPane; }
+        bind "Alt x" { CloseFocus; }
+        bind "Alt h" { MoveFocus "Left"; }
+        bind "Alt j" { MoveFocus "Down"; }
+        bind "Alt k" { MoveFocus "Up"; }
+        bind "Alt l" { MoveFocus "Right"; }
+        bind "Alt m" { ToggleFocusFullscreen; }
+
+        // bind "Alt t" { NewTab; }
+        bind "Alt w" { NewTab; }
+        bind "Alt n" { GoToNextTab; }
+        bind "Alt p" { GoToPreviousTab; }
+        bind "Alt u" { HalfPageScrollUp; }
+        bind "Alt d" { HalfPageScrollDown; }
+        // bind "Alt u" { HalfPageScrollUp; SwitchToMode "tmux"; }
+        // bind "Alt d" { HalfPageScrollDown; SwitchToMode "tmux"; }
+        bind "Alt e" { EditScrollback; }
+        // bind "Alt u" { HalfPageScrollUp; }
+        // bind "Alt d" { HalfPageScrollDown; }
+    }
+    search clear-defaults=true {
+        bind "q" { SwitchToMode "Normal"; }
+        bind "j" "Down" { ScrollDown; }
+        bind "k" "Up" { ScrollUp; }
+        bind "Ctrl f" "PageDown" "Right" "l" { PageScrollDown; }
+        bind "Ctrl b" "PageUp" "Left" "h" { PageScrollUp; }
+        bind "d" { HalfPageScrollDown; }
+        bind "u" { HalfPageScrollUp; }
+        bind "n" { Search "down"; }
+        bind "p" { Search "up"; }
+        bind "c" { SearchToggleOption "CaseSensitivity"; }
+        bind "w" { SearchToggleOption "Wrap"; }
+        bind "o" { SearchToggleOption "WholeWord"; }
+    }
+    // tmux clear-defaults=true {
+    //     // bind "Ctrl f" { Write 2; SwitchToMode "Normal"; }
+    //     bind "q" { SwitchToMode "Normal"; }
+    //     bind "g" { SwitchToMode "Locked"; }
+    //     bind "p" { SwitchToMode "Pane"; }
+    //     bind "t" { SwitchToMode "Tab"; }
+    //     bind "n" { SwitchToMode "Resize"; }
+    //     bind "h" { SwitchToMode "Move"; }
+    //     bind "s" { SwitchToMode "Scroll"; }
+    //     bind "o" { SwitchToMode "Session"; }
+    //     bind "x" { SwitchToMode "Normal"; }
+    // }
+    // shared_except "normal"{
+    //     unbind "Ctrl q"
+    //     unbind "Ctrl o"
+    //     bind "q" { SwitchToMode "Normal"; }
+    //     bind "g" { SwitchToMode "Locked"; }
+    //     bind "p" { SwitchToMode "Pane"; }
+    //     bind "t" { SwitchToMode "Tab"; }
+    //     bind "n" { SwitchToMode "Resize"; }
+    //     bind "h" { SwitchToMode "Move"; }
+    //     bind "s" { SwitchToMode "Scroll"; }
+    //     bind "o" { SwitchToMode "Session"; }
+    //     bind "x" { SwitchToMode "Normal"; }
+    // }
+}
+
+plugins {
+    tab-bar { path "tab-bar"; }
+    status-bar { path "status-bar"; }
+    // strider { path "strider"; }
+    // compact-bar { path "compact-bar"; }
+    // session-manager { path "session-manager"; }
+}
+
+theme "catppuccin-mocha"
+default_shell "fish"
+pane_frames false
+mouse_mode true
+scrollback_editor "nvim"
