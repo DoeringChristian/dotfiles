@@ -88,6 +88,7 @@
           zathura
           tectonic
           distrobox # run `distrobox create --nvidia --name ubuntu --image ubuntu:latest` to create ubuntu nvidia container
+          dust
           claudepod.packages.${system}.default
 
           (nixGLWrap tev)
