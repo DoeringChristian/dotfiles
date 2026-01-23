@@ -1,2 +1,15 @@
 #!/usr/bin/env bash
 set -e
+
+# TOOL, used to ssh into microsoft openconnect vpns
+
+TOTP=$(echo $(passage show epfl/totp) | oathtool --totp -b -)
+PWD=$(passage show epfl/pwd)
+
+CTX="${PWD}\n${TOTP}\n"
+
+VPN_SLICE=$(which vpn-slice)
+
+# echo -e $CTX | sudo openconnect --authgroup "Microsoft Entra ID" --protocol=anyconnect --useragent=AnyConnect -s 'vpn-slice **list of domain names** jed.epfl.ch izar.epfl.ch' -u ** your epfl username just username part of email ** --passwd-on-stdin vpn.epfl.ch
+echo -e $CTX | sudo openconnect --authgroup "Microsoft Entra ID" --protocol=anyconnect --useragent=AnyConnect -s "$VPN_SLICE M04d4c45c114b.dyn.epfl.ch pg2-jetson.duckdns.org jed.epfl.ch izar.epfl.ch" -u cdoering --passwd-on-stdin vpn.epfl.ch
+# sudo openconnect --authgroup "Microsoft Entra ID" --protocol=anyconnect --useragent=AnyConnect -u cdoering vpn.epfl.ch

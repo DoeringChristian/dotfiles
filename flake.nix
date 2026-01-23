@@ -102,6 +102,8 @@
           inetutils
           nmap
           traceroute
+          vpn-slice
+          openconnect
 
           # Fonts
           nerd-fonts.fira-code
