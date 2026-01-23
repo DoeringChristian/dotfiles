@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+SUBCOMMAND_DIR="$SCRIPT_DIR/vpns"
+
+if [[ -z "$1" ]]; then
+	echo "Usage: vpn <command> [args...]"
+	echo "Available commands:"
+	ls -1 "$SUBCOMMAND_DIR" 2>/dev/null || echo "  (none)"
+	exit 1
+fi
+
+cmd="$SUBCOMMAND_DIR/$1"
+
+if [[ -x "$cmd" ]]; then
+	shift
+	exec "$cmd" "$@"
+else
+	echo "Unknown command: $1" >&2
+	echo "Available commands:"
+	ls $SUBCOMMAND_DIR
+	exit 1
+fi
