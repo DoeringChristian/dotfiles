@@ -62,6 +62,10 @@
           wl-clipboard
           xsel
 
+          # Secrets
+          age
+          passage
+
           # System monitoring
           btop
           ncdu
