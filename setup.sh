@@ -10,7 +10,7 @@ cd $PROJECT_DIR
 # Decrypt the age key
 mkdir -p ~/.local/share/age
 age -d ./setup/age-key.age >~/.local/share/age/key.txt
-chmod 600 ~/.age/key.txt
+chmod 600 ~/.local/share/age/key.txt
 
 # Copy over to passage
 mkdir -p ~/.passage
