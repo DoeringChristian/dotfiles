@@ -80,3 +80,5 @@ default_shell "fish"
 pane_frames false
 mouse_mode true
 scrollback_editor "nvim -u ~/.config/nvim/zsb.lua"
+
+show_startup_tips false
