@@ -95,6 +95,9 @@
           dust
           claudepod.packages.${system}.default
 
+          # LLMs
+          ollama
+
           (nixGLWrap tev)
 
           # Network tools
