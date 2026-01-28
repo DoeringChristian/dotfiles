@@ -20,14 +20,15 @@ This runs the complete setup process:
 ### Stow Operations
 ```bash
 # Apply stow package (creates symlinks to home directory)
-stow common
+stow -t ~ common
 
 # Remove stow package symlinks
-stow -D common
+stow -t ~ -D common
 
 # Re-stow (useful after adding new files)
-stow -R common
+stow -t ~ -R common
 ```
+**Ordering matters**: `stow -t ~ stow` must run before `stow -t ~ common` so the global ignore rules are in place. `sync.sh` handles this automatically.
 
 ### Nix/Flake
 ```bash
@@ -56,11 +57,13 @@ dotfiles/
 
 - **`common/`**: The main stow package containing all portable configuration files. Files here are symlinked to `~` maintaining their directory structure.
 - **`stow/.stow-global-ignore`**: Applied first via `stow stow` to set up ignore patterns before symlinking common.
-- **`flake.nix`**: Nix flakes entry point with NixGL support for GPU applications (kitty, darktable, tev). Packages are installed via `nix profile install`.
+- **`flake.nix`**: Nix flakes entry point with NixGL support for GPU applications (kitty, darktable, tev). Packages are installed via `nix profile install`. Uses a `nixGLWrap` helper that wraps binaries with `nixGLIntel` for GPU compatibility on non-NixOS systems.
 
 ## Conventions
 
 - **Git LFS**: Binary files in `.local/bin/` are tracked with Git LFS (see `.gitattributes`)
 - **Catppuccin Macchiato**: Consistent dark theme used across starship, fish, bat, btop, kitty, and eza
 - **Fish shell**: Default shell with vi-mode keybindings (`jk` for escape, `l` accepts autosuggestions)
-- **NixGL wrapping**: GPU-accelerated apps (kitty, darktable, tev) use nixGLIntel wrapper for compatibility
+- **NixGL wrapping**: GPU-accelerated apps (kitty, darktable, tev) use `nixGLIntel` wrapper for compatibility. To wrap a new GPU app, use `(nixGLWrap pkg)` in flake.nix
+- **Adding a new config**: Place files under `common/` mirroring their home directory path (e.g., `common/.config/foo/config` symlinks to `~/.config/foo/config`), then run `stow -t ~ -R common`
+- **Adding a new package**: Add it to the `paths` list in `flake.nix`, then run `nix profile remove dotfiles && nix profile install .#default`
