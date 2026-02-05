@@ -88,18 +88,27 @@
           gh
           git
           git-lfs
-          (nixGLWrap kitty)
-          zathura
           tectonic
           distrobox # run `distrobox create --nvidia --name ubuntu --image ubuntu:latest` to create ubuntu nvidia container
           dust
           claudepod.packages.${system}.default
           nvtopPackages.full
 
+          # Graphical applications
+          (nixGLWrap kitty)
+          zathura
+          xournalpp
+          (nixGLWrap tev)
+          # Inkscape with TexText extension
+          (pkgs.inkscape-with-extensions.override {
+            inkscapeExtensions = [
+              pkgs.inkscape-extensions.textext
+            ];
+          })
+          (nixGLWrap darktable)
+
           # LLMs
           ollama
-
-          (nixGLWrap tev)
 
           # Network tools
           net-tools
@@ -111,15 +120,6 @@
 
           # Fonts
           nerd-fonts.fira-code
-
-          # Inkscape with TexText extension
-          (pkgs.inkscape-with-extensions.override {
-            inkscapeExtensions = [
-              pkgs.inkscape-extensions.textext
-            ];
-          })
-
-          (nixGLWrap darktable)
         ];
       };
     });
