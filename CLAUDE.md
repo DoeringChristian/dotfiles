@@ -8,7 +8,13 @@ This is a stow-based dotfiles repository using GNU Stow for symlink management a
 
 ## Key Commands
 
-### Initial Setup / Full Sync
+### Initial Setup (new machine)
+```bash
+./setup.sh
+```
+Decrypts age key for secrets management, sets up passage, then runs sync.
+
+### Full Sync
 ```bash
 ./sync.sh
 ```
@@ -16,6 +22,12 @@ This runs the complete setup process:
 1. Nix (installs packages from flake.nix)
 2. GNU Stow (creates symlinks)
 3. dconf (loads GNOME settings)
+
+### Update All
+```bash
+./update.sh
+```
+Updates flake inputs (`nix flake update`) then runs sync.
 
 ### Stow Operations
 ```bash
@@ -44,13 +56,16 @@ nix flake update
 ```
 dotfiles/
 ├── common/           # Main stow package - portable configs
-│   ├── .config/      # XDG config files (fish, starship, atuin, etc.)
+│   ├── .config/      # XDG config files (fish, starship, atuin, kitty, zellij, etc.)
 │   ├── .local/bin/   # User binaries (tracked with Git LFS)
 │   └── .local/share/applications/  # Desktop entries
-├── stow/             # Stow global ignore rules
+├── stow/             # Stow global ignore rules (.stow-global-ignore)
+├── setup/            # Encrypted secrets (age-key.age)
 ├── flake.nix         # Nix flakes configuration
 ├── dconf.ini         # GNOME desktop settings
-└── sync.sh           # Setup/installation script
+├── sync.sh           # Sync packages, symlinks, and dconf
+├── setup.sh          # First-time setup (decrypts age key, then syncs)
+└── update.sh         # Update flake inputs and sync
 ```
 
 ## Architecture
@@ -58,6 +73,7 @@ dotfiles/
 - **`common/`**: The main stow package containing all portable configuration files. Files here are symlinked to `~` maintaining their directory structure.
 - **`stow/.stow-global-ignore`**: Applied first via `stow stow` to set up ignore patterns before symlinking common.
 - **`flake.nix`**: Nix flakes entry point with NixGL support for GPU applications (kitty, darktable, tev). Packages are installed via `nix profile install`. Uses a `nixGLWrap` helper that wraps binaries with `nixGLIntel` for GPU compatibility on non-NixOS systems.
+- **Secrets**: Uses age for encryption and passage for password management. The encrypted age key lives in `setup/age-key.age` and is decrypted to `~/.local/share/age/key.txt` by `setup.sh`.
 
 ## Conventions
 
