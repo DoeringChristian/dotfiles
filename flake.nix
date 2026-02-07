@@ -93,6 +93,7 @@
           dust
           claudepod.packages.${system}.default
           nvtopPackages.full
+          lazygit
 
           # Graphical applications
           (nixGLWrap kitty)
