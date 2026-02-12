@@ -94,6 +94,7 @@
           claudepod.packages.${system}.default
           nvtopPackages.full
           lazygit
+          devenv
 
           # Graphical applications
           (nixGLWrap kitty)
