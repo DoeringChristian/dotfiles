@@ -120,6 +120,9 @@
           vpn-slice
           openconnect
 
+          # Type Setting
+          typst
+
           # Fonts
           nerd-fonts.fira-code
         ];
