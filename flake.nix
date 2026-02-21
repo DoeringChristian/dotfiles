@@ -16,6 +16,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    neovim-nightly-overlay = {
+      url = "github:nix-community/neovim-nightly-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -23,6 +28,7 @@
     nixpkgs,
     nixgl,
     claudepod,
+    neovim-nightly-overlay,
     flake-utils,
     ...
   }:
@@ -30,7 +36,7 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays = [nixgl.overlay];
+        overlays = [nixgl.overlay neovim-nightly-overlay.overlays.default];
       };
       nixGLWrap = pkg:
         pkgs.writeShellScriptBin pkg.pname ''
