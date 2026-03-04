@@ -1,0 +1,14 @@
+{
+  "previous_exit_code": 0,
+  "requirements_checker": {
+    "inkscape_executable": "~/.nix-profile/bin/inkscape",
+    "available_tex_to_pdf_converters": {
+      "pdflatex": "~/.nix-profile/bin/pdflatex",
+      "lualatex": "~/.nix-profile/bin/lualatex",
+      "xelatex": "~/.nix-profile/bin/xelatex"
+    },
+    "available_pdf_to_svg_converters": {
+      "inkscape": "~/.nix-profile/bin/inkscape"
+    }
+  }
+}

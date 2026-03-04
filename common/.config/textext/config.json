@@ -9,6 +9,6 @@
   "preamble": "~/.config/textext/preamble.tex",
   "scale": 1.0,
   "previous_tex_command": "pdflatex",
-  "pdflatex-executable": "/home/doeringc/.nix-profile/bin/pdflatex",
-  "lualatex-executable": "/home/doeringc/.nix-profile/bin/lualatex"
+  "pdflatex-executable": "~/.nix-profile/bin/pdflatex",
+  "lualatex-executable": "~/.nix-profile/bin/lualatex"
 }

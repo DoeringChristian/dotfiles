@@ -107,10 +107,13 @@
           zathura
           xournalpp
           (nixGLWrap tev)
-          # Inkscape with TexText extension
+          # Inkscape with TexText extension (using full texlive for newpxtext etc.)
           (pkgs.inkscape-with-extensions.override {
             inkscapeExtensions = [
-              pkgs.inkscape-extensions.textext
+              (pkgs.callPackage "${pkgs.path}/pkgs/applications/graphics/inkscape/extensions/textext" {
+                pdflatex = pkgs.texlive.combined.scheme-full;
+                lualatex = pkgs.texlive.combined.scheme-full;
+              })
             ];
           })
           (nixGLWrap darktable)
