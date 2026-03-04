@@ -1,0 +1,14 @@
+{
+  "gui": {
+    "confirm_close": false,
+    "line_numbers": true,
+    "auto_indent": true,
+    "insert_spaces": true,
+    "tab_width": 4
+  },
+  "preamble": "~/.config/textext/preamble.tex",
+  "scale": 1.0,
+  "previous_tex_command": "pdflatex",
+  "pdflatex-executable": "/home/doeringc/.nix-profile/bin/pdflatex",
+  "lualatex-executable": "/home/doeringc/.nix-profile/bin/lualatex"
+}
