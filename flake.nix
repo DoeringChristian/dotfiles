@@ -128,6 +128,7 @@
 
           # Type Setting
           typst
+          texlive.combined.scheme-full
 
           # Fonts
           nerd-fonts.fira-code
