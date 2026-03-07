@@ -19,6 +19,8 @@ echo "Applying configs with GNU Stow:"
 stow -t ~ stow
 stow -t ~ common
 
-# Load dconf
+# Load dconf (may fail on servers without desktop environment)
 echo "Loading dconf:"
-dconf load / <dconf.ini
+if ! dconf load / <dconf.ini 2>/dev/null; then
+    echo "Warning: dconf load failed (likely running on a server). Skipping."
+fi
