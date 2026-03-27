@@ -84,7 +84,7 @@
           bat
           btop
           claude-code
-          claude-code-acp
+          claude-agent-acp
           gemini-cli
           atuin
           zoxide
