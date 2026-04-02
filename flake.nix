@@ -57,6 +57,7 @@
           stow
           ripgrep
           pixi
+          uv
 
           # Utilities
           unzip
