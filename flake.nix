@@ -36,7 +36,10 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays = [nixgl.overlay neovim-nightly-overlay.overlays.default];
+        overlays = [
+          nixgl.overlay
+          neovim-nightly-overlay.overlays.default
+        ];
       };
       nixGLWrap = pkg:
         pkgs.writeShellScriptBin pkg.pname ''
