@@ -95,7 +95,7 @@ custom = []
 
 [dependencies.nodejs]
 enabled = true
-version = "18"
+version = "22"
 source = "nodesource"
 
 [dependencies.github_cli]
