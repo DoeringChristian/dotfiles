@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# persistent-ssh: SSH with persistent sessions via shpool
+#
+# Uses kitten ssh for the connection (terminfo, shell integration) and
+# shpool on the remote to keep shells alive across connection drops.
+# Pairs with kitten-shpool/persistent_ssh_watcher.py for auto-reconnect.
+
+PATH_PREFIX='export PATH="$HOME/.cargo/bin:$PATH"'
+
+usage() {
+    cat <<EOF
+Usage: persistent-ssh <host> [options]
+
+Options:
+  --new              Force a new session instead of reusing window ID
+  --list             List shpool sessions on remote
+  --clean            Kill all kitty shpool sessions on remote
+  --kill <session>   Kill a specific session on remote
+  --shell <shell>    Shell to use on remote (default: current shell, fallback: bash)
+  --session <name>   Use a specific session name (for reconnection)
+  -h, --help         Show this help
+EOF
+}
+
+detect_shell() {
+    local parent_name
+    parent_name="$(ps -o comm= -p "$PPID" 2>/dev/null)" || true
+    case "$parent_name" in
+        fish|bash|zsh|nu) echo "$parent_name" ;;
+        *) basename "${SHELL:-bash}" ;;
+    esac
+}
+
+remote_has_shell() {
+    local host="$1" shell="$2"
+    ssh "$host" "command -v $shell" &>/dev/null
+}
+
+ensure_shpool() {
+    local host="$1"
+    if ssh "$host" 'command -v shpool >/dev/null 2>&1 || test -x "$HOME/.cargo/bin/shpool"'; then
+        return 0
+    fi
+
+    echo "shpool not found on $host. Installing via cargo..."
+    ssh "$host" "$PATH_PREFIX && cargo install shpool" 2>&1
+    if [ $? -eq 0 ]; then
+        echo "shpool installed successfully on $host"
+        return 0
+    fi
+
+    echo "Failed to install shpool on $host."
+    echo "Ensure cargo is installed, then run: cargo install shpool"
+    return 1
+}
+
+# --- Parse arguments ---
+host=""
+force_new=false
+shell_override=""
+session_override=""
+action="connect"
+kill_target=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --new) force_new=true; shift ;;
+        --list) action="list"; shift ;;
+        --clean) action="clean"; shift ;;
+        --kill) action="kill"; kill_target="${2:-}"; shift 2 || { echo "Error: --kill requires a session name"; exit 1; } ;;
+        --shell) shell_override="${2:-}"; shift 2 || { echo "Error: --shell requires a name"; exit 1; } ;;
+        --session) session_override="${2:-}"; shift 2 || { echo "Error: --session requires a name"; exit 1; } ;;
+        -*) echo "Unknown option: $1"; usage; exit 1 ;;
+        *)
+            if [ -z "$host" ]; then
+                host="$1"
+            else
+                echo "Unexpected argument: $1"; usage; exit 1
+            fi
+            shift ;;
+    esac
+done
+
+if [ -z "$host" ]; then
+    usage
+    exit 1
+fi
+
+case "$action" in
+    list)
+        ssh "$host" "$PATH_PREFIX && shpool list" 2>/dev/null
+        exit
+        ;;
+    clean)
+        ssh "$host" "$PATH_PREFIX"' && for s in $(shpool list 2>/dev/null | tail -n+2 | awk "{print \$1}"); do shpool kill "$s"; done'
+        echo "Cleaned all shpool sessions on $host"
+        exit
+        ;;
+    kill)
+        if [ -z "$kill_target" ]; then
+            echo "Error: --kill requires a session name"
+            exit 1
+        fi
+        ssh "$host" "$PATH_PREFIX && shpool kill $kill_target" 2>/dev/null
+        echo "Killed session $kill_target on $host"
+        exit
+        ;;
+esac
+
+ensure_shpool "$host" || exit 1
+
+remote_shell="${shell_override:-$(detect_shell)}"
+if ! remote_has_shell "$host" "$remote_shell"; then
+    echo "$remote_shell not found on $host, falling back to bash"
+    remote_shell="bash"
+fi
+
+if [ -n "$session_override" ]; then
+    session_name="$session_override"
+elif [ "$force_new" = true ]; then
+    session_name="kitty-${RANDOM}"
+else
+    win_id="${KITTY_WINDOW_ID:-$RANDOM}"
+    win_id="$(echo "$win_id" | tr -cd '0-9')"
+    session_name="kitty-${host}-${win_id}"
+fi
+
+if [ -n "${KITTY_WINDOW_ID:-}" ]; then
+    kitten @ set-user-vars \
+        "persistent_ssh_host=$host" \
+        "persistent_ssh_session=$session_name" \
+        "persistent_ssh_shell=$remote_shell" \
+        2>/dev/null || true
+fi
+
+# Connect via kitten ssh for proper shell integration (terminfo, prompt, etc.)
+# Session info is passed via env vars and picked up by the conf.d hook on remote.
+export PERSISTENT_SSH_SESSION="$session_name"
+export PERSISTENT_SSH_SHELL="$remote_shell"
+exec kitten ssh "$host"
