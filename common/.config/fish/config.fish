@@ -29,7 +29,7 @@ status is-interactive; and begin
     alias lla 'eza -la'
     alias ls eza
     alias lt 'eza --tree'
-    alias s 'persistent-ssh'
+    alias s 'kitten ssh'
 
     # Interactive shell initialisation
     fzf --fish | source
