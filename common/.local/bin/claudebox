@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo "Usage: claudebox [OPTIONS] [PROJECT_DIR] [-- CLAUDE_ARGS...]"
+    echo ""
+    echo "Run Claude Code with --dangerously-skip-permissions inside a Bubblewrap sandbox."
+    echo ""
+    echo "Arguments:"
+    echo "  PROJECT_DIR          Project directory (default: current directory)"
+    echo ""
+    echo "Options:"
+    echo "  --ssh                Bind ~/.ssh read-only (off by default)"
+    echo "  --block-env FILES    Comma-separated .env files to block (default: .env,.env.local,.env.production)"
+    echo "  --no-block-env       Don't block any .env files"
+    echo "  -h, --help           Show this help"
+    echo ""
+    echo "Anything after -- is passed directly to claude."
+    echo ""
+    echo "Examples:"
+    echo "  claudebox ~/projects/myapp"
+    echo "  claudebox ~/projects/myapp -- 'Review the code'"
+    echo "  claudebox --ssh ~/projects/myapp"
+    echo "  claudebox  # uses current directory"
+}
+
+BIND_SSH=false
+BLOCK_ENV=".env,.env.local,.env.production"
+PROJECT_DIR=""
+CLAUDE_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --ssh)
+            BIND_SSH=true
+            shift
+            ;;
+        --block-env)
+            BLOCK_ENV="$2"
+            shift 2
+            ;;
+        --no-block-env)
+            BLOCK_ENV=""
+            shift
+            ;;
+        --)
+            shift
+            CLAUDE_ARGS=("$@")
+            break
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+        *)
+            if [[ -z "$PROJECT_DIR" ]]; then
+                PROJECT_DIR="$1"
+            else
+                echo "Unexpected argument: $1" >&2
+                usage >&2
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
+PROJECT_DIR="$(realpath "$PROJECT_DIR")"
+
+if [[ ! -d "$PROJECT_DIR" ]]; then
+    echo "Error: $PROJECT_DIR is not a directory" >&2
+    exit 1
+fi
+
+CLAUDE_BIN="$(readlink -f "$(command -v claude)" 2>/dev/null || true)"
+if [[ -z "$CLAUDE_BIN" || ! -x "$CLAUDE_BIN" ]]; then
+    echo "Error: claude not found in PATH" >&2
+    exit 1
+fi
+
+# Build bwrap arguments
+BWRAP_ARGS=(
+    # System (read-only)
+    --ro-bind /usr /usr
+    --ro-bind /bin /bin
+    --ro-bind /etc/resolv.conf /etc/resolv.conf
+    --ro-bind /etc/hosts /etc/hosts
+    --ro-bind /etc/ssl /etc/ssl
+    --ro-bind /etc/passwd /etc/passwd
+    --ro-bind /etc/group /etc/group
+)
+
+# /lib and /lib64 may not exist on all systems
+[[ -e /lib ]] && BWRAP_ARGS+=(--ro-bind /lib /lib)
+[[ -e /lib64 ]] && BWRAP_ARGS+=(--ro-bind /lib64 /lib64)
+[[ -e /sbin ]] && BWRAP_ARGS+=(--ro-bind /sbin /sbin)
+
+# Nix store (read-only) - needed for nix-installed claude and tools
+[[ -e /nix ]] && BWRAP_ARGS+=(--ro-bind /nix /nix)
+
+# Git config
+[[ -f "$HOME/.gitconfig" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig")
+[[ -d "$HOME/.config/git" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.config/git" "$HOME/.config/git")
+
+# Node/nvm (needed for claude's node runtime)
+[[ -d "$HOME/.nvm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.nvm" "$HOME/.nvm")
+[[ -d "$HOME/.fnm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.fnm" "$HOME/.fnm")
+[[ -d "$HOME/.npm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.npm" "$HOME/.npm")
+
+# Claude auth and config (read-write so sessions persist)
+[[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
+
+# SSH (optional)
+if [[ "$BIND_SSH" == true ]] && [[ -d "$HOME/.ssh" ]]; then
+    BWRAP_ARGS+=(--ro-bind "$HOME/.ssh" "$HOME/.ssh")
+fi
+
+# GPU access - bind DRI and nvidia devices
+if [[ -d /dev/dri ]]; then
+    BWRAP_ARGS+=(--dev-bind /dev/dri /dev/dri)
+fi
+for dev in /dev/nvidia*; do
+    [[ -e "$dev" ]] && BWRAP_ARGS+=(--dev-bind "$dev" "$dev")
+done
+
+# Project directory (read-write)
+BWRAP_ARGS+=(--bind "$PROJECT_DIR" "$PROJECT_DIR")
+
+# Sandbox essentials
+BWRAP_ARGS+=(
+    --tmpfs /tmp
+    --proc /proc
+    --dev /dev
+    --share-net
+    --unshare-pid
+    --die-with-parent
+    --chdir "$PROJECT_DIR"
+)
+
+# Block .env files by overlaying with /dev/null
+if [[ -n "$BLOCK_ENV" ]]; then
+    IFS=',' read -ra ENV_FILES <<< "$BLOCK_ENV"
+    for env_file in "${ENV_FILES[@]}"; do
+        env_path="$PROJECT_DIR/$env_file"
+        if [[ -f "$env_path" ]]; then
+            BWRAP_ARGS+=(--ro-bind /dev/null "$env_path")
+        fi
+    done
+fi
+
+exec bwrap "${BWRAP_ARGS[@]}" \
+    "$CLAUDE_BIN" --dangerously-skip-permissions "${CLAUDE_ARGS[@]}"
