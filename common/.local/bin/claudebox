@@ -84,8 +84,16 @@ if [[ -z "$CLAUDE_BIN" || ! -x "$CLAUDE_BIN" ]]; then
     exit 1
 fi
 
-# Build bwrap arguments
+# Build bwrap arguments — order matters: base mounts first, then overlays on top
 BWRAP_ARGS=(
+    # Sandbox essentials (must come first so later binds overlay correctly)
+    --tmpfs /tmp
+    --proc /proc
+    --dev-bind /dev /dev
+    --share-net
+    --unshare-pid
+    --die-with-parent
+
     # System (read-only)
     --ro-bind /usr /usr
     --ro-bind /bin /bin
@@ -104,6 +112,9 @@ BWRAP_ARGS=(
 # Nix store (read-only) - needed for nix-installed claude and tools
 [[ -e /nix ]] && BWRAP_ARGS+=(--ro-bind /nix /nix)
 
+# Home directory as tmpfs base so child bind mounts have a mountpoint
+BWRAP_ARGS+=(--tmpfs "$HOME")
+
 # Git config
 [[ -f "$HOME/.gitconfig" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig")
 [[ -d "$HOME/.config/git" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.config/git" "$HOME/.config/git")
@@ -115,31 +126,16 @@ BWRAP_ARGS=(
 
 # Claude auth and config (read-write so sessions persist)
 [[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
+[[ -f "$HOME/.claude.json" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude.json" "$HOME/.claude.json")
 
 # SSH (optional)
 if [[ "$BIND_SSH" == true ]] && [[ -d "$HOME/.ssh" ]]; then
     BWRAP_ARGS+=(--ro-bind "$HOME/.ssh" "$HOME/.ssh")
 fi
 
-# GPU access - bind DRI and nvidia devices
-if [[ -d /dev/dri ]]; then
-    BWRAP_ARGS+=(--dev-bind /dev/dri /dev/dri)
-fi
-for dev in /dev/nvidia*; do
-    [[ -e "$dev" ]] && BWRAP_ARGS+=(--dev-bind "$dev" "$dev")
-done
-
 # Project directory (read-write)
-BWRAP_ARGS+=(--bind "$PROJECT_DIR" "$PROJECT_DIR")
-
-# Sandbox essentials
 BWRAP_ARGS+=(
-    --tmpfs /tmp
-    --proc /proc
-    --dev /dev
-    --share-net
-    --unshare-pid
-    --die-with-parent
+    --bind "$PROJECT_DIR" "$PROJECT_DIR"
     --chdir "$PROJECT_DIR"
 )
 
