@@ -115,6 +115,10 @@ BWRAP_ARGS+=(--tmpfs "$HOME")
 [[ -f "$HOME/.gitconfig" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig")
 [[ -d "$HOME/.config/git" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.config/git" "$HOME/.config/git")
 
+# Nix profile symlinks (so nix-installed tools like pixi are on PATH)
+[[ -e "$HOME/.nix-profile" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.nix-profile" "$HOME/.nix-profile")
+[[ -d "$HOME/.local/state/nix" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/state/nix" "$HOME/.local/state/nix")
+
 # Node/nvm (needed for claude's node runtime)
 [[ -d "$HOME/.nvm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.nvm" "$HOME/.nvm")
 [[ -d "$HOME/.fnm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.fnm" "$HOME/.fnm")
