@@ -103,24 +103,61 @@ find_config() {
 
 CONFIG_FILE="$(find_config "$PROJECT_DIR")"
 if [[ -n "$CONFIG_FILE" ]]; then
+    CONFIG_DIR="$(dirname "$(realpath "$CONFIG_FILE")")"
+    current_section=""
+
     while IFS= read -r line || [[ -n "$line" ]]; do
-        # Skip comments and blank lines
+        # Strip comments and whitespace
         line="${line%%#*}"
-        line="${line## }"
-        line="${line%% }"
+        line="${line%%;;*}"
+        line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
         [[ -z "$line" ]] && continue
 
-        # Parse "directive path" lines
-        read -r directive path <<< "$line"
-        # Expand ~ and env vars in path
-        path="${path/#\~/$HOME}"
-        path="$(eval echo "$path" 2>/dev/null || echo "$path")"
-        [[ -e "$path" ]] || continue
-        path="$(realpath "$path")"
+        # Section header
+        if [[ "$line" =~ ^\[(.+)\]$ ]]; then
+            current_section="${BASH_REMATCH[1]}"
+            continue
+        fi
 
-        case "$directive" in
-            bind)    EXTRA_BINDS+=("--bind" "$path" "$path") ;;
-            ro-bind) EXTRA_BINDS+=("--ro-bind" "$path" "$path") ;;
+        # Key = value pairs
+        if [[ "$line" =~ ^([^=]+)=(.+)$ ]]; then
+            key="$(echo "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+            value="$(echo "${BASH_REMATCH[2]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        else
+            continue
+        fi
+
+        # Expand ~ and env vars in value
+        expand_path() {
+            local p="$1"
+            p="${p/#\~/$HOME}"
+            p="${p/\$HOME/$HOME}"
+            p="${p/\{CONFIG_DIR\}/$CONFIG_DIR}"
+            p="${p/\$CONFIG_DIR/$CONFIG_DIR}"
+            echo "$p"
+        }
+
+        case "$current_section" in
+            mounts)
+                local_path="$(expand_path "$value")"
+                [[ -e "$local_path" ]] || continue
+                local_path="$(realpath "$local_path")"
+                case "$key" in
+                    bind)    EXTRA_BINDS+=("--bind" "$local_path" "$local_path") ;;
+                    ro-bind) EXTRA_BINDS+=("--ro-bind" "$local_path" "$local_path") ;;
+                esac
+                ;;
+            options)
+                case "$key" in
+                    ssh)        [[ "$value" == "true" ]] && BIND_SSH=true ;;
+                    block-env)  BLOCK_ENV="$value" ;;
+                    bind-config-dir)
+                        if [[ "$value" == "true" ]]; then
+                            EXTRA_BINDS+=("--bind" "$CONFIG_DIR" "$CONFIG_DIR")
+                        fi
+                        ;;
+                esac
+                ;;
         esac
     done < "$CONFIG_FILE"
 fi
