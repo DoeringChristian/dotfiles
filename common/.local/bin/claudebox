@@ -96,6 +96,8 @@ BWRAP_ARGS=(
     --ro-bind /etc/ssl /etc/ssl
     --ro-bind /etc/passwd /etc/passwd
     --ro-bind /etc/group /etc/group
+    --ro-bind /sys /sys
+    --ro-bind /run /run
 )
 
 # /lib and /lib64 may not exist on all systems
