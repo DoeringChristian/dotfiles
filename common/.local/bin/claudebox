@@ -10,6 +10,7 @@ usage() {
     echo "  PROJECT_DIR          Project directory (default: current directory)"
     echo ""
     echo "Options:"
+    echo "  --bash               Launch a bash shell inside the sandbox"
     echo "  --ssh                Bind ~/.ssh read-only (off by default)"
     echo "  --block-env FILES    Comma-separated .env files to block (default: .env,.env.local,.env.production)"
     echo "  --no-block-env       Don't block any .env files"
@@ -27,6 +28,7 @@ usage() {
 BIND_SSH=false
 BLOCK_ENV=".env,.env.local,.env.production"
 PROJECT_DIR=""
+SHELL_MODE=""
 CLAUDE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -34,6 +36,10 @@ while [[ $# -gt 0 ]]; do
     -h | --help)
         usage
         exit 0
+        ;;
+    --bash)
+        SHELL_MODE=bash
+        shift
         ;;
     --ssh)
         BIND_SSH=true
@@ -72,10 +78,20 @@ if [[ ! -d "$PROJECT_DIR" ]]; then
     exit 1
 fi
 
-CLAUDE_BIN="$(readlink -f "$(command -v claude)" 2>/dev/null || true)"
-if [[ -z "$CLAUDE_BIN" || ! -x "$CLAUDE_BIN" ]]; then
-    echo "Error: claude not found in PATH" >&2
-    exit 1
+if [[ -n "$SHELL_MODE" ]]; then
+    ENTRY_BIN="$(command -v "$SHELL_MODE" 2>/dev/null || true)"
+    if [[ -z "$ENTRY_BIN" ]]; then
+        echo "Error: $SHELL_MODE not found in PATH" >&2
+        exit 1
+    fi
+    ENTRY_ARGS=()
+else
+    ENTRY_BIN="$(readlink -f "$(command -v claude)" 2>/dev/null || true)"
+    if [[ -z "$ENTRY_BIN" || ! -x "$ENTRY_BIN" ]]; then
+        echo "Error: claude not found in PATH" >&2
+        exit 1
+    fi
+    ENTRY_ARGS=(--dangerously-skip-permissions "${CLAUDE_ARGS[@]}")
 fi
 
 # Build bwrap arguments — order matters: base mounts first, then overlays on top
@@ -150,5 +166,4 @@ if [[ -n "$BLOCK_ENV" ]]; then
     done
 fi
 
-exec bwrap "${BWRAP_ARGS[@]}" \
-    "$CLAUDE_BIN" --dangerously-skip-permissions "${CLAUDE_ARGS[@]}"
+exec bwrap "${BWRAP_ARGS[@]}" "$ENTRY_BIN" "${ENTRY_ARGS[@]}"
