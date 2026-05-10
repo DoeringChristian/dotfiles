@@ -31,42 +31,36 @@ CLAUDE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        --ssh)
-            BIND_SSH=true
-            shift
-            ;;
-        --block-env)
-            BLOCK_ENV="$2"
-            shift 2
-            ;;
-        --no-block-env)
-            BLOCK_ENV=""
-            shift
-            ;;
-        --)
-            shift
-            CLAUDE_ARGS=("$@")
-            break
-            ;;
-        -*)
-            echo "Unknown option: $1" >&2
-            usage >&2
-            exit 1
-            ;;
-        *)
-            if [[ -z "$PROJECT_DIR" ]]; then
-                PROJECT_DIR="$1"
-            else
-                echo "Unexpected argument: $1" >&2
-                usage >&2
-                exit 1
-            fi
-            shift
-            ;;
+    -h | --help)
+        usage
+        exit 0
+        ;;
+    --ssh)
+        BIND_SSH=true
+        shift
+        ;;
+    --block-env)
+        BLOCK_ENV="$2"
+        shift 2
+        ;;
+    --no-block-env)
+        BLOCK_ENV=""
+        shift
+        ;;
+    --)
+        shift
+        CLAUDE_ARGS+=("$@")
+        break
+        ;;
+    *)
+        if [[ -z "$PROJECT_DIR" && -d "$1" ]]; then
+            PROJECT_DIR="$1"
+        else
+            # Forward unrecognized args to claude
+            CLAUDE_ARGS+=("$1")
+        fi
+        shift
+        ;;
     esac
 done
 
@@ -141,7 +135,7 @@ BWRAP_ARGS+=(
 
 # Block .env files by overlaying with /dev/null
 if [[ -n "$BLOCK_ENV" ]]; then
-    IFS=',' read -ra ENV_FILES <<< "$BLOCK_ENV"
+    IFS=',' read -ra ENV_FILES <<<"$BLOCK_ENV"
     for env_file in "${ENV_FILES[@]}"; do
         env_path="$PROJECT_DIR/$env_file"
         if [[ -f "$env_path" ]]; then
