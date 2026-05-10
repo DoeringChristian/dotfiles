@@ -11,6 +11,8 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --bash               Launch a bash shell inside the sandbox"
+    echo "  --bind PATH          Bind extra directory read-write (repeatable)"
+    echo "  --ro-bind PATH       Bind extra directory read-only (repeatable)"
     echo "  --ssh                Bind ~/.ssh read-only (off by default)"
     echo "  --block-env FILES    Comma-separated .env files to block (default: .env,.env.local,.env.production)"
     echo "  --no-block-env       Don't block any .env files"
@@ -29,6 +31,7 @@ BIND_SSH=false
 BLOCK_ENV=".env,.env.local,.env.production"
 PROJECT_DIR=""
 SHELL_MODE=""
+EXTRA_BINDS=()
 CLAUDE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -40,6 +43,14 @@ while [[ $# -gt 0 ]]; do
     --bash)
         SHELL_MODE=bash
         shift
+        ;;
+    --bind)
+        EXTRA_BINDS+=("--bind" "$(realpath "$2")" "$(realpath "$2")")
+        shift 2
+        ;;
+    --ro-bind)
+        EXTRA_BINDS+=("--ro-bind" "$(realpath "$2")" "$(realpath "$2")")
+        shift 2
         ;;
     --ssh)
         BIND_SSH=true
@@ -76,6 +87,42 @@ PROJECT_DIR="$(realpath "$PROJECT_DIR")"
 if [[ ! -d "$PROJECT_DIR" ]]; then
     echo "Error: $PROJECT_DIR is not a directory" >&2
     exit 1
+fi
+
+# Search upward from PROJECT_DIR for .claudebox config
+find_config() {
+    local dir="$1"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/.claudebox" ]]; then
+            echo "$dir/.claudebox"
+            return
+        fi
+        dir="$(dirname "$dir")"
+    done
+}
+
+CONFIG_FILE="$(find_config "$PROJECT_DIR")"
+if [[ -n "$CONFIG_FILE" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Skip comments and blank lines
+        line="${line%%#*}"
+        line="${line## }"
+        line="${line%% }"
+        [[ -z "$line" ]] && continue
+
+        # Parse "directive path" lines
+        read -r directive path <<< "$line"
+        # Expand ~ and env vars in path
+        path="${path/#\~/$HOME}"
+        path="$(eval echo "$path" 2>/dev/null || echo "$path")"
+        [[ -e "$path" ]] || continue
+        path="$(realpath "$path")"
+
+        case "$directive" in
+            bind)    EXTRA_BINDS+=("--bind" "$path" "$path") ;;
+            ro-bind) EXTRA_BINDS+=("--ro-bind" "$path" "$path") ;;
+        esac
+    done < "$CONFIG_FILE"
 fi
 
 if [[ -n "$SHELL_MODE" ]]; then
@@ -154,6 +201,11 @@ BWRAP_ARGS+=(
     --bind "$PROJECT_DIR" "$PROJECT_DIR"
     --chdir "$PROJECT_DIR"
 )
+
+# Extra user-specified bind mounts
+if [[ ${#EXTRA_BINDS[@]} -gt 0 ]]; then
+    BWRAP_ARGS+=("${EXTRA_BINDS[@]}")
+fi
 
 # Block .env files by overlaying with /dev/null
 if [[ -n "$BLOCK_ENV" ]]; then
