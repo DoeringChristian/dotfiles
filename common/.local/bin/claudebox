@@ -13,6 +13,7 @@ usage() {
     echo "  --bash               Launch a bash shell inside the sandbox"
     echo "  --bind PATH          Bind extra directory read-write (repeatable)"
     echo "  --ro-bind PATH       Bind extra directory read-only (repeatable)"
+    echo "  --share-pid          Share host PID namespace (shows all processes)"
     echo "  --ssh                Bind ~/.ssh read-only (off by default)"
     echo "  --block-env FILES    Comma-separated .env files to block (default: .env,.env.local,.env.production)"
     echo "  --no-block-env       Don't block any .env files"
@@ -28,6 +29,7 @@ usage() {
 }
 
 BIND_SSH=false
+SHARE_PID=false
 BLOCK_ENV=".env,.env.local,.env.production"
 PROJECT_DIR=""
 SHELL_MODE=""
@@ -42,6 +44,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     --bash)
         SHELL_MODE=bash
+        shift
+        ;;
+    --share-pid)
+        SHARE_PID=true
         shift
         ;;
     --bind)
@@ -127,13 +133,15 @@ if [[ -n "$CONFIG_FILE" ]]; then
             continue
         fi
 
-        # Expand ~ and env vars in value
+        # Expand ~ and $HOME, resolve relative paths against CONFIG_DIR
         expand_path() {
             local p="$1"
             p="${p/#\~/$HOME}"
             p="${p/\$HOME/$HOME}"
-            p="${p/\{CONFIG_DIR\}/$CONFIG_DIR}"
-            p="${p/\$CONFIG_DIR/$CONFIG_DIR}"
+            # Resolve relative paths against config file directory
+            if [[ "$p" != /* ]]; then
+                p="$CONFIG_DIR/$p"
+            fi
             echo "$p"
         }
 
@@ -149,13 +157,9 @@ if [[ -n "$CONFIG_FILE" ]]; then
                 ;;
             options)
                 case "$key" in
-                    ssh)        [[ "$value" == "true" ]] && BIND_SSH=true ;;
-                    block-env)  BLOCK_ENV="$value" ;;
-                    bind-config-dir)
-                        if [[ "$value" == "true" ]]; then
-                            EXTRA_BINDS+=("--bind" "$CONFIG_DIR" "$CONFIG_DIR")
-                        fi
-                        ;;
+                    ssh)       [[ "$value" == "true" ]] && BIND_SSH=true ;;
+                    share-pid) [[ "$value" == "true" ]] && SHARE_PID=true ;;
+                    block-env) BLOCK_ENV="$value" ;;
                 esac
                 ;;
         esac
@@ -185,7 +189,6 @@ BWRAP_ARGS=(
     --proc /proc
     --dev-bind /dev /dev
     --share-net
-    --unshare-pid
     --die-with-parent
 
     # System (read-only)
@@ -199,6 +202,11 @@ BWRAP_ARGS=(
     --ro-bind /sys /sys
     --ro-bind /run /run
 )
+
+# PID namespace isolation (default: isolated, share-pid disables it)
+if [[ "$SHARE_PID" != true ]]; then
+    BWRAP_ARGS+=(--unshare-pid)
+fi
 
 # /lib and /lib64 may not exist on all systems
 [[ -e /lib ]] && BWRAP_ARGS+=(--ro-bind /lib /lib)
