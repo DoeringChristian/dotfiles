@@ -25,6 +25,12 @@ if [ "$OS" = "Darwin" ]; then
     stow -t ~ darwin
 fi
 
+# Run install scripts for GUI applications
+echo "Running install scripts:"
+for script in "$PROJECT_DIR"/install/*.sh; do
+    [ -x "$script" ] && bash "$script"
+done
+
 # Load dconf (Linux/GNOME only)
 if [ "$OS" = "Linux" ]; then
     echo "Loading dconf:"

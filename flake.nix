@@ -87,8 +87,6 @@
             nerd-fonts.fira-code
 
             # Graphical applications
-            kitty
-            tev
             zathura
           ]
           ++ (
