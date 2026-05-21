@@ -210,6 +210,11 @@ if [[ "$OS" == "Darwin" ]]; then
 ;; Deny all file writes globally
 (deny file-write*)
 
+;; Allow writes needed for process spawning (pipes, PTYs, sockets)
+(allow file-write* (vnode-type FIFO))
+(allow file-write* (vnode-type CHARACTER-DEVICE))
+(allow file-write* (vnode-type SOCKET))
+
 ;; Allow writes to project directory
 (allow file-write* (subpath "'"$PROJECT_DIR"'"))
 
