@@ -33,7 +33,11 @@
         config.allowUnfree = true;
         overlays =
           [neovim-nightly-overlay.overlays.default]
-          ++ (if isLinux then [nixgl.overlay] else []);
+          ++ (
+            if isLinux
+            then [nixgl.overlay]
+            else []
+          );
       };
       # On Linux, wrap GPU apps with nixGLIntel; on macOS, just pass through
       nixGLWrap =
@@ -110,7 +114,6 @@
             (nixGLWrap kitty)
             zathura
             (nixGLWrap tev)
-            (nixGLWrap darktable)
           ]
           ++ (
             if isLinux
@@ -132,16 +135,6 @@
 
               # Linux-only: LLMs
               ollama
-
-              # Linux-only: GUI (inkscape with textext needs texlive)
-              (pkgs.inkscape-with-extensions.override {
-                inkscapeExtensions = [
-                  (pkgs.callPackage "${pkgs.path}/pkgs/applications/graphics/inkscape/extensions/textext" {
-                    pdflatex = pkgs.texlive.combined.scheme-full;
-                    lualatex = pkgs.texlive.combined.scheme-full;
-                  })
-                ];
-              })
             ]
             else []
           );
