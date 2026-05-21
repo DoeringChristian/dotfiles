@@ -1,5 +1,5 @@
 {
-  description = "Home Manager configuration for Ubuntu";
+  description = "Cross-platform dotfiles (Linux & macOS)";
 
   inputs = {
     # Nixpkgs
@@ -8,11 +8,6 @@
     # NixGL - using PR #187 with nvidia version detection fix
     nixgl = {
       url = "github:nix-community/nixGL/pull/187/head";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    claudepod = {
-      url = "github:doeringchristian/claudepod";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -27,119 +22,129 @@
   outputs = {
     nixpkgs,
     nixgl,
-    claudepod,
     neovim-nightly-overlay,
     flake-utils,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
+      isLinux = builtins.match ".*linux.*" system != null;
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays = [
-          nixgl.overlay
-          neovim-nightly-overlay.overlays.default
-        ];
+        overlays =
+          [neovim-nightly-overlay.overlays.default]
+          ++ (if isLinux then [nixgl.overlay] else []);
       };
-      nixGLWrap = pkg:
-        pkgs.writeShellScriptBin pkg.pname ''
-          exec ${pkgs.nixgl.nixGLIntel}/bin/nixGLIntel ${pkg}/bin/${pkg.pname} "$@"
-        '';
+      # On Linux, wrap GPU apps with nixGLIntel; on macOS, just pass through
+      nixGLWrap =
+        if isLinux
+        then
+          pkg:
+            pkgs.writeShellScriptBin pkg.pname ''
+              exec ${pkgs.nixgl.nixGLIntel}/bin/nixGLIntel ${pkg}/bin/${pkg.pname} "$@"
+            ''
+        else pkg: pkg;
     in {
       packages.default = pkgs.buildEnv {
         name = "dotfiles";
-        paths = with pkgs; [
-          # Development tools
-          vim
-          neovim
-          tree
-          ripgrep
-          fd
-          curl
-          wget
-          stow
-          ripgrep
-          pixi
-          uv
+        paths = with pkgs;
+          [
+            # Development tools
+            vim
+            neovim
+            tree
+            ripgrep
+            fd
+            curl
+            wget
+            stow
+            pixi
+            uv
 
-          # Utilities
-          unzip
-          zip
-          gzip
-          which
-          file
-          less
-          wl-clipboard
-          xsel
+            # Utilities
+            unzip
+            zip
+            gzip
+            which
+            file
+            less
 
-          # Secrets
-          age
-          passage
+            # Secrets
+            age
+            passage
 
-          # System monitoring
-          btop
-          ncdu
-          duf
+            # System monitoring
+            btop
+            ncdu
+            duf
 
-          # Utilities
-          starship
-          direnv
-          eza
-          bat
-          btop
-          claude-code
-          claude-agent-acp
-          gemini-cli
-          atuin
-          zoxide
-          zellij
-          fish
-          fzf
-          gh
-          git
-          git-lfs
-          tectonic
-          distrobox # run `distrobox create --nvidia --name ubuntu --image ubuntu:latest` to create ubuntu nvidia container
-          dust
-          claudepod.packages.${system}.default
-          nvtopPackages.full
-          lazygit
-          devenv
+            # Shell & CLI tools
+            starship
+            direnv
+            eza
+            bat
+            claude-code
+            claude-agent-acp
+            gemini-cli
+            atuin
+            zoxide
+            zellij
+            fish
+            fzf
+            gh
+            git
+            git-lfs
+            tectonic
+            dust
+            lazygit
+            devenv
+            nmap
 
-          # Graphical applications
-          (nixGLWrap kitty)
-          zathura
-          xournalpp
-          (nixGLWrap tev)
-          # Inkscape with TexText extension (using full texlive for newpxtext etc.)
-          (pkgs.inkscape-with-extensions.override {
-            inkscapeExtensions = [
-              (pkgs.callPackage "${pkgs.path}/pkgs/applications/graphics/inkscape/extensions/textext" {
-                pdflatex = pkgs.texlive.combined.scheme-full;
-                lualatex = pkgs.texlive.combined.scheme-full;
+            # Type Setting
+            typst
+
+            # Fonts
+            nerd-fonts.fira-code
+
+            # Graphical applications (nixGLWrap is identity on macOS)
+            (nixGLWrap kitty)
+            zathura
+            (nixGLWrap tev)
+            (nixGLWrap darktable)
+          ]
+          ++ (
+            if isLinux
+            then [
+              # Linux-only: clipboard
+              wl-clipboard
+              xsel
+
+              # Linux-only: containers & GPU monitoring
+              distrobox # run `distrobox create --nvidia --name ubuntu --image ubuntu:latest`
+              nvtopPackages.full
+
+              # Linux-only: network tools
+              net-tools
+              inetutils
+              traceroute
+              vpn-slice
+              openconnect
+
+              # Linux-only: LLMs
+              ollama
+
+              # Linux-only: GUI (inkscape with textext needs texlive)
+              (pkgs.inkscape-with-extensions.override {
+                inkscapeExtensions = [
+                  (pkgs.callPackage "${pkgs.path}/pkgs/applications/graphics/inkscape/extensions/textext" {
+                    pdflatex = pkgs.texlive.combined.scheme-full;
+                    lualatex = pkgs.texlive.combined.scheme-full;
+                  })
+                ];
               })
-            ];
-          })
-          (nixGLWrap darktable)
-
-          # LLMs
-          ollama
-
-          # Network tools
-          net-tools
-          inetutils
-          nmap
-          traceroute
-          vpn-slice
-          openconnect
-
-          # Type Setting
-          typst
-          texlive.combined.scheme-full
-
-          # Fonts
-          nerd-fonts.fira-code
-        ];
+            ]
+            else []
+          );
       };
     });
 }

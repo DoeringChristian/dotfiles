@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-# Goto the directory this executable is located in
-PROJECT_DIR=$(dirname "$(realpath $0)")
-cd $PROJECT_DIR
+# Portable realpath fallback (macOS lacks realpath by default)
+PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
+cd "$PROJECT_DIR"
 
 nix flake update
 ./sync.sh

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-# Goto the directory this executable is located in
-PROJECT_DIR=$(dirname "$(realpath $0)")
-cd $PROJECT_DIR
+# Portable realpath fallback (macOS lacks realpath by default)
+PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
+cd "$PROJECT_DIR"
+
+OS="$(uname -s)"
 
 mkdir -p ~/.config
 mkdir -p ~/.local/bin
@@ -19,8 +21,14 @@ echo "Applying configs with GNU Stow:"
 stow -t ~ stow
 stow -t ~ common
 
-# Load dconf (may fail on servers without desktop environment)
-echo "Loading dconf:"
-if ! dconf load / <dconf.ini 2>/dev/null; then
-    echo "Warning: dconf load failed (likely running on a server). Skipping."
+if [ "$OS" = "Darwin" ]; then
+    stow -t ~ darwin
+fi
+
+# Load dconf (Linux/GNOME only)
+if [ "$OS" = "Linux" ]; then
+    echo "Loading dconf:"
+    if ! dconf load / <dconf.ini 2>/dev/null; then
+        echo "Warning: dconf load failed (likely running on a server). Skipping."
+    fi
 fi
