@@ -28,11 +28,13 @@ if [ "$OS" = "Darwin" ]; then
 
     echo "Mounting and installing..."
     hdiutil attach -quiet "$TMPDIR/tev.dmg" -mountpoint "$TMPDIR/mnt"
-    cp -R "$TMPDIR/mnt/tev.app" /Applications/tev.app
+    mkdir -p ~/Applications
+    rm -rf ~/Applications/tev.app
+    cp -R "$TMPDIR/mnt/tev.app" ~/Applications/tev.app
     hdiutil detach -quiet "$TMPDIR/mnt"
     rm -rf "$TMPDIR"
 
-    echo "tev installed to /Applications/tev.app"
+    echo "tev installed to ~/Applications/tev.app"
 
 elif [ "$OS" = "Linux" ]; then
     if [ "$ARCH" = "aarch64" ]; then
