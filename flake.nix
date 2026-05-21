@@ -5,12 +5,6 @@
     # Nixpkgs
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    # NixGL - using PR #187 with nvidia version detection fix
-    nixgl = {
-      url = "github:nix-community/nixGL/pull/187/head";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     neovim-nightly-overlay = {
       url = "github:nix-community/neovim-nightly-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -21,7 +15,6 @@
 
   outputs = {
     nixpkgs,
-    nixgl,
     neovim-nightly-overlay,
     flake-utils,
     ...
@@ -31,23 +24,8 @@
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
-        overlays =
-          [neovim-nightly-overlay.overlays.default]
-          ++ (
-            if isLinux
-            then [nixgl.overlay]
-            else []
-          );
+        overlays = [neovim-nightly-overlay.overlays.default];
       };
-      # On Linux, wrap GPU apps with nixGLIntel; on macOS, just pass through
-      nixGLWrap =
-        if isLinux
-        then
-          pkg:
-            pkgs.writeShellScriptBin pkg.pname ''
-              exec ${pkgs.nixgl.nixGLIntel}/bin/nixGLIntel ${pkg}/bin/${pkg.pname} "$@"
-            ''
-        else pkg: pkg;
     in {
       packages.default = pkgs.buildEnv {
         name = "dotfiles";
@@ -108,10 +86,10 @@
             # Fonts
             nerd-fonts.fira-code
 
-            # Graphical applications (nixGLWrap is identity on macOS)
-            (nixGLWrap kitty)
+            # Graphical applications
+            kitty
+            tev
             zathura
-            (nixGLWrap tev)
           ]
           ++ (
             if isLinux

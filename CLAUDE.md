@@ -75,7 +75,7 @@ dotfiles/
 - **`common/`**: The main stow package containing all portable configuration files. Files here are symlinked to `~` maintaining their directory structure. Used on both Linux and macOS.
 - **`darwin/`**: macOS-specific stow package. Stowed in addition to `common/` on macOS only. Place macOS-specific config overrides here.
 - **`stow/.stow-global-ignore`**: Applied first via `stow stow` to set up ignore patterns before symlinking common.
-- **`flake.nix`**: Nix flakes entry point. Uses `eachDefaultSystem` for cross-platform support. On Linux, includes NixGL overlay and wraps GPU apps (kitty, darktable, tev) with `nixGLIntel`. On macOS, `nixGLWrap` is a no-op pass-through. Linux-only packages (wl-clipboard, distrobox, nvtop, etc.) are conditionally included.
+- **`flake.nix`**: Nix flakes entry point. Uses `eachDefaultSystem` for cross-platform support. Linux-only packages (wl-clipboard, distrobox, nvtop, etc.) are conditionally included.
 - **Secrets**: Uses age for encryption and passage for password management. The encrypted age key lives in `setup/age-key.age` and is decrypted to `~/.local/share/age/key.txt` by `setup.sh`. Note: `setup.sh` runs `sync.sh` first to ensure `age` is installed via Nix before attempting decryption.
 
 ## Conventions
@@ -83,6 +83,5 @@ dotfiles/
 - **Git LFS**: Binary files in `.local/bin/` are tracked with Git LFS (see `.gitattributes`)
 - **Catppuccin Macchiato**: Consistent dark theme used across starship, fish, bat, btop, kitty, and eza
 - **Fish shell**: Default shell with vi-mode keybindings (`jk` for escape, `l` accepts autosuggestions)
-- **NixGL wrapping** (Linux only): GPU-accelerated apps (kitty, darktable, tev) use `nixGLIntel` wrapper for compatibility. To wrap a new GPU app, use `(nixGLWrap pkg)` in flake.nix. On macOS, `nixGLWrap` is identity — no wrapping needed.
 - **Adding a new config**: Place files under `common/` mirroring their home directory path (e.g., `common/.config/foo/config` symlinks to `~/.config/foo/config`), then run `stow -t ~ -R common`. For macOS-specific configs, use `darwin/` instead.
 - **Adding a new package**: Add it to the common `paths` list in `flake.nix` (or the linux-only conditional block), then run `nix profile remove dotfiles && nix profile install .#default`
