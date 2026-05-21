@@ -98,10 +98,8 @@
             gh
             git
             git-lfs
-            tectonic
             dust
             lazygit
-            devenv
             nmap
 
             # Type Setting
