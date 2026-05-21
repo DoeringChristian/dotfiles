@@ -1,2 +1,2 @@
 #!/bin/bash
-exec ~/.nix-profile/bin/kitty "$@"
+exec /usr/bin/arch -arm64 ~/.nix-profile/bin/kitty "$@"
