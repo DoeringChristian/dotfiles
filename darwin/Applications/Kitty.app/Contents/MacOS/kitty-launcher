@@ -1,2 +1,6 @@
 #!/bin/bash
+# Source nix environment (not available when launched from Spotlight/Launchpad)
+if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+    . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+fi
 exec /usr/bin/arch -arm64 ~/.nix-profile/bin/kitty "$@"
