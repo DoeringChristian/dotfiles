@@ -1,0 +1,56 @@
+# Development tools
+brew "vim"
+brew "neovim"
+brew "tree"
+brew "ripgrep"
+brew "fd"
+brew "curl"
+brew "wget"
+brew "stow"
+brew "pixi"
+brew "uv"
+
+# Utilities
+brew "unzip"
+brew "zip"
+brew "gzip"
+brew "less"
+
+# Secrets
+brew "age"
+brew "passage"
+
+# System monitoring
+brew "btop"
+brew "ncdu"
+brew "duf"
+
+# Shell & CLI tools
+brew "starship"
+brew "direnv"
+brew "eza"
+brew "bat"
+brew "atuin"
+brew "zoxide"
+brew "zellij"
+brew "fish"
+brew "fzf"
+brew "gh"
+brew "git"
+brew "git-lfs"
+brew "dust"
+brew "lazygit"
+
+# Typesetting
+brew "typst"
+brew "tectonic"
+
+# Network tools
+brew "nmap"
+brew "traceroute"
+
+# LLMs
+brew "ollama"
+
+# Fonts
+cask "font-fira-code-nerd-font" if OS.mac?

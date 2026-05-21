@@ -1,0 +1,16 @@
+# Clipboard
+brew "wl-clipboard"
+brew "xsel"
+
+# Containers
+brew "distrobox"
+
+# Graphical applications
+brew "kitty"
+brew "zathura"
+
+# Network tools
+brew "net-tools"
+brew "inetutils"
+brew "vpn-slice"
+brew "openconnect"

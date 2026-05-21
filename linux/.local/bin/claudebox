@@ -213,8 +213,8 @@ fi
 [[ -e /lib64 ]] && BWRAP_ARGS+=(--ro-bind /lib64 /lib64)
 [[ -e /sbin ]] && BWRAP_ARGS+=(--ro-bind /sbin /sbin)
 
-# Nix store (read-only) - needed for nix-installed claude and tools
-[[ -e /nix ]] && BWRAP_ARGS+=(--ro-bind /nix /nix)
+# Linuxbrew (read-only)
+[[ -d /home/linuxbrew ]] && BWRAP_ARGS+=(--ro-bind /home/linuxbrew /home/linuxbrew)
 
 # Home directory as tmpfs base so child bind mounts have a mountpoint
 BWRAP_ARGS+=(--tmpfs "$HOME")
@@ -222,10 +222,6 @@ BWRAP_ARGS+=(--tmpfs "$HOME")
 # Git config
 [[ -f "$HOME/.gitconfig" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig")
 [[ -d "$HOME/.config/git" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.config/git" "$HOME/.config/git")
-
-# Nix profile symlinks (so nix-installed tools like pixi are on PATH)
-[[ -e "$HOME/.nix-profile" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.nix-profile" "$HOME/.nix-profile")
-[[ -d "$HOME/.local/state/nix" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/state/nix" "$HOME/.local/state/nix")
 
 # Node/nvm (needed for claude's node runtime)
 [[ -d "$HOME/.nvm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.nvm" "$HOME/.nvm")

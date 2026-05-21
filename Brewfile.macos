@@ -1,0 +1,11 @@
+# Clipboard (pbcopy/pbpaste built-in on macOS)
+
+# Terminal
+cask "kitty"
+
+# PDF viewer
+brew "zathura"
+brew "zathura-pdf-poppler"
+
+# Fonts (already in common for cask, but brew tap needed)
+tap "homebrew/cask-fonts"

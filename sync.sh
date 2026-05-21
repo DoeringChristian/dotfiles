@@ -2,25 +2,39 @@
 set -e
 
 # Goto the directory this executable is located in
-PROJECT_DIR=$(dirname "$(realpath $0)")
-cd $PROJECT_DIR
+PROJECT_DIR=$(dirname "$(realpath "$0")")
+cd "$PROJECT_DIR"
 
 mkdir -p ~/.config
 mkdir -p ~/.local/bin
 mkdir -p ~/.ssh
 
-# First, install the required packages
-echo "Installing packages with Nix:"
-export NIX_CONFIG="experimental-features = nix-command flakes"
-nix profile remove dotfiles && nix profile install .#default
+# Detect OS
+OS="$(uname)"
+
+# Install packages with Homebrew
+echo "Installing packages with Homebrew..."
+brew bundle --file=Brewfile.common
+if [[ "$OS" == "Darwin" ]]; then
+    brew bundle --file=Brewfile.macos
+else
+    brew bundle --file=Brewfile.linux
+fi
 
 # This stow comes before the others to ensure global ignore list is respected before other stow commands
-echo "Applying configs with GNU Stow:"
+echo "Applying configs with GNU Stow..."
 stow -t ~ stow
 stow -t ~ common
+if [[ "$OS" == "Darwin" ]]; then
+    stow -t ~ macos
+else
+    stow -t ~ linux
+fi
 
-# Load dconf (may fail on servers without desktop environment)
-echo "Loading dconf:"
-if ! dconf load / <dconf.ini 2>/dev/null; then
-    echo "Warning: dconf load failed (likely running on a server). Skipping."
+# Load dconf (Linux with GNOME only)
+if [[ "$OS" != "Darwin" ]]; then
+    echo "Loading dconf..."
+    if ! dconf load / <dconf.ini 2>/dev/null; then
+        echo "Warning: dconf load failed (likely running on a server). Skipping."
+    fi
 fi
