@@ -42,6 +42,7 @@
             stow
             pixi
             uv
+            rustup
 
             # Utilities
             unzip
