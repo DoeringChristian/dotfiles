@@ -6,10 +6,11 @@ fish_config theme choose "Catppuccin Macchiato"
 
 set -gx fish_key_bindings fish_user_key_bindings
 
+fish_add_path -g ~/.local/bin
+
 status is-login; and begin
 
     # Login shell initialisation
-    fish_add_path -g ~/.local/bin
 
 end
 

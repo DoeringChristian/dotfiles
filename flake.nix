@@ -45,6 +45,7 @@
             rustup
             nodejs
             python3
+            tree-sitter
 
             # Utilities
             unzip
