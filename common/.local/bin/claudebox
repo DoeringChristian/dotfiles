@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+OS="$(uname -s)"
+
 usage() {
     echo "Usage: claudebox [OPTIONS] [PROJECT_DIR] [-- CLAUDE_ARGS...]"
     echo ""
-    echo "Run Claude Code with --dangerously-skip-permissions inside a Bubblewrap sandbox."
+    if [[ "$OS" == "Darwin" ]]; then
+        echo "Run Claude Code with --dangerously-skip-permissions inside a Seatbelt sandbox."
+    else
+        echo "Run Claude Code with --dangerously-skip-permissions inside a Bubblewrap sandbox."
+    fi
     echo ""
     echo "Arguments:"
     echo "  PROJECT_DIR          Project directory (default: current directory)"
     echo ""
     echo "Options:"
     echo "  --bash               Launch a bash shell inside the sandbox"
-    echo "  --bind PATH          Bind extra directory read-write (repeatable)"
-    echo "  --ro-bind PATH       Bind extra directory read-only (repeatable)"
-    echo "  --share-pid          Share host PID namespace (shows all processes)"
+    if [[ "$OS" != "Darwin" ]]; then
+        echo "  --bind PATH          Bind extra directory read-write (repeatable)"
+        echo "  --ro-bind PATH       Bind extra directory read-only (repeatable)"
+        echo "  --share-pid          Share host PID namespace (shows all processes)"
+    fi
     echo "  --ssh                Bind ~/.ssh read-only (off by default)"
     echo "  --block-env FILES    Comma-separated .env files to block (default: .env,.env.local,.env.production)"
     echo "  --no-block-env       Don't block any .env files"
@@ -34,6 +42,7 @@ BLOCK_ENV=".env,.env.local,.env.production"
 PROJECT_DIR=""
 SHELL_MODE=""
 EXTRA_BINDS=()
+EXTRA_WRITE_PATHS=()
 CLAUDE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -51,11 +60,14 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --bind)
-        EXTRA_BINDS+=("--bind" "$(realpath "$2")" "$(realpath "$2")")
+        resolved="$(cd "$2" && pwd)"
+        EXTRA_BINDS+=("--bind" "$resolved" "$resolved")
+        EXTRA_WRITE_PATHS+=("$resolved")
         shift 2
         ;;
     --ro-bind)
-        EXTRA_BINDS+=("--ro-bind" "$(realpath "$2")" "$(realpath "$2")")
+        resolved="$(cd "$2" && pwd)"
+        EXTRA_BINDS+=("--ro-bind" "$resolved" "$resolved")
         shift 2
         ;;
     --ssh)
@@ -88,7 +100,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
-PROJECT_DIR="$(realpath "$PROJECT_DIR")"
+PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 
 if [[ ! -d "$PROJECT_DIR" ]]; then
     echo "Error: $PROJECT_DIR is not a directory" >&2
@@ -109,7 +121,7 @@ find_config() {
 
 CONFIG_FILE="$(find_config "$PROJECT_DIR")"
 if [[ -n "$CONFIG_FILE" ]]; then
-    CONFIG_DIR="$(dirname "$(realpath "$CONFIG_FILE")")"
+    CONFIG_DIR="$(cd "$(dirname "$CONFIG_FILE")" && pwd)"
     current_section=""
 
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -149,9 +161,12 @@ if [[ -n "$CONFIG_FILE" ]]; then
             mounts)
                 local_path="$(expand_path "$value")"
                 [[ -e "$local_path" ]] || continue
-                local_path="$(realpath "$local_path")"
+                local_path="$(cd "$local_path" && pwd)"
                 case "$key" in
-                    bind)    EXTRA_BINDS+=("--bind" "$local_path" "$local_path") ;;
+                    bind)
+                        EXTRA_BINDS+=("--bind" "$local_path" "$local_path")
+                        EXTRA_WRITE_PATHS+=("$local_path")
+                        ;;
                     ro-bind) EXTRA_BINDS+=("--ro-bind" "$local_path" "$local_path") ;;
                 esac
                 ;;
@@ -174,13 +189,67 @@ if [[ -n "$SHELL_MODE" ]]; then
     fi
     ENTRY_ARGS=()
 else
-    ENTRY_BIN="$(readlink -f "$(command -v claude)" 2>/dev/null || true)"
+    if [[ "$OS" == "Darwin" ]]; then
+        ENTRY_BIN="$(command -v claude 2>/dev/null || true)"
+    else
+        ENTRY_BIN="$(readlink -f "$(command -v claude)" 2>/dev/null || true)"
+    fi
     if [[ -z "$ENTRY_BIN" || ! -x "$ENTRY_BIN" ]]; then
         echo "Error: claude not found in PATH" >&2
         exit 1
     fi
     ENTRY_ARGS=(--dangerously-skip-permissions "${CLAUDE_ARGS[@]}")
 fi
+
+# ── macOS: Seatbelt sandbox ──────────────────────────────────────────────────
+if [[ "$OS" == "Darwin" ]]; then
+    # Build the seatbelt profile dynamically
+    PROFILE='(version 1)
+(allow default)
+
+;; Deny all file writes globally
+(deny file-write*)
+
+;; Allow writes to project directory
+(allow file-write* (subpath "'"$PROJECT_DIR"'"))
+
+;; Allow writes to Claude config
+(allow file-write* (subpath "'"$HOME/.claude"'"))
+(allow file-write* (literal "'"$HOME/.claude.json"'"))
+
+;; Allow writes to temp directories
+(allow file-write* (subpath "/private/tmp"))
+(allow file-write* (subpath "/private/var/folders"))
+(allow file-write* (subpath "/tmp"))
+(allow file-write* (subpath "'"${TMPDIR:-/tmp}"'"))
+
+;; Allow writes to nix store (for nix operations)
+(allow file-write* (subpath "/nix"))
+'
+
+    # Extra write paths from --bind or .claudebox config
+    for extra_path in "${EXTRA_WRITE_PATHS[@]+"${EXTRA_WRITE_PATHS[@]}"}"; do
+        PROFILE+='(allow file-write* (subpath "'"$extra_path"'"))
+'
+    done
+
+    # Block .env files
+    if [[ -n "$BLOCK_ENV" ]]; then
+        IFS=',' read -ra ENV_FILES <<<"$BLOCK_ENV"
+        for env_file in "${ENV_FILES[@]}"; do
+            env_path="$PROJECT_DIR/$env_file"
+            if [[ -f "$env_path" ]]; then
+                PROFILE+='(deny file-read* (literal "'"$env_path"'"))
+'
+            fi
+        done
+    fi
+
+    cd "$PROJECT_DIR"
+    exec sandbox-exec -p "$PROFILE" "$ENTRY_BIN" "${ENTRY_ARGS[@]}"
+fi
+
+# ── Linux: Bubblewrap sandbox ────────────────────────────────────────────────
 
 # Build bwrap arguments — order matters: base mounts first, then overlays on top
 BWRAP_ARGS=(
