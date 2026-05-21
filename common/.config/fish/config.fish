@@ -9,6 +9,7 @@ set -gx fish_key_bindings fish_user_key_bindings
 status is-login; and begin
 
     # Login shell initialisation
+    fish_add_path -g ~/.local/bin
 
 end
 
@@ -59,7 +60,7 @@ status is-interactive; and begin
         set fish_complete_path $prev "/home/doeringc/.local/share/fish/home-manager/generated_completions" $post
     end
 
-    atuin init fish | source
+    # atuin init fish | source
 
     direnv hook fish | source
 
