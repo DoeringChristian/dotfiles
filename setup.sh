@@ -21,6 +21,15 @@ fi
 # Sync packages, configs, etc.
 ./sync.sh
 
+# Install passage (not available in Homebrew)
+if ! command -v passage &>/dev/null; then
+    echo "Installing passage..."
+    git clone https://github.com/FiloSottile/passage.git /tmp/passage
+    cd /tmp/passage && make install PREFIX="$HOME/.local"
+    cd "$PROJECT_DIR"
+    rm -rf /tmp/passage
+fi
+
 # Decrypt the age key (age is now installed via brew)
 mkdir -p ~/.local/share/age
 age -d ./setup/age-key.age >~/.local/share/age/key.txt

@@ -18,7 +18,6 @@ brew "less"
 
 # Secrets
 brew "age"
-brew "passage"
 
 # System monitoring
 brew "btop"
