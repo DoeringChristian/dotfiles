@@ -43,6 +43,8 @@
             pixi
             uv
             rustup
+            nodejs
+            python3
 
             # Utilities
             unzip
