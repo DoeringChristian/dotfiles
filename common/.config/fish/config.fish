@@ -7,6 +7,8 @@ fish_config theme choose "Catppuccin Macchiato"
 set -gx fish_key_bindings fish_user_key_bindings
 
 fish_add_path -g ~/.local/bin
+fish_add_path -g ~/.nix-profile/bin
+fish_add_path -g /nix/var/nix/profiles/default/bin
 
 status is-login; and begin
 
