@@ -84,6 +84,7 @@
             lazygit
             mosh
             nmap
+            shpool
 
             # Type Setting
             typst

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -eu
+
+if [ $# -lt 1 ]; then
+    echo "Usage: sshr <host> [ssh-args...]" >&2
+    exit 1
+fi
+
+HOST="$1"
+shift
+SESSION="sshr-$$"
+
+# Probe which session tool is available on the remote
+probe_tool() {
+    ssh "$HOST" "$@" 'command -v shpool >/dev/null 2>&1 && echo shpool || (command -v abduco >/dev/null 2>&1 && echo abduco || echo none)' 2>/dev/null
+}
+
+TOOL="$(probe_tool "$@")"
+
+build_cmd() {
+    case "$TOOL" in
+        shpool)
+            echo "shpool attach $SESSION"
+            ;;
+        abduco)
+            echo "abduco -A $SESSION \"\$SHELL\""
+            ;;
+        none)
+            echo ""
+            ;;
+    esac
+}
+
+REMOTE_CMD="$(build_cmd)"
+
+connect() {
+    if [ -n "$REMOTE_CMD" ]; then
+        ssh "$HOST" "$@" -t "$REMOTE_CMD"
+    else
+        ssh "$HOST" "$@"
+    fi
+}
+
+echo "Connecting to $HOST${TOOL:+ (using $TOOL)}..."
+while true; do
+    connect "$@"
+    STATUS=$?
+
+    # Normal exit (user typed exit/logout)
+    if [ $STATUS -eq 0 ]; then
+        break
+    fi
+
+    echo ""
+    echo "Connection to $HOST lost. Press any key to reconnect (Ctrl-C to quit)..."
+    read -r -s -n 1 || break
+    echo "Reconnecting..."
+done

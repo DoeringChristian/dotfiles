@@ -33,6 +33,7 @@ status is-interactive; and begin
     alias lla 'eza -la'
     alias ls eza
     alias lt 'eza --tree'
+    alias mosh 'mosh --server=~/.nix-profile/bin/mosh-server'
     alias s 'kitten ssh'
 
     # Interactive shell initialisation
