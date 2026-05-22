@@ -1,31 +1,115 @@
 #!/usr/bin/env bash
-set -eu
+set -u
+
+ATTACH=false
+
+# Parse options
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -a|--attach)
+            ATTACH=true
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            echo "Usage: sshr [-a|--attach] <host> [ssh-args...]" >&2
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 if [ $# -lt 1 ]; then
-    echo "Usage: sshr <host> [ssh-args...]" >&2
+    echo "Usage: sshr [-a|--attach] <host> [ssh-args...]" >&2
     exit 1
 fi
 
 HOST="$1"
 shift
-SESSION="sshr-$$"
 
 # Probe which session tool is available on the remote
+# Check both PATH and common Nix locations since non-interactive SSH
+# sessions may not have ~/.nix-profile/bin in PATH
 probe_tool() {
-    ssh "$HOST" "$@" 'command -v shpool >/dev/null 2>&1 && echo shpool || (command -v abduco >/dev/null 2>&1 && echo abduco || echo none)' 2>/dev/null
+    ssh "$HOST" "$@" '
+        for tool in shpool abduco; do
+            for dir in $(echo "$PATH" | tr ":" " ") "$HOME/.nix-profile/bin" "$HOME/.local/bin"; do
+                if [ -x "$dir/$tool" ]; then
+                    echo "$dir/$tool"
+                    exit 0
+                fi
+            done
+        done
+        echo none
+    ' 2>/dev/null
 }
 
-TOOL="$(probe_tool "$@")"
+TOOL_PATH="$(probe_tool "$@")"
+TOOL_NAME="$(basename "$TOOL_PATH")"
 
-build_cmd() {
-    case "$TOOL" in
+# List existing sessions on the remote
+list_sessions() {
+    case "$TOOL_NAME" in
         shpool)
-            echo "shpool attach $SESSION"
+            ssh "$HOST" "$@" "$TOOL_PATH list 2>/dev/null" 2>/dev/null | tail -n +2
             ;;
         abduco)
-            echo "abduco -A $SESSION \"\$SHELL\""
+            ssh "$HOST" "$@" "$TOOL_PATH 2>&1 | tail -n +2" 2>/dev/null
             ;;
-        none)
+    esac
+}
+
+# Pick an existing session or bail out
+pick_session() {
+    SESSIONS="$(list_sessions "$@")"
+    if [ -z "$SESSIONS" ]; then
+        echo "No existing sessions on $HOST." >&2
+        exit 1
+    fi
+    echo "Sessions on $HOST:"
+    echo "$SESSIONS" | awk '{ printf "  [%d] %s\n", NR, $0 }'
+    NUM="$(echo "$SESSIONS" | wc -l | tr -d ' ')"
+    printf "Select session: "
+    read -r CHOICE
+    if echo "$CHOICE" | grep -qE '^[0-9]+$' && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "$NUM" ]; then
+        SESSION="$(echo "$SESSIONS" | sed -n "${CHOICE}p" | awk '{print $1}')"
+    else
+        echo "Invalid selection." >&2
+        exit 1
+    fi
+}
+
+# Generate a unique session name
+new_session_name() {
+    EXISTING="$(list_sessions "$@")"
+    I=0
+    while true; do
+        NAME="s$I"
+        if ! echo "$EXISTING" | awk '{print $1}' | grep -qx "$NAME"; then
+            echo "$NAME"
+            return
+        fi
+        I=$((I + 1))
+    done
+}
+
+if [ "$ATTACH" = true ] && [ "$TOOL_NAME" != "none" ]; then
+    pick_session "$@"
+elif [ "$TOOL_NAME" != "none" ]; then
+    SESSION="$(new_session_name "$@")"
+fi
+
+build_cmd() {
+    case "$TOOL_NAME" in
+        shpool)
+            echo "$TOOL_PATH attach $SESSION"
+            ;;
+        abduco)
+            echo "$TOOL_PATH -A $SESSION \"\$SHELL\""
+            ;;
+        *)
             echo ""
             ;;
     esac
@@ -41,7 +125,7 @@ connect() {
     fi
 }
 
-echo "Connecting to $HOST${TOOL:+ (using $TOOL)}..."
+echo "Connecting to $HOST${TOOL_NAME:+ (using $TOOL_NAME, session: $SESSION)}..."
 while true; do
     connect "$@"
     STATUS=$?
