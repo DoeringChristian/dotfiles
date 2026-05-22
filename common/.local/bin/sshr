@@ -2,6 +2,7 @@
 set -u
 
 ATTACH=false
+REMOTE_CWD=""
 
 # Parse options
 while [ $# -gt 0 ]; do
@@ -10,9 +11,13 @@ while [ $# -gt 0 ]; do
             ATTACH=true
             shift
             ;;
+        --remote-cwd)
+            REMOTE_CWD="$2"
+            shift 2
+            ;;
         -*)
             echo "Unknown option: $1" >&2
-            echo "Usage: sshr [-a|--attach] <host> [ssh-args...]" >&2
+            echo "Usage: sshr [-a|--attach] [--remote-cwd <path>] <host> [ssh-args...]" >&2
             exit 1
             ;;
         *)
@@ -22,32 +27,44 @@ while [ $# -gt 0 ]; do
 done
 
 if [ $# -lt 1 ]; then
-    echo "Usage: sshr [-a|--attach] <host> [ssh-args...]" >&2
+    echo "Usage: sshr [-a|--attach] [--remote-cwd <path>] <host> [ssh-args...]" >&2
     exit 1
 fi
 
 HOST="$1"
 shift
 
-# Probe which session tool is available on the remote
-# Check both PATH and common Nix locations since non-interactive SSH
-# sessions may not have ~/.nix-profile/bin in PATH
-probe_tool() {
+# Tell kitty this window is an sshr session
+if [ -n "${KITTY_WINDOW_ID:-}" ]; then
+    printf '\e]1337;SetUserVar=%s=%s\a' "sshr_host" "$(printf '%s' "$HOST" | base64)"
+fi
+
+# Probe for session tools and fish on the remote in a single SSH call.
+# Checks PATH and common Nix locations since non-interactive SSH
+# sessions may not have ~/.nix-profile/bin in PATH.
+# Output: two lines — session tool path, then fish path (or "none")
+probe_remote() {
     ssh "$HOST" "$@" '
-        for tool in shpool abduco; do
-            for dir in $(echo "$PATH" | tr ":" " ") "$HOME/.nix-profile/bin" "$HOME/.local/bin"; do
-                if [ -x "$dir/$tool" ]; then
-                    echo "$dir/$tool"
-                    exit 0
-                fi
+        find_cmd() {
+            for tool in $@; do
+                for dir in $(echo "$PATH" | tr ":" " ") "$HOME/.nix-profile/bin" "$HOME/.local/bin"; do
+                    if [ -x "$dir/$tool" ]; then
+                        echo "$dir/$tool"
+                        return
+                    fi
+                done
             done
-        done
-        echo none
+            echo none
+        }
+        find_cmd shpool abduco
+        find_cmd fish
     ' 2>/dev/null
 }
 
-TOOL_PATH="$(probe_tool "$@")"
+PROBE_OUTPUT="$(probe_remote "$@")"
+TOOL_PATH="$(echo "$PROBE_OUTPUT" | sed -n '1p')"
 TOOL_NAME="$(basename "$TOOL_PATH")"
+FISH_PATH="$(echo "$PROBE_OUTPUT" | sed -n '2p')"
 
 # List existing sessions on the remote
 list_sessions() {
@@ -101,16 +118,45 @@ elif [ "$TOOL_NAME" != "none" ]; then
     SESSION="$(new_session_name "$@")"
 fi
 
+# Tell kitty the session name and tool path (now that they've been determined)
+if [ -n "${KITTY_WINDOW_ID:-}" ] && [ -n "${SESSION:-}" ]; then
+    printf '\e]1337;SetUserVar=%s=%s\a' "sshr_session" "$(printf '%s' "$SESSION" | base64)"
+    printf '\e]1337;SetUserVar=%s=%s\a' "sshr_tool" "$(printf '%s' "$TOOL_PATH" | base64)"
+fi
+
 build_cmd() {
     case "$TOOL_NAME" in
         shpool)
-            echo "$TOOL_PATH attach $SESSION"
+            local CMD="$TOOL_PATH attach $SESSION"
+            if [ "$FISH_PATH" != "none" ]; then
+                CMD="$CMD -c $FISH_PATH"
+            fi
+            if [ -n "$REMOTE_CWD" ]; then
+                CMD="$CMD -d $(printf '%q' "$REMOTE_CWD")"
+            fi
+            echo "$CMD"
             ;;
         abduco)
-            echo "$TOOL_PATH -A $SESSION \"\$SHELL\""
+            local SHELL="\"\$SHELL\""
+            if [ "$FISH_PATH" != "none" ]; then
+                SHELL="$FISH_PATH"
+            fi
+            if [ -n "$REMOTE_CWD" ]; then
+                echo "cd $(printf '%q' "$REMOTE_CWD") && $TOOL_PATH -A $SESSION $SHELL"
+            else
+                echo "$TOOL_PATH -A $SESSION $SHELL"
+            fi
             ;;
         *)
-            echo ""
+            if [ "$FISH_PATH" != "none" ] && [ -n "$REMOTE_CWD" ]; then
+                echo "$FISH_PATH -C 'cd $(printf '%q' "$REMOTE_CWD")'"
+            elif [ "$FISH_PATH" != "none" ]; then
+                echo "$FISH_PATH"
+            elif [ -n "$REMOTE_CWD" ]; then
+                echo "cd $(printf '%q' "$REMOTE_CWD") && \"\$SHELL\""
+            else
+                echo ""
+            fi
             ;;
     esac
 }
