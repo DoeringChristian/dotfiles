@@ -1,0 +1,39 @@
+#!/bin/sh
+# kitty-persistent-ssh: auto-reconnecting SSH with tmux session persistence
+#
+# Usage: kitty-persistent-ssh <host> [session-name]
+#
+# Wraps kitten ssh in a reconnect loop. On the remote, attaches to (or creates)
+# a tmux session. Programs, scrollback, and cursor position survive disconnects.
+#
+# Clean detach (prefix+d) exits the loop. Connection drops trigger retry.
+#
+# Examples:
+#   kitty-persistent-ssh ci
+#   kitty-persistent-ssh ci work
+
+host="$1"
+session="${2:-$1}"
+
+if [ -z "$host" ]; then
+    printf 'Usage: kitty-persistent-ssh <host> [session-name]\n' >&2
+    exit 1
+fi
+
+trap 'exit 0' HUP TERM INT
+
+while true; do
+    kitten ssh -t \
+        -o ServerAliveInterval=15 \
+        -o ServerAliveCountMax=3 \
+        "$host" "tmux attach-session -t $session 2>/dev/null || tmux new-session -s $session"
+    exit_code=$?
+
+    # Clean detach (exit 0) means the user intentionally left
+    if [ $exit_code -eq 0 ]; then
+        break
+    fi
+
+    printf '\033[2m[persistent-ssh] Connection lost. Reconnecting in 3s…\033[0m\n'
+    sleep 3
+done

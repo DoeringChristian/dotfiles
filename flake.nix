@@ -74,7 +74,7 @@
             gemini-cli
             atuin
             zoxide
-            zellij
+            tmux
             fish
             fzf
             gh

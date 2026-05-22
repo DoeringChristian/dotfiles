@@ -1,0 +1,10 @@
+#!/bin/sh
+# kitty-ssh-bounce: kill stale kitten ssh processes to trigger immediate reconnect
+#
+# After waking from sleep, TCP connections are dead but kitten ssh doesn't know
+# yet (waits ~45s for ServerAliveCountMax to expire). Killing them makes the
+# kitty-persistent-ssh loops retry immediately.
+#
+# Trigger via kitty keybinding (Alt+R / Cmd+R) after opening the lid.
+
+pkill -f 'kitten ssh' 2>/dev/null || true

@@ -16,6 +16,11 @@ status is-login; and begin
 
 end
 
+# Auto-start tmux on interactive sessions (unless already inside tmux or not a terminal)
+if status is-interactive; and not set -q TMUX; and test "$TERM" != dumb
+    tmux attach -t default 2>/dev/null; or tmux new-session -s default
+end
+
 status is-interactive; and begin
 
     # Abbreviations
@@ -34,6 +39,7 @@ status is-interactive; and begin
     alias ls eza
     alias lt 'eza --tree'
     alias s 'kitten ssh'
+    alias ss 'kitty-persistent-ssh'
 
     # Interactive shell initialisation
     fzf --fish | source
