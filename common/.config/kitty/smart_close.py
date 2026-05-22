@@ -34,6 +34,4 @@ def handle_result(args, answer, target_window_id, boss):
             stderr=subprocess.DEVNULL,
         )
 
-    tab = boss.active_tab
-    if tab is not None:
-        tab.remove_window(window)
+    boss.close_window()

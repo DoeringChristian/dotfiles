@@ -38,7 +38,11 @@ def handle_result(args, answer, target_window_id, boss):
 
         tab.new_window(cmd=cmd)
     else:
-        tab.new_window(cwd_from=target_window_id)
+        cwd = window.cwd_of_child
+        if cwd:
+            tab.new_window(cwd=cwd)
+        else:
+            tab.new_window()
 
 
 def _parse_remote_cwd(title):
