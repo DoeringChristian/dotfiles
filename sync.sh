@@ -25,10 +25,22 @@ if [ "$OS" = "Darwin" ]; then
     stow -t ~ darwin
 fi
 
-# Run install scripts for GUI applications
+# Run install scripts for GUI applications (skip already-installed apps unless UPDATE=1)
 echo "Running install scripts:"
 for script in "$PROJECT_DIR"/install/*.sh; do
-    [ -x "$script" ] && bash "$script"
+    [ -x "$script" ] || continue
+    name="$(basename "$script" .sh)"
+    installed=false
+    if command -v "$name" >/dev/null 2>&1 \
+        || [ -d "$HOME/Applications/$name.app" ] \
+        || [ -d "/Applications/$name.app" ]; then
+        installed=true
+    fi
+    if [ "${UPDATE:-0}" != "1" ] && [ "$installed" = true ]; then
+        echo "Skipping $name (already installed)"
+        continue
+    fi
+    bash "$script"
 done
 
 # Load dconf (Linux/GNOME only)

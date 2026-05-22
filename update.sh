@@ -6,4 +6,4 @@ PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$PROJECT_DIR"
 
 nix flake update
-./sync.sh
+UPDATE=1 ./sync.sh

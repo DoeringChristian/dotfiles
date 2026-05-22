@@ -82,6 +82,7 @@
             git-lfs
             dust
             lazygit
+            mosh
             nmap
 
             # Type Setting
