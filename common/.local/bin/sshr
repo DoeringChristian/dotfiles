@@ -129,7 +129,7 @@ build_cmd() {
         shpool)
             local CMD="$TOOL_PATH attach $SESSION"
             if [ "$FISH_PATH" != "none" ]; then
-                CMD="$CMD -c $FISH_PATH"
+                CMD="$CMD -c '$FISH_PATH -C \"set -gx SSH_CONNECTION 1\"'"
             fi
             if [ -n "$REMOTE_CWD" ]; then
                 CMD="$CMD -d $(printf '%q' "$REMOTE_CWD")"
