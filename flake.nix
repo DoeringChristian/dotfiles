@@ -11,12 +11,19 @@
     };
 
     flake-utils.url = "github:numtide/flake-utils";
+
+    sshr = {
+      url = "github:DoeringChristian/sshr";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
   outputs = {
     nixpkgs,
     neovim-nightly-overlay,
     flake-utils,
+    sshr,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
@@ -84,7 +91,7 @@
             lazygit
             mosh
             nmap
-            shpool
+            sshr.packages.${system}.default
 
             # Type Setting
             typst

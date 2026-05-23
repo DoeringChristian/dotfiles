@@ -97,7 +97,31 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "neovim-nightly-overlay": "neovim-nightly-overlay",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "sshr": "sshr"
+      }
+    },
+    "sshr": {
+      "inputs": {
+        "flake-utils": [
+          "flake-utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1779524286,
+        "narHash": "sha256-epv7PysowegqdNuMoVUK6g8MOa3+IMbIjZiQAge4u5M=",
+        "owner": "DoeringChristian",
+        "repo": "sshr",
+        "rev": "ef5cb0cf780795ce9393053bb37d559e8de8b6d3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "DoeringChristian",
+        "repo": "sshr",
+        "type": "github"
       }
     },
     "systems": {
