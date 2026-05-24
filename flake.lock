@@ -111,11 +111,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1779618760,
-        "narHash": "sha256-r3MbEXYdLTlLCQ3gvSmrp91cOKctirwdw+5MepV4DZA=",
+        "lastModified": 1779627434,
+        "narHash": "sha256-EneEfjTDppq4WXAiD9KDuMbbZVrOz3FhE55VyhPso5g=",
         "owner": "DoeringChristian",
         "repo": "sshr",
-        "rev": "9b52f13a9ed6f80e19bfa11f939b9217ad6bbf7d",
+        "rev": "c43ac74e345ce66250fcef7cabb0b1f4d001d1be",
         "type": "github"
       },
       "original": {
