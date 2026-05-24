@@ -98,9 +98,6 @@
 
             # Fonts
             nerd-fonts.fira-code
-
-            # Graphical applications
-            zathura
           ]
           ++ (
             if isLinux

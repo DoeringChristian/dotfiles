@@ -230,6 +230,11 @@ if [[ "$OS" == "Darwin" ]]; then
 
 ;; Allow writes to nix store (for nix operations)
 (allow file-write* (subpath "/nix"))
+
+;; Allow writes to Keychain and security services (for OAuth token refresh)
+(allow file-write* (subpath "'"$HOME/Library/Keychains"'"))
+(allow file-write* (regex #"^/private/var/folders/.*/com\.apple\.security\."))
+(allow file-write* (subpath "'"$HOME/Library/Preferences"'"))
 '
 
     # Extra write paths from --bind or .claudebox config
