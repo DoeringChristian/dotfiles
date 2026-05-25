@@ -235,6 +235,10 @@ if [[ "$OS" == "Darwin" ]]; then
 (allow file-write* (subpath "'"$HOME/Library/Keychains"'"))
 (allow file-write* (regex #"^/private/var/folders/.*/com\.apple\.security\."))
 (allow file-write* (subpath "'"$HOME/Library/Preferences"'"))
+
+;; Allow writes to Claude app data and cache (for token storage and refresh)
+(allow file-write* (subpath "'"$HOME/Library/Application Support/Claude"'"))
+(allow file-write* (subpath "'"$HOME/Library/Caches/claude-cli-nodejs"'"))
 '
 
     # Extra write paths from --bind or .claudebox config
