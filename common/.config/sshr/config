@@ -1,3 +1,0 @@
-# Prefer fish on the remote (resolved via PATH). Falls back to remote
-# $SHELL automatically if not found by launch.sh.
-shell = fish
