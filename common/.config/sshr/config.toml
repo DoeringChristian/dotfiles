@@ -1,0 +1,4 @@
+shell = "fish"
+
+[env]
+PATH = "$PATH:$HOME/.nix-profile/bin"
