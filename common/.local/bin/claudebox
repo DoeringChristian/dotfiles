@@ -315,6 +315,12 @@ BWRAP_ARGS+=(--tmpfs "$HOME")
 [[ -d "$HOME/.fnm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.fnm" "$HOME/.fnm")
 [[ -d "$HOME/.npm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.npm" "$HOME/.npm")
 
+# Claude native installer: launcher (~/.local/bin/claude) execs a versioned
+# binary under ~/.local/share/claude/versions/*, so both must be visible inside
+# the sandbox (the tmpfs $HOME above hides them otherwise).
+[[ -e "$HOME/.local/bin/claude" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/bin/claude" "$HOME/.local/bin/claude")
+[[ -d "$HOME/.local/share/claude" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/share/claude" "$HOME/.local/share/claude")
+
 # Claude auth and config (read-write so sessions persist)
 [[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
 [[ -f "$HOME/.claude.json" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude.json" "$HOME/.claude.json")
