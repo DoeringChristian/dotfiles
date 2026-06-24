@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-This is a stow-based dotfiles repository using GNU Stow for symlink management and pixi (via `pixi.toml`) for package management. The setup is cross-platform (Linux & macOS). Tools that aren't on conda-forge (or need a newer/nightly version) are built from source as pixi packages under `ext/`.
+Cross-platform (Linux & macOS) dotfiles using:
+- **GNU Stow** for symlink management of config files, and
+- **`pixi global`** for package management — every CLI tool is installed into
+  `~/.pixi/bin` (on PATH in every shell). Tools not on conda-forge, or needing a
+  newer/nightly build, are compiled from source as pixi packages under `ext/`.
 
 ## Key Commands
 
@@ -12,92 +16,111 @@ This is a stow-based dotfiles repository using GNU Stow for symlink management a
 ```bash
 ./setup.sh
 ```
-Installs pixi (if missing) and rattler-build, runs sync to build/install packages, then decrypts age key for secrets management and sets up passage.
+Installs pixi (if missing) + `rattler-build`, runs `sync.sh`, then decrypts the
+age key and sets up passage.
 
 ### Full Sync
 ```bash
 ./sync.sh
 ```
-This runs the complete setup process:
-1. pixi (`pixi install` builds the env at `.pixi/envs/default`, which the shell config puts on PATH)
-2. GNU Stow (creates symlinks — `common` on all platforms, `darwin` additionally on macOS)
-3. dconf (loads GNOME settings, Linux only)
+1. **pixi global** — copies `pixi-global.toml` to `~/.pixi/manifests/` and runs
+   `pixi global sync` (installs tools into `~/.pixi/bin`, creates GUI shortcuts).
+2. **GNU Stow** — symlinks configs (`common` everywhere, `darwin` on macOS).
+   On macOS it also copies the fonts into `~/Library/Fonts` (see Fonts below).
+3. **dconf** — loads GNOME settings (Linux only).
 
 ### Update All
 ```bash
 ./update.sh
 ```
-Updates conda deps (`pixi update`) then runs sync. For source packages tracking a moving ref (neovim nightly, sshr `main`), force a fresh build with `pixi clean && ./sync.sh`.
+Runs `pixi global update` (or re-`sync`) to refresh deps. For source packages
+tracking a moving ref (neovim nightly, sshr `main`), force a clean rebuild:
+`pixi global install --force-reinstall --environment dotfiles --path ext/neovim`.
 
 ### Stow Operations
 ```bash
-# Apply stow package (creates symlinks to home directory)
-stow -t ~ common
-
-# Remove stow package symlinks
-stow -t ~ -D common
-
-# Re-stow (useful after adding new files)
-stow -t ~ -R common
+stow -t ~ common        # apply (symlink into ~)
+stow -t ~ -D common     # remove
+stow -t ~ -R common     # re-stow (after adding files)
 ```
-**Ordering matters**: `stow -t ~ stow` must run before `stow -t ~ common` so the global ignore rules are in place. `sync.sh` handles this automatically.
+**Ordering matters**: `stow -t ~ stow` runs before `common` so the global ignore
+rules are in place. `sync.sh` handles this.
 
-### Pixi (global tools)
-Tools are installed **globally** via `pixi global` into `~/.pixi/bin` (already on
-PATH in every shell). The committed `pixi-global.toml` is the source of truth;
-`sync.sh` copies it to `~/.pixi/manifests/` and runs `pixi global sync`.
+### Pixi global (the package manager)
+The committed **`pixi-global.toml`** is the source of truth; it defines one env
+(`dotfiles`) containing all tools. `sync.sh` places it at
+`~/.pixi/manifests/pixi-global.toml` and runs `pixi global sync`.
 ```bash
-# Apply the committed manifest (what sync.sh does)
-cp pixi-global.toml ~/.pixi/manifests/pixi-global.toml && pixi global sync
-
-# Add/remove a tool: edit pixi-global.toml, or use the CLI (which auto-exposes)
-pixi global install --environment dotfiles <pkg>        # channel package
-pixi global install --environment dotfiles --path ext/<name>   # source package
-# then re-snapshot: cp ~/.pixi/manifests/pixi-global.toml ./pixi-global.toml
+# Add a tool (auto-exposes its binaries), then re-snapshot the manifest:
+pixi global install --environment dotfiles <pkg>              # conda-forge package
+pixi global install --environment dotfiles --path ext/<name> # from-source package
+cp ~/.pixi/manifests/pixi-global.toml ./pixi-global.toml
 ```
-GUI apps (kitty, tev) ship a menuinst `menu.json`, so `pixi global` creates a
-launcher automatically: a shim `~/Applications/<app>.app` on macOS (Spotlight-
-indexable) and a `.desktop` entry on Linux. `ext/` holds the from-source package
-recipes (built on demand by `pixi global install --path`).
-**npm tools**: `gemini-cli` and `claude-code` build via a custom local backend
-(`ext/pixi-build-npm`) that isn't published to a channel, so pixi needs
-`PIXI_BUILD_BACKEND_OVERRIDE` set — `.envrc` and the install scripts do this. It
-also requires `rattler-build` (installed via `pixi global` by `setup.sh`).
+- **GUI apps** (kitty, tev) ship a menuinst `menu.json`, so `pixi global` creates
+  a launcher automatically: a shim `~/Applications/<app>.app` on macOS (Spotlight-
+  indexable) and a `.desktop` entry on Linux.
+- **npm tools** (`gemini-cli`, `claude-code`) build via the local custom backend
+  `ext/pixi-build-npm`, which isn't on a channel — so pixi needs
+  `PIXI_BUILD_BACKEND_OVERRIDE` set (sync.sh and `.envrc` do this) and
+  `rattler-build` installed (setup.sh does this).
 
 ## Repository Structure
 
 ```
 dotfiles/
-├── common/           # Main stow package - portable configs (both platforms)
-│   ├── .config/      # XDG config files (fish, starship, atuin, kitty, zellij, etc.)
-│   ├── .local/bin/   # User binaries (tracked with Git LFS)
-│   └── .local/share/applications/  # Desktop entries
-├── darwin/           # macOS-specific stow package (overrides/additions)
-│   └── .config/      # macOS-specific config files
+├── common/           # Main stow package — portable configs (both platforms)
+│   ├── .config/      # XDG config (fish, starship, atuin, kitty, zellij, …)
+│   ├── .local/bin/   # User binaries (Git LFS)
+│   └── .local/share/fonts/  # Nerd Fonts (Git LFS); stow-linked on Linux
+├── darwin/           # macOS-only stow package (config overrides)
 ├── stow/             # Stow global ignore rules (.stow-global-ignore)
 ├── setup/            # Encrypted secrets (age-key.age)
-├── pixi.toml         # pixi manifest: conda deps + path deps to ext/ (platform-aware)
-├── ext/              # From-source pixi packages (neovim nightly, sshr, kitty, tev,
-│                     #   stow, passage, npm tools) + the custom pixi-build-npm backend
-├── dconf.ini         # GNOME desktop settings (Linux only)
-├── sync.sh           # Sync packages (pixi install), symlinks, and dconf
-├── setup.sh          # First-time setup (installs pixi + rattler-build, syncs, decrypts age key)
-└── update.sh         # pixi update and sync
+├── ext/              # From-source pixi package recipes (neovim nightly, sshr,
+│                     #   kitty, tev, stow, passage, npm tools) + the custom
+│                     #   pixi-build-npm backend
+├── pixi-global.toml  # pixi global manifest — the installed tool set (source of truth)
+├── pixi.toml         # legacy workspace manifest (dev/build only; not installed)
+├── dconf.ini         # GNOME settings (Linux only)
+├── sync.sh           # pixi global sync + stow + fonts + dconf
+├── setup.sh          # first-time setup (pixi + rattler-build, sync, age key)
+└── update.sh         # update deps and sync
 ```
 
 ## Architecture
 
-- **`common/`**: The main stow package containing all portable configuration files. Files here are symlinked to `~` maintaining their directory structure. Used on both Linux and macOS.
-- **`darwin/`**: macOS-specific stow package. Stowed in addition to `common/` on macOS only. Place macOS-specific config overrides here.
-- **`stow/.stow-global-ignore`**: Applied first via `stow stow` to set up ignore patterns before symlinking common.
-- **`pixi.toml`**: pixi manifest. Cross-platform tools are plain conda-forge `[dependencies]`; Linux-only packages (wl-clipboard, distrobox, nvtop, etc.) go in `[target.linux-64.dependencies]`. Tools not on conda-forge — or needing a newer/nightly build — are path deps to `ext/<name>` (rattler-build recipes). The env builds to `.pixi/envs/default`, whose `bin/` the shell config puts on PATH (replacing the old nix profile).
-- **`ext/`**: From-source pixi packages. Each is a `pixi-build-rattler-build` recipe except the npm tools, which use the local `ext/pixi-build-npm` custom backend.
-- **Secrets**: Uses age for encryption and passage for password management. The encrypted age key lives in `setup/age-key.age` and is decrypted to `~/.local/share/age/key.txt` by `setup.sh`. Note: `setup.sh` runs `sync.sh` first to build the pixi env, then calls `age` by its absolute path in `.pixi/envs/default/bin` (the env isn't on the script's PATH yet).
+- **`common/`** / **`darwin/`**: stow packages symlinked into `~`. `darwin` is
+  stowed in addition to `common` on macOS only.
+- **`stow/.stow-global-ignore`**: applied first so ignore rules are in place.
+- **`pixi-global.toml`**: the installed tool set. One `dotfiles` env; conda-forge
+  packages plus path deps to `ext/<name>` (paths are relative to
+  `~/.pixi/manifests/`, e.g. `../../dotfiles/ext/kitty`). Binaries are exposed in
+  `~/.pixi/bin`, which the shell configs put on PATH (replacing the old nix profile).
+- **`ext/`**: from-source pixi packages. Each is a `pixi-build-rattler-build`
+  recipe (build via `pixi global install --path`), except the npm tools which use
+  the local `ext/pixi-build-npm` backend. `kitty`/`tev` also carry a `menu.json`
+  for menuinst GUI shortcuts.
+- **`pixi.toml` (legacy)**: the original workspace manifest. No longer the install
+  mechanism — kept only as a scratch space for building/testing recipes. Safe to
+  remove along with `.pixi/`.
+- **Fonts**: source of truth is `common/.local/share/fonts/` (Git LFS). On Linux
+  it's stow-linked to `~/.local/share/fonts` (fontconfig follows symlinks). On
+  macOS `sync.sh` copies real files into `~/Library/Fonts` because **CoreText
+  ignores symlinked fonts**.
+- **Secrets**: age + passage. `setup/age-key.age` is decrypted to
+  `~/.local/share/age/key.txt` by `setup.sh`, which calls `age` from `~/.pixi/bin`
+  (where `pixi global` exposed it during the preceding sync).
 
 ## Conventions
 
-- **Git LFS**: Binary files in `.local/bin/` are tracked with Git LFS (see `.gitattributes`)
-- **Catppuccin Macchiato**: Consistent dark theme used across starship, fish, bat, btop, kitty, and eza
-- **Fish shell**: Default shell with vi-mode keybindings (`jk` for escape, `l` accepts autosuggestions)
-- **Adding a new config**: Place files under `common/` mirroring their home directory path (e.g., `common/.config/foo/config` symlinks to `~/.config/foo/config`), then run `stow -t ~ -R common`. For macOS-specific configs, use `darwin/` instead.
-- **Adding a new package**: If it's on conda-forge, add it to `[dependencies]` in `pixi.toml` (or `[target.linux-64.dependencies]` for Linux-only), then `pixi install`. If it's not on conda-forge (or needs a newer build), add a recipe under `ext/<name>/` and reference it as a path dependency — see the existing `ext/` packages as templates.
+- **Git LFS**: binaries in `.local/bin/` and `*.ttf` fonts are tracked via LFS.
+- **Catppuccin Macchiato**: theme across starship, fish, bat, btop, kitty, eza.
+- **Fish shell**: default shell with vi-mode keybindings.
+- **Adding a config**: place under `common/` mirroring the home path, then
+  `stow -t ~ -R common`. macOS-only configs go in `darwin/`.
+- **Adding a tool**:
+  - On conda-forge → `pixi global install --environment dotfiles <pkg>`.
+  - Not on conda-forge / needs a newer build → add a recipe under `ext/<name>/`
+    (copy an existing one), then `pixi global install --environment dotfiles --path ext/<name>`.
+  - Either way, re-snapshot: `cp ~/.pixi/manifests/pixi-global.toml ./pixi-global.toml`.
+  - For a GUI app, add a `menu.json` to the recipe so a shortcut is created.
+```

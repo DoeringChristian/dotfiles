@@ -24,9 +24,9 @@ fi
 # Install packages (including age) before trying to use age
 ./sync.sh
 
-# Decrypt the age key (age now comes from the pixi env, which isn't on this
-# script's PATH yet, so call it by its absolute path)
-AGE="$PROJECT_DIR/.pixi/envs/default/bin/age"
+# Decrypt the age key. sync.sh installed `age` via pixi global into ~/.pixi/bin,
+# which is on this script's PATH (set above).
+AGE="$HOME/.pixi/bin/age"
 mkdir -p ~/.local/share/age
 "$AGE" -d ./setup/age-key.age >~/.local/share/age/key.txt
 chmod 600 ~/.local/share/age/key.txt
