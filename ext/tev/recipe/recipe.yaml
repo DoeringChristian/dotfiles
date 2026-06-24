@@ -19,7 +19,7 @@ source:
   # submodules: true is the default -- required, the codecs live in submodules.
 
 build:
-  number: 0
+  number: 2   # bumped: menuinst shortcut + icon (no longer ships the full .app), not just the binary
 
 requirements:
   build:

@@ -7,8 +7,7 @@ fish_config theme choose "Catppuccin Macchiato"
 set -gx fish_key_bindings fish_user_key_bindings
 
 fish_add_path -g ~/.local/bin
-# pixi env (replaces the old nix profile) + globally installed pixi tools
-fish_add_path -g ~/dotfiles/.pixi/envs/default/bin
+# globally-installed pixi tools (pixi global -> ~/.pixi/bin)
 fish_add_path -g ~/.pixi/bin
 
 status is-login; and begin
@@ -34,7 +33,7 @@ status is-interactive; and begin
     alias lla 'eza -la'
     alias ls eza
     alias lt 'eza --tree'
-    alias mosh 'mosh --server=~/dotfiles/.pixi/envs/default/bin/mosh-server'
+    alias mosh 'mosh --server=~/.pixi/bin/mosh-server'
     alias s 'kitten ssh'
 
     # Interactive shell initialisation

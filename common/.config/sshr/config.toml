@@ -1,4 +1,4 @@
 shell = "fish"
 
 [env]
-PATH = "$PATH:$HOME/.nix-profile/bin"
+PATH = "$PATH:$HOME/.pixi/bin"

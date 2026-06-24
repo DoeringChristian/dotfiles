@@ -32,8 +32,19 @@ if [[ "${target_platform}" == osx-* ]]; then
     cp -R kitty.app "$PREFIX/libexec/kitty.app"
     ln -sf ../libexec/kitty.app/Contents/MacOS/kitty  "$PREFIX/bin/kitty"
     ln -sf ../libexec/kitty.app/Contents/MacOS/kitten "$PREFIX/bin/kitten"
+
+    # menuinst icon (macOS): lift kitty's own .icns out of the bundle.
+    mkdir -p "$PREFIX/Menu"
+    cp kitty.app/Contents/Resources/kitty.icns "$PREFIX/Menu/kitty.icns"
 else
     # Linux: supported prefix install.
     "$PYTHON" setup.py linux-package --prefix="$PREFIX" \
         --ignore-compiler-warnings --update-check-interval=0
+    # menuinst icon (Linux): kitty installs hicolor PNGs; grab a large one.
+    mkdir -p "$PREFIX/Menu"
+    cp "$PREFIX"/share/icons/hicolor/256x256/apps/kitty.png "$PREFIX/Menu/kitty.png" 2>/dev/null || true
 fi
+
+# menuinst shortcut definition (creates a ~/Applications shim .app on macOS and
+# a .desktop entry on Linux when installed via `pixi global`).
+install -m 0644 "${RECIPE_DIR}/menu.json" "${PREFIX}/Menu/${PKG_NAME}_menu.json"

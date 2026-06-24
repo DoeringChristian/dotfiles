@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schemas.conda.org/menuinst-1-2-0.schema.json",
+  "menu_name": "kitty",
+  "menu_items": [
+    {
+      "name": "kitty",
+      "description": "Fast, feature-rich, GPU-based terminal emulator",
+      "icon": "{{ MENU_DIR }}/kitty.icns",
+      "command": ["{{ PREFIX }}/bin/kitty"],
+      "platforms": {
+        "osx": {
+          "CFBundleName": "kitty",
+          "CFBundleDisplayName": "kitty",
+          "CFBundleIdentifier": "net.kovidgoyal.kitty"
+        },
+        "linux": {
+          "Categories": ["System", "TerminalEmulator"],
+          "StartupWMClass": "kitty"
+        }
+      }
+    }
+  ]
+}

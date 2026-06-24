@@ -20,7 +20,7 @@ source:
     target_directory: nerd-symbols
 
 build:
-  number: 0
+  number: 1   # bumped: now ships a menuinst shortcut (Menu/kitty_menu.json + icon)
 
 requirements:
   build:
