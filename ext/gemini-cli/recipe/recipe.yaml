@@ -1,0 +1,26 @@
+# gemini-cli -- Google's Gemini CLI, vendored from npm.
+# No `source:` block: npm fetches the package itself during build.sh.
+context:
+  version: "0.47.0"
+
+package:
+  name: gemini-cli
+  version: ${{ version }}
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - nodejs        # provides `npm` at build time
+  run:
+    - nodejs        # the `gemini` launcher runs under node
+
+tests:
+  - script:
+      - gemini --version
+
+about:
+  homepage: https://github.com/google-gemini/gemini-cli
+  license: Apache-2.0
+  summary: Google Gemini command-line interface

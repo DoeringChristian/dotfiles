@@ -1,21 +1,12 @@
-# gemini-cli, now built via our custom pixi-build-npm backend (ext/pixi-build-npm).
-# No recipe needed -- the backend generates one from the config below and runs
-# `npm install`. This is the payoff of the backend: declaring an npm tool is now
-# just a name + version + the npm package id.
-#
-# Requires the backend override to be active, e.g.:
-#   PIXI_BUILD_BACKEND_OVERRIDE=pixi-build-npm=$PWD/ext/pixi-build-npm/pixi-build-npm
-# (wired into .envrc so it's always set in this workspace).
+# gemini-cli, vendored from npm via a thin rattler-build recipe (recipe/build.sh
+# runs `npm install`). Uses the standard pixi-build-rattler-build backend so it
+# builds under `pixi global sync` with no backend override needed.
 
 [package]
 name = "gemini-cli"
 version = "0.47.0"
 
 [package.build.backend]
-name = "pixi-build-npm"
+name = "pixi-build-rattler-build"
 version = "*"
 channels = ["https://prefix.dev/conda-forge"]
-
-[package.build.config]
-npm-package = "@google/gemini-cli"
-node = ">=20"

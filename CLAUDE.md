@@ -70,10 +70,10 @@ that's a clean `ext/<name>`; under a stow path it would be `../../../ext/<name>`
 - **GUI apps** (kitty, tev): listed under `shortcuts`. Their recipe ships a
   menuinst `menu.json`, so `sync` creates a shim `~/Applications/<app>.app` on
   macOS (Spotlight-indexable) and a `.desktop` on Linux.
-- **npm tools** (`gemini-cli`, `claude-code`) build via the local backend
-  `ext/pixi-build-npm` (not on a channel) — so pixi needs
-  `PIXI_BUILD_BACKEND_OVERRIDE` set (sync.sh, update.sh, and `.envrc` do this) and
-  `rattler-build` installed (setup.sh does this).
+- **npm tools** (`gemini-cli`, `claude-code`) are thin rattler-build recipes whose
+  `build.sh` runs `npm install -g … --prefix $PREFIX`. (They use the standard
+  `pixi-build-rattler-build` backend so they build under `pixi global sync` with no
+  backend override.)
 
 ## Repository Structure
 
@@ -87,8 +87,7 @@ dotfiles/
 ├── stow/             # Stow global ignore rules (.stow-global-ignore)
 ├── setup/            # Encrypted secrets (age-key.age)
 ├── ext/              # From-source pixi package recipes (neovim nightly, sshr,
-│                     #   kitty, tev, stow, passage, npm tools) + the custom
-│                     #   pixi-build-npm backend
+│                     #   kitty, tev, stow, passage, gemini-cli, claude-code)
 ├── pixi-global.toml  # THE tool list (source of truth; symlinked to ~/.pixi/manifests)
 ├── dconf.ini         # GNOME settings (Linux only)
 ├── sync.sh           # pixi global sync + stow + fonts + dconf
@@ -108,9 +107,9 @@ dotfiles/
   PATH (replacing the old nix profile). Edit this file by hand; never
   `pixi global install` (it rewrites it).
 - **`ext/`**: from-source pixi packages. Each is a `pixi-build-rattler-build`
-  recipe (built on demand by `pixi global sync`), except the npm tools which use
-  the local `ext/pixi-build-npm` backend. `kitty`/`tev` also carry a `menu.json`
-  for menuinst GUI shortcuts.
+  recipe, built on demand by `pixi global sync`. The npm tools (`gemini-cli`,
+  `claude-code`) are recipes whose `build.sh` runs `npm install`. `kitty`/`tev`
+  also carry a `menu.json` for menuinst GUI shortcuts.
 - **Fonts**: source of truth is `common/.local/share/fonts/` (Git LFS). On Linux
   it's stow-linked to `~/.local/share/fonts` (fontconfig follows symlinks). On
   macOS `sync.sh` copies real files into `~/Library/Fonts` because **CoreText

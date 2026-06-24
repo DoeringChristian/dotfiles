@@ -35,7 +35,7 @@ picked up.
 |---|---|
 | CLI tools | `pixi global`, defined by [`pixi-global.toml`](pixi-global.toml) → `~/.pixi/bin` |
 | From-source / nightly tools | recipes in [`ext/`](ext/) (neovim nightly, kitty, tev, sshr, stow, passage, …) |
-| npm tools (gemini-cli, claude-code) | custom [`ext/pixi-build-npm`](ext/pixi-build-npm) build backend |
+| npm tools (gemini-cli, claude-code) | thin `ext/` recipes whose `build.sh` runs `npm install` |
 | GUI apps (kitty, tev) | menuinst shortcuts → `~/Applications/*.app` (macOS) / `.desktop` (Linux) |
 | Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
 | Fonts | `common/.local/share/fonts/` (LFS); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |

@@ -1,15 +1,12 @@
-# claude-code via the custom pixi-build-npm backend (ext/pixi-build-npm).
-# Second npm tool -> the whole package def is now just this manifest.
+# claude-code, vendored from npm via a thin rattler-build recipe (recipe/build.sh
+# runs `npm install`). Standard pixi-build-rattler-build backend -> builds under
+# `pixi global sync` with no backend override needed.
 
 [package]
 name = "claude-code"
 version = "2.1.187"
 
 [package.build.backend]
-name = "pixi-build-npm"
+name = "pixi-build-rattler-build"
 version = "*"
 channels = ["https://prefix.dev/conda-forge"]
-
-[package.build.config]
-npm-package = "@anthropic-ai/claude-code"
-node = ">=18"

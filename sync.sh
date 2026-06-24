@@ -18,8 +18,6 @@ mkdir -p ~/.ssh
 # root so its `ext/<name>` path-deps resolve (pixi follows the symlink to the
 # real file and resolves relative to it).
 echo "Installing tools with pixi global:"
-# npm tools (gemini-cli, claude-code) build via our local custom backend.
-export PIXI_BUILD_BACKEND_OVERRIDE="pixi-build-npm=$PROJECT_DIR/ext/pixi-build-npm/pixi-build-npm"
 mkdir -p ~/.pixi/manifests
 ln -sfn "$PROJECT_DIR/pixi-global.toml" ~/.pixi/manifests/pixi-global.toml
 pixi global sync
