@@ -5,3 +5,6 @@
 # nix leftovers
 result
 nvim.log
+
+# macOS Finder junk
+**/.DS_Store

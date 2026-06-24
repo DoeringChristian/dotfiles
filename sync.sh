@@ -13,13 +13,15 @@ mkdir -p ~/.ssh
 
 # Install the toolset globally with `pixi global` so binaries land in ~/.pixi/bin
 # (already on PATH) and GUI apps get menuinst shortcuts (~/Applications on macOS,
-# .desktop on Linux). The committed pixi-global.toml is the source of truth; we
-# place it where pixi global expects it, then sync.
+# .desktop on Linux). The committed pixi-global.toml (repo root) is the source of
+# truth: we symlink it where pixi global looks, then sync. It MUST live at the
+# root so its `ext/<name>` path-deps resolve (pixi follows the symlink to the
+# real file and resolves relative to it).
 echo "Installing tools with pixi global:"
 # npm tools (gemini-cli, claude-code) build via our local custom backend.
 export PIXI_BUILD_BACKEND_OVERRIDE="pixi-build-npm=$PROJECT_DIR/ext/pixi-build-npm/pixi-build-npm"
 mkdir -p ~/.pixi/manifests
-cp "$PROJECT_DIR/pixi-global.toml" ~/.pixi/manifests/pixi-global.toml
+ln -sfn "$PROJECT_DIR/pixi-global.toml" ~/.pixi/manifests/pixi-global.toml
 pixi global sync
 
 # This stow comes before the others to ensure global ignore list is respected before other stow commands

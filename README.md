@@ -55,15 +55,23 @@ setup.sh / sync.sh / update.sh
 
 ## Adding things
 
+The tool list is [`pixi-global.toml`](pixi-global.toml) — edit it like the old
+flake's package list, then run `./sync.sh`.
+
 - **A config file**: drop it under `common/` mirroring its `~` path, then
   `stow -t ~ -R common`.
-- **A conda-forge tool**:
-  ```bash
-  pixi global install --environment dotfiles <pkg>
-  cp ~/.pixi/manifests/pixi-global.toml ./pixi-global.toml   # re-snapshot
+- **A conda-forge tool**: add it under `[envs.dotfiles.dependencies]` and its
+  binary under `[envs.dotfiles.exposed]`:
+  ```toml
+  ripgrep = "*"      # in [envs.dotfiles.dependencies]
+  rg = "rg"          # in [envs.dotfiles.exposed]
   ```
+  then `./sync.sh`.
 - **A from-source / GUI tool**: add a recipe under `ext/<name>/` (copy an existing
-  one; add a `menu.json` for GUI apps), then
-  `pixi global install --environment dotfiles --path ext/<name>` and re-snapshot.
+  one; add a `menu.json` + a `shortcuts` entry for GUI apps), reference it as
+  `name = { path = "ext/<name>" }`, expose its binary, then `./sync.sh`.
+
+> **Don't run `pixi global install`** — it rewrites `pixi-global.toml` in an
+> unreadable machine format. Only `pixi global sync` / `update` are used.
 
 See [`CLAUDE.md`](CLAUDE.md) for the detailed architecture.

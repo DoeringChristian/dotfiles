@@ -47,21 +47,32 @@ stow -t ~ -R common     # re-stow (after adding files)
 rules are in place. `sync.sh` handles this.
 
 ### Pixi global (the package manager)
-The committed **`pixi-global.toml`** is the source of truth; it defines one env
-(`dotfiles`) containing all tools. `sync.sh` places it at
+**`pixi-global.toml` at the repo root is the hand-edited source of truth** — like
+the old flake's `paths` list. `sync.sh` **symlinks** it to
 `~/.pixi/manifests/pixi-global.toml` and runs `pixi global sync`.
-```bash
-# Add a tool (auto-exposes its binaries), then re-snapshot the manifest:
-pixi global install --environment dotfiles <pkg>              # conda-forge package
-pixi global install --environment dotfiles --path ext/<name> # from-source package
-cp ~/.pixi/manifests/pixi-global.toml ./pixi-global.toml
+
+To add a tool, edit `pixi-global.toml` directly and run `./sync.sh`:
+```toml
+[envs.dotfiles.dependencies]
+ripgrep = "*"                    # conda-forge package
+foo = { path = "ext/foo" }       # from-source recipe (path relative to repo root)
+[envs.dotfiles.exposed]
+rg = "rg"                        # which binary(s) to surface onto ~/.pixi/bin
 ```
-- **GUI apps** (kitty, tev) ship a menuinst `menu.json`, so `pixi global` creates
-  a launcher automatically: a shim `~/Applications/<app>.app` on macOS (Spotlight-
-  indexable) and a `.desktop` entry on Linux.
-- **npm tools** (`gemini-cli`, `claude-code`) build via the local custom backend
-  `ext/pixi-build-npm`, which isn't on a channel — so pixi needs
-  `PIXI_BUILD_BACKEND_OVERRIDE` set (sync.sh and `.envrc` do this) and
+**Do NOT run `pixi global install`** — it rewrites `pixi-global.toml` in an
+unreadable machine format (and would clobber the symlinked source). Only
+`pixi global sync` and `pixi global update` are safe (they don't touch the file).
+
+Why root + symlink (not stow): pixi resolves `ext/<name>` path-deps relative to
+the manifest's **real** location (it canonicalizes the symlink). At the repo root
+that's a clean `ext/<name>`; under a stow path it would be `../../../ext/<name>`.
+
+- **GUI apps** (kitty, tev): listed under `shortcuts`. Their recipe ships a
+  menuinst `menu.json`, so `sync` creates a shim `~/Applications/<app>.app` on
+  macOS (Spotlight-indexable) and a `.desktop` on Linux.
+- **npm tools** (`gemini-cli`, `claude-code`) build via the local backend
+  `ext/pixi-build-npm` (not on a channel) — so pixi needs
+  `PIXI_BUILD_BACKEND_OVERRIDE` set (sync.sh, update.sh, and `.envrc` do this) and
   `rattler-build` installed (setup.sh does this).
 
 ## Repository Structure
@@ -78,8 +89,7 @@ dotfiles/
 ├── ext/              # From-source pixi package recipes (neovim nightly, sshr,
 │                     #   kitty, tev, stow, passage, npm tools) + the custom
 │                     #   pixi-build-npm backend
-├── pixi-global.toml  # pixi global manifest — the installed tool set (source of truth)
-├── pixi.toml         # legacy workspace manifest (dev/build only; not installed)
+├── pixi-global.toml  # THE tool list (source of truth; symlinked to ~/.pixi/manifests)
 ├── dconf.ini         # GNOME settings (Linux only)
 ├── sync.sh           # pixi global sync + stow + fonts + dconf
 ├── setup.sh          # first-time setup (pixi + rattler-build, sync, age key)
@@ -91,17 +101,16 @@ dotfiles/
 - **`common/`** / **`darwin/`**: stow packages symlinked into `~`. `darwin` is
   stowed in addition to `common` on macOS only.
 - **`stow/.stow-global-ignore`**: applied first so ignore rules are in place.
-- **`pixi-global.toml`**: the installed tool set. One `dotfiles` env; conda-forge
-  packages plus path deps to `ext/<name>` (paths are relative to
-  `~/.pixi/manifests/`, e.g. `../../dotfiles/ext/kitty`). Binaries are exposed in
-  `~/.pixi/bin`, which the shell configs put on PATH (replacing the old nix profile).
+- **`pixi-global.toml`**: the tool list. One `dotfiles` env; conda-forge packages
+  plus `ext/<name>` path-deps (relative to the repo root). `sync.sh` symlinks it
+  to `~/.pixi/manifests/` and `pixi global sync` reconciles the env. The listed
+  `exposed` binaries are surfaced in `~/.pixi/bin`, which the shell configs put on
+  PATH (replacing the old nix profile). Edit this file by hand; never
+  `pixi global install` (it rewrites it).
 - **`ext/`**: from-source pixi packages. Each is a `pixi-build-rattler-build`
-  recipe (build via `pixi global install --path`), except the npm tools which use
+  recipe (built on demand by `pixi global sync`), except the npm tools which use
   the local `ext/pixi-build-npm` backend. `kitty`/`tev` also carry a `menu.json`
   for menuinst GUI shortcuts.
-- **`pixi.toml` (legacy)**: the original workspace manifest. No longer the install
-  mechanism — kept only as a scratch space for building/testing recipes. Safe to
-  remove along with `.pixi/`.
 - **Fonts**: source of truth is `common/.local/share/fonts/` (Git LFS). On Linux
   it's stow-linked to `~/.local/share/fonts` (fontconfig follows symlinks). On
   macOS `sync.sh` copies real files into `~/Library/Fonts` because **CoreText
@@ -117,10 +126,10 @@ dotfiles/
 - **Fish shell**: default shell with vi-mode keybindings.
 - **Adding a config**: place under `common/` mirroring the home path, then
   `stow -t ~ -R common`. macOS-only configs go in `darwin/`.
-- **Adding a tool**:
-  - On conda-forge → `pixi global install --environment dotfiles <pkg>`.
+- **Adding a tool**: edit `pixi-global.toml` (add the dep under
+  `[envs.dotfiles.dependencies]` and its binary under `[envs.dotfiles.exposed]`),
+  then `./sync.sh`.
+  - On conda-forge → `name = "*"`.
   - Not on conda-forge / needs a newer build → add a recipe under `ext/<name>/`
-    (copy an existing one), then `pixi global install --environment dotfiles --path ext/<name>`.
-  - Either way, re-snapshot: `cp ~/.pixi/manifests/pixi-global.toml ./pixi-global.toml`.
-  - For a GUI app, add a `menu.json` to the recipe so a shortcut is created.
-```
+    (copy an existing one) and reference it as `name = { path = "ext/<name>" }`.
+  - For a GUI app, add a `menu.json` to the recipe and list it under `shortcuts`.
