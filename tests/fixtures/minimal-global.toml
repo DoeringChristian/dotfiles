@@ -1,0 +1,22 @@
+# Minimal pixi-global manifest for the fast docker smoke test (tests/run.sh).
+# Channel packages only -- no ext/ source builds -- so it exercises the bootstrap
+# plumbing (prereqs -> pixi -> sync -> ~/.pixi/bin -> stow) in a couple of minutes.
+# The real toolset is ../../pixi-global.toml (used by `tests/run.sh --full`).
+version = 1
+
+[envs.dotfiles]
+channels = ["conda-forge"]
+
+[envs.dotfiles.dependencies]
+ripgrep = "*"
+fish = "*"
+stow = "*"
+git = "*"
+git-lfs = "*"
+
+[envs.dotfiles.exposed]
+rg = "rg"
+fish = "fish"
+stow = "stow"
+git = "git"
+git-lfs = "git-lfs"

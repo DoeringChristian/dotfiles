@@ -13,10 +13,18 @@ This replaces a previous Nix-flake setup; `pixi global` now owns the toolchain.
 
 ## Quick start
 
+On a fresh machine — one line. It installs the only prerequisites (git + curl),
+clones the repo, and lets pixi pull in everything else:
+
 ```bash
-git clone <this-repo> ~/dotfiles
-cd ~/dotfiles
-./setup.sh      # installs pixi + rattler-build, syncs everything, sets up secrets
+curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
+```
+
+Or by hand:
+
+```bash
+git clone https://github.com/doeringchristian/dotfiles ~/dotfiles
+cd ~/dotfiles && ./setup.sh      # installs pixi, syncs everything, sets up secrets
 ```
 
 Day-to-day:
@@ -46,12 +54,25 @@ picked up.
 ```
 common/   # portable config (stowed on all platforms)
 darwin/   # macOS-only config (stowed on macOS)
-ext/      # from-source pixi package recipes + the npm build backend
+ext/      # from-source pixi package recipes
 stow/     # stow global ignore rules
 setup/    # encrypted age key
+tests/    # docker-based bootstrap tests (tests/run.sh)
 pixi-global.toml   # the installed tool set (source of truth)
-setup.sh / sync.sh / update.sh
+bootstrap.sh / setup.sh / sync.sh / update.sh
 ```
+
+## Testing
+
+Test the bootstrap on a clean Linux container (needs docker):
+
+```bash
+tests/run.sh                 # ubuntu, fast smoke test
+tests/run.sh fedora --full   # other distro, build everything
+tests/run.sh ubuntu --remote # the real one-liner from origin/main
+```
+
+See [`tests/README.md`](tests/README.md).
 
 ## Adding things
 

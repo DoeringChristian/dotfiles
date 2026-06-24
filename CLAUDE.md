@@ -13,21 +13,28 @@ Cross-platform (Linux & macOS) dotfiles using:
 ## Key Commands
 
 ### Initial Setup (new machine)
+One-liner (installs git+curl, clones, runs setup):
 ```bash
-./setup.sh
+curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
 ```
-Installs pixi (if missing) + `rattler-build`, runs `sync.sh`, then decrypts the
-age key and sets up passage.
+Or, in an existing checkout, `./setup.sh` directly. `setup.sh` installs pixi (if
+missing), runs `sync.sh`, then decrypts the age key and sets up passage (skip the
+secrets step with `SKIP_SECRETS=1`, e.g. in CI / the docker tests).
 
 ### Full Sync
 ```bash
 ./sync.sh
 ```
-1. **pixi global** — copies `pixi-global.toml` to `~/.pixi/manifests/` and runs
+1. **pixi global** — symlinks `pixi-global.toml` into `~/.pixi/manifests/` and runs
    `pixi global sync` (installs tools into `~/.pixi/bin`, creates GUI shortcuts).
+   Then `git lfs pull` (pixi installed git-lfs) so LFS payloads (fonts, .local/bin)
+   are real files, not pointers — important on a fresh clone.
 2. **GNU Stow** — symlinks configs (`common` everywhere, `darwin` on macOS).
    On macOS it also copies the fonts into `~/Library/Fonts` (see Fonts below).
 3. **dconf** — loads GNOME settings (Linux only).
+
+`sync.sh` puts `~/.pixi/bin` on its own PATH and honors `$PIXI_GLOBAL_MANIFEST`
+(an alternate manifest, used by the docker tests for a fast minimal run).
 
 ### Update All
 ```bash
@@ -88,10 +95,12 @@ dotfiles/
 ├── setup/            # Encrypted secrets (age-key.age)
 ├── ext/              # From-source pixi package recipes (neovim nightly, sshr,
 │                     #   kitty, tev, stow, passage, gemini-cli, claude-code)
+├── tests/            # docker-based bootstrap tests (tests/run.sh)
 ├── pixi-global.toml  # THE tool list (source of truth; symlinked to ~/.pixi/manifests)
 ├── dconf.ini         # GNOME settings (Linux only)
-├── sync.sh           # pixi global sync + stow + fonts + dconf
-├── setup.sh          # first-time setup (pixi + rattler-build, sync, age key)
+├── bootstrap.sh      # one-liner entry: install git/curl, clone, run setup.sh
+├── sync.sh           # pixi global sync + git lfs pull + stow + fonts + dconf
+├── setup.sh          # first-time setup (install pixi, sync, decrypt age key)
 └── update.sh         # update deps and sync
 ```
 

@@ -12,13 +12,6 @@
 # the repo's ext/ dir. (pixi follows the symlink to this real location.)
 version = 1
 
-# Build tool for the from-source backends (kept in its own env).
-[envs.rattler-build]
-channels = ["conda-forge"]
-dependencies = { rattler-build = "*" }
-exposed = { rattler-build = "rattler-build" }
-
-
 [envs.dotfiles]
 channels = ["conda-forge"]
 shortcuts = ["kitty", "tev"]

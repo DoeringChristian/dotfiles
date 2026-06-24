@@ -15,22 +15,17 @@ fi
 # Ensure pixi (and globally-installed tools) are on PATH for this script
 export PATH="$HOME/.pixi/bin:$PATH"
 
-# rattler-build powers our custom pixi-build-npm backend (gemini-cli, claude-code)
-if ! command -v rattler-build &>/dev/null; then
-    echo "Installing rattler-build (build backend dependency)..."
-    pixi global install rattler-build
-fi
-
-# Install packages (including age) before trying to use age
+# Install packages (including age) and apply configs.
 ./sync.sh
 
-# Decrypt the age key. sync.sh installed `age` via pixi global into ~/.pixi/bin,
-# which is on this script's PATH (set above).
-AGE="$HOME/.pixi/bin/age"
-mkdir -p ~/.local/share/age
-"$AGE" -d ./setup/age-key.age >~/.local/share/age/key.txt
-chmod 600 ~/.local/share/age/key.txt
-
-# Copy over to passage
-mkdir -p ~/.passage
-cp ~/.local/share/age/key.txt ~/.passage/identities
+# Decrypt the age key (prompts for the passphrase). Skip with SKIP_SECRETS=1
+# (e.g. in CI / the docker tests). `age` was installed into ~/.pixi/bin by sync.sh.
+if [ "${SKIP_SECRETS:-0}" != 1 ]; then
+    AGE="$HOME/.pixi/bin/age"
+    mkdir -p ~/.local/share/age
+    "$AGE" -d ./setup/age-key.age >~/.local/share/age/key.txt
+    chmod 600 ~/.local/share/age/key.txt
+    # Copy over to passage
+    mkdir -p ~/.passage
+    cp ~/.local/share/age/key.txt ~/.passage/identities
+fi
