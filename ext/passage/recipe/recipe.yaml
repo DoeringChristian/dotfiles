@@ -1,0 +1,34 @@
+# passage -- age-based password store (FiloSottile/passage). Bash script.
+# No tarball releases, so we pin the latest tag by its commit.
+context:
+  version: "1.7.4a2"
+
+package:
+  name: passage
+  version: ${{ version }}
+
+source:
+  git: https://github.com/FiloSottile/passage.git
+  rev: 4e4c5ae14be91833791d45608f50868175c1490f   # tag 1.7.4a2
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - make
+  run:
+    - bash
+    - age          # encryption backend
+    - git          # passage uses git for history
+    - tree         # used to list the store
+
+tests:
+  - script:
+      - command -v passage
+
+about:
+  homepage: https://github.com/FiloSottile/passage
+  license: GPL-2.0-or-later
+  summary: A fork of password-store (pass) that uses age instead of gpg
+  repository: https://github.com/FiloSottile/passage

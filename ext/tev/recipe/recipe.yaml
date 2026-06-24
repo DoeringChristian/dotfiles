@@ -1,0 +1,59 @@
+# tev -- HDR image viewer (Tom94/tev). C++23, CMake.
+#
+# All image-codec dependencies (OpenEXR, libjxl, aom, libpng, ...) are vendored
+# as git submodules and built statically, so there are almost no conda host
+# deps on macOS. On Linux the GUI needs the X11/Wayland/GL/dbus dev stack.
+#
+# To bump: change the tag below and `version` (+ ext/tev/pixi.toml version).
+
+context:
+  version: "2.12.2"
+
+package:
+  name: tev
+  version: ${{ version }}
+
+source:
+  git: https://github.com/Tom94/tev.git
+  tag: v${{ version }}
+  # submodules: true is the default -- required, the codecs live in submodules.
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - cmake
+    - ninja
+    - nasm                       # assembly in vendored aom / jpeg-turbo / jxl
+  host:
+    # Linux GUI stack (nanogui/GLFW backend). macOS uses system frameworks.
+    - if: linux
+      then:
+        - xorg-libx11
+        - xorg-libxrandr
+        - xorg-libxinerama
+        - xorg-libxcursor
+        - xorg-libxi
+        - xorg-libxext
+        - xorg-xorgproto
+        - libglu
+        - mesalib
+        - wayland
+        - wayland-protocols
+        - libxkbcommon
+        - dbus
+        - libffi
+
+tests:
+  - script:
+      - tev --help
+
+about:
+  homepage: https://github.com/Tom94/tev
+  license: GPL-3.0-or-later
+  license_file: LICENSE.txt
+  summary: A high dynamic range (HDR) image viewer
+  repository: https://github.com/Tom94/tev

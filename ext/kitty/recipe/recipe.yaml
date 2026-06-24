@@ -1,0 +1,73 @@
+# kitty -- fast, GPU-based terminal. Built from source (custom setup.py, needs
+# a Go toolchain for the `kitten` binary). Latest release; bump the tag +
+# version (and ext/kitty/pixi.toml) to upgrade.
+
+context:
+  version: "0.47.4"
+
+package:
+  name: kitty
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/kovidgoyal/kitty.git
+    tag: v${{ version }}
+  # kitty's build bundles "Symbols NERD Font Mono"; if the .ttf is already in
+  # the source tree (fonts/), setup.py skips its system-font search. We supply
+  # it pinned instead of requiring the font be installed on the build machine.
+  - url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/NerdFontsSymbolsOnly.zip
+    sha256: 8e617904b980fe3648a4b116808788fe50c99d2d495376cb7c0badbd8a564c47
+    target_directory: nerd-symbols
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - go                         # builds the `kitten` binary
+    - pkg-config
+  host:
+    - python                     # kitty is a python app + C extension (>=3.11)
+    - harfbuzz
+    - freetype                   # harfbuzz.pc requires freetype2 (both OSes)
+    - zlib
+    - libpng
+    - lcms2
+    - openssl
+    - xxhash
+    - simde
+    - if: linux
+      then:
+        - fontconfig
+        - libcanberra
+        - pixman
+        - cairo
+        - dbus
+        - libxkbcommon
+        - wayland
+        - wayland-protocols
+        - xorg-libx11
+        - xorg-libxcursor
+        - xorg-libxrandr
+        - xorg-libxi
+        - xorg-libxinerama
+        - xorg-libxext
+        - mesalib
+  run:
+    - python
+    - if: linux
+      then:
+        - xkeyboard-config
+
+tests:
+  - script:
+      - kitty --version
+      - kitten --version
+
+about:
+  homepage: https://sw.kovidgoyal.net/kitty/
+  license: GPL-3.0-only
+  license_file: LICENSE
+  summary: Cross-platform, fast, feature-rich, GPU-based terminal
+  repository: https://github.com/kovidgoyal/kitty

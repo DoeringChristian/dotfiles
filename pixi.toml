@@ -1,0 +1,129 @@
+[workspace]
+authors = ["Christian Döring <christian.doering@tum.de>"]
+channels = ["conda-forge"]
+name = "dotfiles"
+platforms = ["osx-arm64", "linux-64"]
+version = "0.1.0"
+# Opt into the (still preview) pixi build feature so the workspace can depend
+# on locally built packages defined under ext/.
+preview = ["pixi-build"]
+
+[tasks]
+
+# ---------------------------------------------------------------------------
+# Cross-platform tools (the bulk of the old flake's `paths`).
+# Verified against conda-forge on 2026-06-24: every entry below is at upstream's
+# latest stable, so plain channel deps are enough -- no from-source recipe
+# needed (neovim is the one exception, see ext/neovim).
+# ---------------------------------------------------------------------------
+[dependencies]
+# Editors / source build
+nvim = { path = "ext/neovim" }   # nightly, built from source (ext/neovim)
+vim = "*"
+
+# Your own tools, built from source (ext/<name>)
+sshr = { path = "ext/sshr" }
+
+# Other from-source tools not on conda-forge (ext/<name>)
+tev = { path = "ext/tev" }
+stow = { path = "ext/stow" }     # conda-forge only ships stow for linux
+passage = { path = "ext/passage" }
+kitty = { path = "ext/kitty" }   # latest from source (conda-forge's is ancient)
+gemini-cli = { path = "ext/gemini-cli" }   # wrapped from npm via pixi-build-npm
+claude-code = { path = "ext/claude-code" } # ditto (custom npm backend)
+
+# Development tools
+tree = "*"
+ripgrep = "*"
+fd-find = "*"                    # provides the `fd` binary
+curl = "*"
+wget = "*"
+pixi = "*"
+uv = "*"
+rust = "*"                       # NOTE: conda-forge has no `rustup`; `rust`
+                                 # gives rustc+cargo but not toolchain mgmt.
+nodejs = "*"
+python = "*"
+tree-sitter-cli = "*"            # provides the `tree-sitter` binary
+
+# Utilities
+unzip = "*"
+zip = "*"
+gzip = "*"
+which = "*"
+file = "*"
+less = "*"
+
+# Secrets
+age = "*"
+
+# System monitoring
+btop = "*"
+duf = "*"   # ncdu dropped: conda-forge only has the old C v1.x, not nixpkgs' Zig v2
+
+# Shell & CLI tools
+starship = "*"
+direnv = "*"
+eza = "*"
+bat = "*"
+claude-agent-acp = "*"
+atuin = "*"
+zoxide = "*"
+zellij = "*"
+fish = "*"
+fzf = "*"
+gh = "*"
+git = "*"
+git-lfs = "*"
+dust = "*"                       # bootandy/dust (confirmed), not an unrelated pkg
+lazygit = "*"
+mosh = "*"
+
+# Type setting
+typst = "*"
+
+# ---------------------------------------------------------------------------
+# Linux-only tools (the old flake's `if isLinux` block).
+# Only the ones conda-forge actually ships are listed; gaps are noted at the
+# bottom of this file.
+# ---------------------------------------------------------------------------
+[target.linux-64.dependencies]
+xsel = "*"
+distrobox = "*"
+nvtop = "*"
+inetutils = "*"                  # covers telnet/ftp/etc. (GNU inetutils)
+openconnect = "*"
+ollama = "*"
+# From-source recipes (ext/<name>) for Linux tools missing from conda-forge.
+# These build on Linux only; not verified on macOS.
+wl-clipboard = { path = "ext/wl-clipboard" }
+net-tools = { path = "ext/net-tools" }
+traceroute = { path = "ext/traceroute" }
+
+# ---------------------------------------------------------------------------
+# Built from source via ext/<name> (not on conda-forge, or too old there):
+#   sshr, tev, kitty, stow, passage          -> cross-platform [dependencies]
+#   wl-clipboard, net-tools, traceroute      -> [target.linux-64.dependencies]
+# (kitty's conda-forge build is ancient + linux-only, so we build latest here.)
+#
+# npm tools, built via our custom backend (ext/pixi-build-npm) -- declared with
+# just a [package.build.config] npm-package, no recipe:
+#   gemini-cli  (@google/gemini-cli)
+#   claude-code (@anthropic-ai/claude-code)
+# NB: needs PIXI_BUILD_BACKEND_OVERRIDE set (wired into .envrc) since the
+# backend isn't published to a channel.
+#
+# Still unaddressed -- need a non-conda mechanism:
+#   rustup                -> not packaged; using `rust` above. Install rustup
+#                            via its own installer if you need toolchain mgmt.
+#   nmap                  -> not on conda-forge anywhere (declined a recipe)
+#   nerd-fonts.fira-code  -> fonts aren't on conda-forge; install separately
+#   vpn-slice             -> pip package, not on conda-forge (linux)
+#
+# Caveats on the source builds:
+#   passage (macOS)       -> flag-bearing subcommands need GNU getopt, which
+#                            conda-forge doesn't ship for osx; works on Linux.
+#                            `brew install gnu-getopt` to fix on macOS.
+#   wl-clipboard/net-tools/traceroute -> built & verified on Linux only
+#                            (resolve in the lock on macOS but don't build).
+# ---------------------------------------------------------------------------

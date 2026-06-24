@@ -7,22 +7,28 @@ cd "$PROJECT_DIR"
 
 OS="$(uname -s)"
 
-# Install Nix if not present
-if ! command -v nix &>/dev/null; then
-    echo "Nix not found. Installing via Determinate Systems installer..."
-    curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
-    # Source nix for the current shell session
-    if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
-        . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
-    fi
+# Install pixi if not present
+if ! command -v pixi &>/dev/null; then
+    echo "pixi not found. Installing..."
+    curl -fsSL https://pixi.sh/install.sh | sh
+fi
+# Ensure pixi (and globally-installed tools) are on PATH for this script
+export PATH="$HOME/.pixi/bin:$PATH"
+
+# rattler-build powers our custom pixi-build-npm backend (gemini-cli, claude-code)
+if ! command -v rattler-build &>/dev/null; then
+    echo "Installing rattler-build (build backend dependency)..."
+    pixi global install rattler-build
 fi
 
 # Install packages (including age) before trying to use age
 ./sync.sh
 
-# Decrypt the age key (age is now available from nix)
+# Decrypt the age key (age now comes from the pixi env, which isn't on this
+# script's PATH yet, so call it by its absolute path)
+AGE="$PROJECT_DIR/.pixi/envs/default/bin/age"
 mkdir -p ~/.local/share/age
-age -d ./setup/age-key.age >~/.local/share/age/key.txt
+"$AGE" -d ./setup/age-key.age >~/.local/share/age/key.txt
 chmod 600 ~/.local/share/age/key.txt
 
 # Copy over to passage

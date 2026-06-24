@@ -1,0 +1,30 @@
+# sshr -- your SSH wrapper (Rust). Built from the main branch (no releases).
+context:
+  version: "0.1.0"
+
+package:
+  name: sshr
+  version: ${{ version }}
+
+source:
+  git: https://github.com/DoeringChristian/sshr.git
+  branch: main
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - ${{ compiler('c') }}   # linker driver for the rust build
+    - rust                   # conda-forge `rust` bundles rustc + cargo
+  run:
+    - openssh                # sshr shells out to the system `ssh`
+
+tests:
+  - script:
+      - sshr --help
+
+about:
+  homepage: https://github.com/DoeringChristian/sshr
+  summary: SSH wrapper with kitty / shpool integration
+  repository: https://github.com/DoeringChristian/sshr

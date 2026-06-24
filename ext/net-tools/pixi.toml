@@ -1,0 +1,14 @@
+# Buildable pixi package for net-tools (ifconfig, netstat, route, arp, ...).
+# Linux-only; not on conda-forge. Built from source.
+# NOTE: only referenced from [target.linux-64.dependencies] -- builds on Linux
+# only, NOT verified on macOS. The build uses net-tools' interactive `make
+# config` driven non-interactively (`yes "" | make config`).
+
+[package]
+name = "net-tools"
+version = "2.10"
+
+[package.build.backend]
+name = "pixi-build-rattler-build"
+version = "*"
+channels = ["https://prefix.dev/conda-forge"]

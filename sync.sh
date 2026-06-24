@@ -11,13 +11,12 @@ mkdir -p ~/.config
 mkdir -p ~/.local/bin
 mkdir -p ~/.ssh
 
-# First, install the required packages
-echo "Installing packages with Nix:"
-export NIX_CONFIG="experimental-features = nix-command flakes"
-# Build first so a failure doesn't leave the profile empty
-nix build .#default
-nix profile remove dotfiles 2>/dev/null || true
-nix profile install .#default
+# First, install the required packages (builds the pixi env at .pixi/envs/default,
+# which the shell config puts on PATH).
+echo "Installing packages with pixi:"
+# npm tools (gemini-cli, claude-code) build via our local custom backend.
+export PIXI_BUILD_BACKEND_OVERRIDE="pixi-build-npm=$PROJECT_DIR/ext/pixi-build-npm/pixi-build-npm"
+pixi install
 
 # This stow comes before the others to ensure global ignore list is respected before other stow commands
 echo "Applying configs with GNU Stow:"

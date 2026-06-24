@@ -1,0 +1,17 @@
+# Buildable pixi package for the kitty terminal (kovidgoyal/kitty).
+# conda-forge only ships an ancient kitty (0.23.1, linux-only), so we build the
+# latest from source for both osx-arm64 and linux-64.
+#
+# macOS is the hard case: kitty's only macOS packaging target is `kitty.app`
+# (an app bundle). We install that bundle intact under $PREFIX/libexec and
+# symlink the launchers onto $PREFIX/bin, so the bundle's own resource
+# resolution keeps working. On Linux we use the supported `linux-package`.
+
+[package]
+name = "kitty"
+version = "0.47.4"
+
+[package.build.backend]
+name = "pixi-build-rattler-build"
+version = "*"
+channels = ["https://prefix.dev/conda-forge"]

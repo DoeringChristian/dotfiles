@@ -1,0 +1,23 @@
+# Buildable pixi package for Neovim, built from source.
+#
+# conda-forge's `nvim` tracks stable releases, but if you want a newer
+# point release (or a nightly) before it lands on conda-forge, building from
+# source here lets you bump `context.version` + `source.sha256` in
+# recipe/recipe.yaml and rebuild immediately.
+#
+# The root workspace consumes this via a path dependency:
+#   [dependencies]
+#   nvim = { path = "ext/neovim" }
+#
+# The pixi-build-rattler-build backend drives an ordinary rattler-build recipe
+# (recipe/recipe.yaml + recipe/build.sh). Per that backend's contract, all
+# binary build/host/run dependencies live in the recipe, NOT in this manifest.
+
+[package]
+name = "nvim"
+version = "0.13.0.dev"
+
+[package.build.backend]
+name = "pixi-build-rattler-build"
+version = "*"
+channels = ["https://prefix.dev/conda-forge"]

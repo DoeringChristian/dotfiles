@@ -1,0 +1,29 @@
+# net-tools -- classic Linux networking utilities. Linux-only.
+context:
+  version: "2.10"
+
+package:
+  name: net-tools
+  version: ${{ version }}
+
+source:
+  url: https://github.com/ecki/net-tools/archive/refs/tags/v${{ version }}.tar.gz
+  sha256: 8e186f65f0ff304989b3dc8b0067c3a07d36ae777da60667bdd6ccb2730908d2
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - make
+
+tests:
+  - script:
+      - command -v ifconfig
+      - command -v netstat
+
+about:
+  homepage: https://github.com/ecki/net-tools
+  license: GPL-2.0-or-later
+  summary: Classic Linux networking tools (ifconfig, netstat, route, arp, ...)

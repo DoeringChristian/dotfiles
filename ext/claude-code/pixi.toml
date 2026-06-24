@@ -1,0 +1,15 @@
+# claude-code via the custom pixi-build-npm backend (ext/pixi-build-npm).
+# Second npm tool -> the whole package def is now just this manifest.
+
+[package]
+name = "claude-code"
+version = "2.1.187"
+
+[package.build.backend]
+name = "pixi-build-npm"
+version = "*"
+channels = ["https://prefix.dev/conda-forge"]
+
+[package.build.config]
+npm-package = "@anthropic-ai/claude-code"
+node = ">=18"

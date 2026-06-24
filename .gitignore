@@ -1,0 +1,7 @@
+# pixi environments (built locally, never committed)
+.pixi/*
+!.pixi/config.toml
+
+# nix leftovers
+result
+nvim.log
