@@ -1,6 +1,11 @@
-# kitty -- fast, GPU-based terminal. Built from source (custom setup.py, needs
-# a Go toolchain for the `kitten` binary). Latest release; bump the tag +
-# version (and ext/kitty/pixi.toml) to upgrade.
+# kitty -- fast, GPU-based terminal. Installed from the project's OFFICIAL
+# prebuilt, self-contained binaries (the same artifacts kitty's installer.sh
+# uses) instead of building from source. They bundle their own Python + libs and
+# use the system's GL/X11/Wayland at runtime, so there is no build toolchain and
+# none of the Linux GL/fontconfig/expat link headaches.
+#
+# To bump: change `version`, ext/kitty/pixi.toml, and the four sha256 below
+# (download the release assets and `shasum -a 256`).
 
 context:
   version: "0.47.4"
@@ -10,63 +15,31 @@ package:
   version: ${{ version }}
 
 source:
-  - git: https://github.com/kovidgoyal/kitty.git
-    tag: v${{ version }}
-  # kitty's build bundles "Symbols NERD Font Mono"; if the .ttf is already in
-  # the source tree (fonts/), setup.py skips its system-font search. We supply
-  # it pinned instead of requiring the font be installed on the build machine.
-  - url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/NerdFontsSymbolsOnly.zip
-    sha256: 8e617904b980fe3648a4b116808788fe50c99d2d495376cb7c0badbd8a564c47
-    target_directory: nerd-symbols
+  # Linux: relocatable .txz bundles (bin/ lib/ share/), extracted into dist/.
+  - if: target_platform == "linux-64"
+    then:
+      - url: https://github.com/kovidgoyal/kitty/releases/download/v${{ version }}/kitty-${{ version }}-x86_64.txz
+        sha256: bc230142b2bd27f2a4bf1b1b67575f3d397a4ea2cc83f4ac2b912c306a939693
+        target_directory: dist
+  - if: target_platform == "linux-aarch64"
+    then:
+      - url: https://github.com/kovidgoyal/kitty/releases/download/v${{ version }}/kitty-${{ version }}-arm64.txz
+        sha256: 998216e2662b4d2237f10e21dfec5f4e916063f1b6c17f96edae08212e91d0fa
+        target_directory: dist
+  # macOS: universal .dmg (contains kitty.app). Kept as a file (not extracted);
+  # build.sh mounts it with hdiutil.
+  - if: osx
+    then:
+      - url: https://github.com/kovidgoyal/kitty/releases/download/v${{ version }}/kitty-${{ version }}.dmg
+        sha256: b53b9b18a27d53ad44a25dd6776fde8c47487b4e103ac50d682af1ee8e7b77ed
+        file_name: kitty.dmg
 
 build:
-  number: 3   # bumped: add expat (provides expat.pc for fontconfig pkg-config resolution)
-
-requirements:
-  build:
-    - ${{ compiler('c') }}
-    - go                         # builds the `kitten` binary
-    - pkg-config
-  host:
-    - python                     # kitty is a python app + C extension (>=3.11)
-    - harfbuzz
-    - freetype                   # harfbuzz.pc requires freetype2 (both OSes)
-    - zlib
-    - libpng
-    - lcms2
-    - openssl
-    - xxhash
-    - simde
-    - if: linux
-      then:
-        - fontconfig
-        # fontconfig only pulls runtime `libexpat` (no .pc); kitty probes
-        # cairo-fc -> fontconfig, whose .pc has `Requires.private: expat`, so
-        # pkg-config needs expat.pc -> pull the dev `expat` package explicitly.
-        - expat
-        - libcanberra
-        - pixman
-        - cairo
-        - dbus
-        - libxkbcommon
-        - wayland
-        - wayland-protocols
-        - xorg-libx11
-        - xorg-libxcursor
-        - xorg-libxrandr
-        - xorg-libxi
-        - xorg-libxinerama
-        - xorg-libxext
-        - mesalib
-        # GL/EGL .so link symlinks come from the libglvnd -devel packages (mesalib
-        # alone doesn't ship them); kitty's glfw links GLX/EGL on Linux.
-        - libgl-devel
-        - libegl-devel
-  run:
-    - python
-    - if: linux
-      then:
-        - xkeyboard-config
+  number: 0
+  # Prebuilt, self-contained binaries: don't let rattler-build patchelf/relocate
+  # them (it would rewrite their bundled rpaths and needs patchelf on Linux).
+  dynamic_linking:
+    binary_relocation: false
 
 tests:
   - script:
@@ -76,6 +49,5 @@ tests:
 about:
   homepage: https://sw.kovidgoyal.net/kitty/
   license: GPL-3.0-only
-  license_file: LICENSE
   summary: Cross-platform, fast, feature-rich, GPU-based terminal
   repository: https://github.com/kovidgoyal/kitty

@@ -8,3 +8,7 @@ nvim.log
 
 # macOS Finder junk
 **/.DS_Store
+# pixi-build / rattler-build outputs (never commit built packages)
+ext/**/*.conda
+*.conda
+.pixi/

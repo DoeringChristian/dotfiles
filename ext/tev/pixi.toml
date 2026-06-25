@@ -1,8 +1,6 @@
-# Buildable pixi package for tev (https://github.com/Tom94/tev), an HDR image
-# viewer. Not on conda-forge, so built from source.
-#
-# tev vendors ALL its dependencies as git submodules, so we use a git source
-# (rattler-build clones submodules by default) pinned to a release tag.
+# pixi package for tev (https://github.com/Tom94/tev), an HDR image viewer. Not
+# on conda-forge. We install the project's OFFICIAL prebuilt binaries (Linux
+# AppImage, macOS .dmg) rather than building from source -- see recipe/recipe.yaml.
 
 [package]
 name = "tev"

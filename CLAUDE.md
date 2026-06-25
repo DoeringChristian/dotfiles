@@ -93,8 +93,9 @@ dotfiles/
 ├── darwin/           # macOS-only stow package (config overrides)
 ├── stow/             # Stow global ignore rules (.stow-global-ignore)
 ├── setup/            # Encrypted secrets (age-key.age)
-├── ext/              # From-source pixi package recipes (neovim nightly, sshr,
-│                     #   kitty, tev, stow, passage, gemini-cli, claude-code)
+├── ext/              # pixi package recipes: from-source (neovim nightly, sshr,
+│                     #   stow, passage) + prebuilt-binary repackages (kitty, tev,
+│                     #   gemini-cli, claude-code)
 ├── tests/            # docker-based bootstrap tests (tests/run.sh)
 ├── pixi-global.toml  # THE tool list (source of truth; symlinked to ~/.pixi/manifests)
 ├── dconf.ini         # GNOME settings (Linux only)
@@ -115,10 +116,14 @@ dotfiles/
   `exposed` binaries are surfaced in `~/.pixi/bin`, which the shell configs put on
   PATH (replacing the old nix profile). Edit this file by hand; never
   `pixi global install` (it rewrites it).
-- **`ext/`**: from-source pixi packages. Each is a `pixi-build-rattler-build`
-  recipe, built on demand by `pixi global sync`. The npm tools (`gemini-cli`,
-  `claude-code`) are recipes whose `build.sh` runs `npm install`. `kitty`/`tev`
-  also carry a `menu.json` for menuinst GUI shortcuts.
+- **`ext/`**: pixi packages, each a `pixi-build-rattler-build` recipe built on
+  demand by `pixi global sync`. Two flavors: **from-source** (`neovim` nightly,
+  `sshr`, `stow`, `passage`) and **prebuilt-binary repackages** whose `build.sh`
+  just fetches/extracts an upstream artifact — `kitty`/`tev` (official release
+  `.txz`/`.dmg`/AppImage) and the npm tools `gemini-cli`/`claude-code` (`npm
+  install`). Binary repackages set `build.dynamic_linking.binary_relocation:
+  false` (no patchelf). `kitty`/`tev` also carry a `menu.json` for menuinst GUI
+  shortcuts.
 - **Fonts**: source of truth is `common/.local/share/fonts/` (Git LFS). On Linux
   it's stow-linked to `~/.local/share/fonts` (fontconfig follows symlinks). On
   macOS `sync.sh` copies real files into `~/Library/Fonts` because **CoreText
