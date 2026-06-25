@@ -19,7 +19,7 @@ source:
   # submodules: true is the default -- required, the codecs live in submodules.
 
 build:
-  number: 3   # bumped: add libgl/egl-devel (provides -lGL link symlink on Linux)
+  number: 4   # bumped: add xorg-libxxf86vm (nanogui hardcodes -lXxf86vm on Linux)
 
 requirements:
   build:
@@ -38,6 +38,7 @@ requirements:
         - xorg-libxcursor
         - xorg-libxi
         - xorg-libxext
+        - xorg-libxxf86vm            # nanogui hardcodes -lXxf86vm (CMakeLists NANOGUI_EXTRA_LIBS)
         - xorg-xorgproto
         - libglu
         - mesalib
