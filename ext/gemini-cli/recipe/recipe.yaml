@@ -9,6 +9,10 @@ package:
 
 build:
   number: 0
+  # The npm package vendors prebuilt native bits (node-pty); don't let
+  # rattler-build patchelf/relocate them (also avoids needing patchelf on Linux).
+  dynamic_linking:
+    binary_relocation: false
 
 requirements:
   build:

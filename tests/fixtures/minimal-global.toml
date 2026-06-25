@@ -10,9 +10,12 @@ channels = ["conda-forge"]
 [envs.dotfiles.dependencies]
 ripgrep = "*"
 fish = "*"
-stow = "*"
 git = "*"
 git-lfs = "*"
+# stow isn't on conda-forge for all platforms (e.g. linux-aarch64), so -- like
+# the real manifest -- build it from source. Path is relative to THIS file
+# (tests/fixtures/), so ../../ext/stow points at the repo's recipe.
+stow = { path = "../../ext/stow" }
 
 [envs.dotfiles.exposed]
 rg = "rg"

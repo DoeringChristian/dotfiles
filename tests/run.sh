@@ -46,7 +46,13 @@ fail=0
 for t in rg fish stow git; do
     if command -v "$t" >/dev/null; then echo "  ok: $t -> $(command -v "$t")"; else echo "  MISSING: $t"; fail=1; fi
 done
-if [ -L "$HOME/.config/fish/config.fish" ]; then echo "  ok: stow linked ~/.config/fish/config.fish"; else echo "  MISSING: stow link"; fail=1; fi
+# stow may "fold" (symlink the whole ~/.config/fish dir) on a fresh machine, so
+# check that config.fish *resolves* into the repo rather than being a symlink itself.
+cfg=$(readlink -f "$HOME/.config/fish/config.fish" 2>/dev/null || true)
+case "$cfg" in
+    */common/.config/fish/config.fish) [ -f "$cfg" ] && echo "  ok: config.fish -> $cfg" || { echo "  MISSING: config.fish target"; fail=1; } ;;
+    *) echo "  MISSING: config.fish not stow-linked (resolved: ${cfg:-none})"; fail=1 ;;
+esac
 [ "$fail" = 0 ] && echo "==> PASS" || { echo "==> FAIL"; exit 1; }
 A
 

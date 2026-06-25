@@ -9,6 +9,10 @@ package:
 
 build:
   number: 0
+  # The npm package vendors its own prebuilt, self-contained native binary; don't
+  # let rattler-build patchelf/relocate it (also avoids needing patchelf on Linux).
+  dynamic_linking:
+    binary_relocation: false
 
 requirements:
   build:
