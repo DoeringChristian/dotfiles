@@ -20,7 +20,7 @@ source:
     target_directory: nerd-symbols
 
 build:
-  number: 2   # bumped: add libgl/egl-devel (provides -lGL link symlink on Linux)
+  number: 3   # bumped: add expat (provides expat.pc for fontconfig pkg-config resolution)
 
 requirements:
   build:
@@ -40,6 +40,10 @@ requirements:
     - if: linux
       then:
         - fontconfig
+        # fontconfig only pulls runtime `libexpat` (no .pc); kitty probes
+        # cairo-fc -> fontconfig, whose .pc has `Requires.private: expat`, so
+        # pkg-config needs expat.pc -> pull the dev `expat` package explicitly.
+        - expat
         - libcanberra
         - pixman
         - cairo
