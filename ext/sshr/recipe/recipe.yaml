@@ -11,12 +11,18 @@ source:
   branch: main
 
 build:
-  number: 1   # bumped: cargo install --force + idempotent shpool copy
+  number: 2   # bumped: add patchelf for Linux binary relocation
 
 requirements:
   build:
     - ${{ compiler('c') }}   # linker driver for the rust build
     - rust                   # conda-forge `rust` bundles rustc + cargo
+    # cargo doesn't inject conda's $PREFIX/lib rpath the way the C compiler does,
+    # so rattler-build must patchelf the binary to relocate it -> needs patchelf
+    # on the build PATH (macOS uses install_name_tool from the toolchain).
+    - if: linux
+      then:
+        - patchelf
   run:
     - openssh                # sshr shells out to the system `ssh`
 
