@@ -20,7 +20,7 @@ source:
     target_directory: nerd-symbols
 
 build:
-  number: 1   # bumped: now ships a menuinst shortcut (Menu/kitty_menu.json + icon)
+  number: 2   # bumped: add libgl/egl-devel (provides -lGL link symlink on Linux)
 
 requirements:
   build:
@@ -54,6 +54,10 @@ requirements:
         - xorg-libxinerama
         - xorg-libxext
         - mesalib
+        # GL/EGL .so link symlinks come from the libglvnd -devel packages (mesalib
+        # alone doesn't ship them); kitty's glfw links GLX/EGL on Linux.
+        - libgl-devel
+        - libegl-devel
   run:
     - python
     - if: linux

@@ -19,7 +19,7 @@ source:
   # submodules: true is the default -- required, the codecs live in submodules.
 
 build:
-  number: 2   # bumped: menuinst shortcut + icon (no longer ships the full .app), not just the binary
+  number: 3   # bumped: add libgl/egl-devel (provides -lGL link symlink on Linux)
 
 requirements:
   build:
@@ -41,6 +41,12 @@ requirements:
         - xorg-xorgproto
         - libglu
         - mesalib
+        # libGL/EGL/OpenGL .so link symlinks come from the libglvnd -devel
+        # packages (mesalib alone doesn't ship them) -> fixes `cannot find -lGL`.
+        # Their run_exports pull the matching runtime libs automatically.
+        - libgl-devel
+        - libegl-devel
+        - libopengl-devel
         - wayland
         - wayland-protocols
         - libxkbcommon
