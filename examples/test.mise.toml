@@ -1,0 +1,37 @@
+# Self-contained TEST config — one entry of every backend the toolbox uses, so
+# you can exercise the whole system quickly. Run it isolated with:
+#
+#     bash scripts/test-shell.sh
+#
+# which copies this to a temp dir outside the repo (so it does NOT inherit the
+# full toolbox mise.toml) and links the in-repo plugins automatically.
+#
+# Heaviest items are `node` (a download) and `app:kitty` (extracts a ~50MB dmg
+# on macOS). The aqua tools are small. Install everything with `mise install`,
+# or pick a few: `mise install ripgrep app:kitty`.
+
+[tools]
+# --- aqua backend (CLI tools, small + fast) ---
+ripgrep = "latest"
+fd      = "latest"
+bat     = "latest"
+eza     = "latest"
+fzf     = "latest"
+
+# --- core runtime (the npm backend needs node) ---
+node = "22"
+
+# --- npm backend (tracks upstream LATEST — the headline case) ---
+"npm:@anthropic-ai/claude-code" = "latest"
+
+# --- conda backend (conda-forge build; rattler built into mise, no conda needed) ---
+"conda:btop" = "latest"
+
+# --- app backend (GUI apps, via the local 'app' plugin; versions resolve from
+#     GitHub releases — no hashes — with a generated .app/.desktop launcher) ---
+"app:kitty" = "latest"
+"app:tev"   = "latest"
+
+[settings]
+experimental = true
+lockfile = true

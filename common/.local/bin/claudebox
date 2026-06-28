@@ -321,10 +321,13 @@ BWRAP_ARGS+=(--tmpfs "$HOME")
 [[ -e "$HOME/.local/bin/claude" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/bin/claude" "$HOME/.local/bin/claude")
 [[ -d "$HOME/.local/share/claude" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/share/claude" "$HOME/.local/share/claude")
 
-# Pixi global: ~/.pixi/bin/claude is a trampoline that execs the real binary in
-# ~/.pixi/envs/dotfiles, so the whole ~/.pixi tree must be visible (the tmpfs
-# $HOME above hides it otherwise).
-[[ -d "$HOME/.pixi" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.pixi" "$HOME/.pixi")
+# mise: the `claude` shim (~/.local/share/mise/shims/claude) execs `mise`, which
+# resolves the real npm-backed binary under ~/.local/share/mise/installs. Bind
+# the mise binary + its install/shim tree so the whole chain is visible (the
+# tmpfs $HOME above hides them otherwise).
+[[ -e "$HOME/.local/bin/mise" ]]      && BWRAP_ARGS+=(--ro-bind "$HOME/.local/bin/mise" "$HOME/.local/bin/mise")
+[[ -d "$HOME/.local/share/mise" ]]    && BWRAP_ARGS+=(--ro-bind "$HOME/.local/share/mise" "$HOME/.local/share/mise")
+[[ -d "$HOME/.config/mise" ]]         && BWRAP_ARGS+=(--ro-bind "$HOME/.config/mise" "$HOME/.config/mise")
 
 # Claude auth and config (read-write so sessions persist)
 [[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")

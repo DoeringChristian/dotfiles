@@ -1,4 +1,4 @@
 shell = "fish"
 
 [env]
-PATH = "$PATH:$HOME/.pixi/bin"
+PATH = "$PATH:$HOME/.local/bin:$HOME/.local/share/mise/shims"

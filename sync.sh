@@ -1,77 +1,75 @@
 #!/usr/bin/env bash
+# sync.sh — reconcile the machine to the repo (mise edition). Drop-in for the
+# pixi sync.sh: the tool layer is now mise (the whole toolset lives in mise.toml,
+# no brew/apt) instead of `pixi global sync`; the stow / Git-LFS / fonts / dconf
+# steps are unchanged and only run when their inputs are present.
 set -e
 
-# Portable realpath fallback (macOS lacks realpath by default)
 PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$PROJECT_DIR"
-
 OS="$(uname -s)"
+PROFILE="${MISE_ENV:-base}"
 
-# pixi-installed tools (stow, git-lfs, ...) live here; ensure they're findable even
-# when this script is run directly (not via the login shell / setup.sh).
-export PATH="$HOME/.pixi/bin:$PATH"
+# mise + its shims on PATH even when run directly (not via a mise-activated shell).
+export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+export npm_config_cache="${npm_config_cache:-$HOME/.cache/npm}"   # avoid a root-owned ~/.npm
 
-mkdir -p ~/.config
-mkdir -p ~/.local/bin
-mkdir -p ~/.ssh
+mkdir -p ~/.config ~/.local/bin ~/.ssh
 
-# Install the toolset globally with `pixi global` so binaries land in ~/.pixi/bin
-# (already on PATH) and GUI apps get menuinst shortcuts (~/Applications on macOS,
-# .desktop on Linux). The committed pixi-global.toml (repo root) is the source of
-# truth: we symlink it where pixi global looks, then sync. It MUST live at the
-# root so its `ext/<name>` path-deps resolve (pixi follows the symlink to the
-# real file and resolves relative to it). Override the manifest with
-# $PIXI_GLOBAL_MANIFEST (used by the docker tests for a fast, minimal run).
-echo "Installing tools with pixi global:"
-mkdir -p ~/.pixi/manifests
-ln -sfn "${PIXI_GLOBAL_MANIFEST:-$PROJECT_DIR/pixi-global.toml}" ~/.pixi/manifests/pixi-global.toml
-pixi global sync
+# npm backend health: claude-code / gemini-cli need a user-owned npm cache.
+if [ -d "$HOME/.npm" ] && find "$HOME/.npm" -user root -print -quit 2>/dev/null | grep -q .; then
+    echo "!! ~/.npm has root-owned files; npm-backed tools may fail."
+    echo "   Fix: sudo chown -R \"\$(id -u):\$(id -g)\" \"$HOME/.npm\""
+fi
 
-# Fetch Git LFS payloads (fonts, .local/bin binaries) now that pixi installed
-# git-lfs. A non-LFS or already-pulled checkout is a no-op. Without this, a fresh
-# clone leaves those files as small pointer text files.
+# 1. Tools via mise (the pixi-global replacement). Link the in-repo backend
+#    (app:), trust the config, then install everything mise.toml + the active
+#    profile declare. mise.lock keeps it reproducible.
+echo "==> Installing tools with mise (profile=$PROFILE):"
+mise trust "$PROJECT_DIR" >/dev/null 2>&1 || true
+bash "$PROJECT_DIR/scripts/link-plugins.sh"
+[ "$PROFILE" != base ] && export MISE_ENV="$PROFILE"
+
+# Make this repo's mise config the GLOBAL config so its tools are on PATH
+# EVERYWHERE (like the old `pixi global` -> ~/.pixi/bin), not just inside this
+# repo. Direct analog of the old pixi sync symlinking the manifest into
+# ~/.pixi/manifests/. (One tool list for every machine; Linux-only tools are
+# os-gated inside mise.toml.)
+MISE_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/mise"
+mkdir -p "$MISE_CFG"
+ln -sfn "$PROJECT_DIR/mise.toml" "$MISE_CFG/config.toml"
+mise trust "$MISE_CFG/config.toml" >/dev/null 2>&1 || true
+
+mise install
+
+# (No native package layer — everything, incl. system CLIs / GUI apps / from-
+# source tools / Linux GPU extras, is a mise tool in mise.toml.)
+
+# 2. Git LFS payloads (fonts, .local/bin binaries) — git-lfs comes from mise.
 git lfs install --local >/dev/null 2>&1 || true
 git lfs pull 2>/dev/null || true
 
-# This stow comes before the others to ensure global ignore list is respected before other stow commands
-echo "Applying configs with GNU Stow:"
-stow -t ~ stow
-stow -t ~ common
-
-if [ "$OS" = "Darwin" ]; then
-    stow -t ~ darwin
-    # Fonts: macOS CoreText ignores symlinked fonts, so install REAL copies into
-    # ~/Library/Fonts. (On Linux the stow-linked ~/.local/share/fonts works, since
-    # fontconfig follows symlinks.)
-    mkdir -p ~/Library/Fonts
-    cp -f common/.local/share/fonts/*.ttf ~/Library/Fonts/ 2>/dev/null || true
-fi
-# GUI apps (kitty, tev) are exposed by pixi global via menuinst shortcuts
-# (~/Applications/*.app on macOS, ~/.local/share/applications/*.desktop on Linux),
-# so no manual app linking is needed here.
-
-# Run install scripts for GUI applications (skip already-installed apps unless UPDATE=1)
-echo "Running install scripts:"
-for script in "$PROJECT_DIR"/install/*.sh; do
-    [ -x "$script" ] || continue
-    name="$(basename "$script" .sh)"
-    installed=false
-    if command -v "$name" >/dev/null 2>&1 \
-        || [ -d "$HOME/Applications/$name.app" ] \
-        || [ -d "/Applications/$name.app" ]; then
-        installed=true
-    fi
-    if [ "${UPDATE:-0}" != "1" ] && [ "$installed" = true ]; then
-        echo "Skipping $name (already installed)"
-        continue
-    fi
-    bash "$script"
-done
-
-# Load dconf (Linux/GNOME only)
-if [ "$OS" = "Linux" ]; then
-    echo "Loading dconf:"
-    if ! dconf load / <dconf.ini 2>/dev/null; then
-        echo "Warning: dconf load failed (likely running on a server). Skipping."
+# 3. Stow configs — stow itself is a mise tool (src:stow), on PATH after install.
+if command -v stow >/dev/null 2>&1 && [ -d stow ]; then
+    echo "==> Applying configs with GNU Stow:"
+    stow -t ~ stow                       # global ignore rules first
+    [ -d common ] && stow -t ~ common
+    if [ "$OS" = Darwin ] && [ -d darwin ]; then
+        stow -t ~ darwin
+        # macOS CoreText ignores symlinked fonts -> copy real files.
+        mkdir -p ~/Library/Fonts
+        cp -f common/.local/share/fonts/*.ttf ~/Library/Fonts/ 2>/dev/null || true
     fi
 fi
+
+# GUI apps (kitty, tev): their .app/.desktop launchers are created by the `app:`
+# mise backend during `mise install` (above), so no install/*.sh loop is needed.
+
+# 4. dconf (Linux/GNOME only).
+if [ "$OS" = Linux ] && [ -f dconf.ini ]; then
+    echo "==> Loading dconf:"
+    dconf load / <dconf.ini 2>/dev/null \
+        || echo "   Warning: dconf load failed (likely a server). Skipping."
+fi
+
+echo "==> sync complete (profile=$PROFILE)."

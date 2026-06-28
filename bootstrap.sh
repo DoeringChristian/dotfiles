@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# One-line bootstrap for these dotfiles on a fresh machine.
+# One-line bootstrap — mise edition (drop-in replacement for the pixi bootstrap).
 #
 #   curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
+#   # pick a profile:  ... | bash -s -- workstation
+#   # or, in a clone:  bash bootstrap.sh [workstation|server]
 #
 # It installs the only two prerequisites (git + curl), clones the repo, and hands
-# off to setup.sh -- which installs pixi and lets pixi pull in everything else.
+# off to setup.sh — which installs mise and lets mise pull in everything else.
 #
-# Env overrides:
+# Env overrides (same names as the old pixi bootstrap, so the one-liner is
+# unchanged after migrating):
 #   DOTFILES_REPO       git URL to clone (default: this repo)
 #   DOTFILES_DIR        where to clone   (default: ~/dotfiles)
 #   DOTFILES_NO_UPDATE  =1 to use an existing checkout as-is (no clone/pull)
@@ -15,11 +18,12 @@ set -euo pipefail
 
 REPO="${DOTFILES_REPO:-https://github.com/doeringchristian/dotfiles.git}"
 DEST="${DOTFILES_DIR:-$HOME/dotfiles}"
+PROFILE="${1:-${MISE_ENV:-base}}"
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# 1. Minimal prerequisites: git + curl. pixi (installed by setup.sh) brings the rest.
+# 1. Minimal prerequisites: git + curl. mise (installed by setup.sh) brings the rest.
 ensure_prereqs() {
     have git && have curl && return 0
     log "Installing prerequisites (git, curl)..."
@@ -50,6 +54,7 @@ fetch_repo() {
 
 ensure_prereqs
 fetch_repo
-log "Handing off to setup.sh..."
+log "Handing off to setup.sh (profile=$PROFILE)..."
 cd "$DEST"
+[ "$PROFILE" != base ] && export MISE_ENV="$PROFILE"
 exec ./setup.sh

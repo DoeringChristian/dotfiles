@@ -1,6 +1,7 @@
-# pixi environments (built locally, never committed)
-.pixi/*
-!.pixi/config.toml
+# mise: local data dir (only created for sandboxed experiments; real installs
+# go to ~/.local/share/mise) and per-machine overrides.
+.mise/
+mise.local.toml
 
 # nix leftovers
 result
@@ -8,7 +9,3 @@ nvim.log
 
 # macOS Finder junk
 **/.DS_Store
-# pixi-build / rattler-build outputs (never commit built packages)
-ext/**/*.conda
-*.conda
-.pixi/

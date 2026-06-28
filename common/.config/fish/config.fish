@@ -7,8 +7,9 @@ fish_config theme choose "Catppuccin Macchiato"
 set -gx fish_key_bindings fish_user_key_bindings
 
 fish_add_path -g ~/.local/bin
-# globally-installed pixi tools (pixi global -> ~/.pixi/bin)
-fish_add_path -g ~/.pixi/bin
+# globally-installed mise tools (mise -> ~/.local/share/mise/shims)
+fish_add_path -g ~/.local/share/mise/shims
+command -v mise >/dev/null 2>&1; and mise activate fish | source
 
 status is-login; and begin
 
@@ -33,7 +34,7 @@ status is-interactive; and begin
     alias lla 'eza -la'
     alias ls eza
     alias lt 'eza --tree'
-    alias mosh 'mosh --server=~/.pixi/bin/mosh-server'
+    alias mosh 'mosh --server=mosh-server'
     alias s 'kitten ssh'
 
     # Interactive shell initialisation

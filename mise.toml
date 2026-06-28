@@ -1,0 +1,140 @@
+# The complete toolset (cross-platform: macOS + Linux, headless + UI).
+#
+# mise owns EVERYTHING — CLI tools, language runtimes, GUI apps (app: backend),
+# from-source builds (src: backend), and conda-forge packages (conda:). There is
+# no brew/apt "native layer"; Linux-only tools are os-gated below.
+#
+# Version policy (per-tool mix):
+#   - Runtimes are pinned to a major (reproducible, deliberate upgrades).
+#   - Fast-movers track "latest" (claude-code, gemini-cli, neovim nightly).
+#   - Everything else is "latest" but pinned exactly by mise.lock, so machines
+#     stay reproducible while `mise upgrade` advances the lock on demand.
+#
+# Per-machine extras live in profiles/mise.<env>.toml and load when a machine
+# sets MISE_ENV=workstation|server in its own (untracked) mise.local.toml.
+
+[tools]
+# --- Language runtimes (pinned) ---
+node   = "22"
+python = "3.13"
+rust   = "stable"
+
+# --- Editors / shells helpers ---
+neovim = "nightly"            # vfox-neovim; matches the flake's nightly overlay
+"conda:vim" = "latest"        # classic vim alongside nvim (conda-forge, as in pixi)
+
+# --- Search / files / nav ---
+ripgrep     = "latest"
+fd          = "latest"
+eza         = "latest"
+bat         = "latest"
+fzf         = "latest"
+zoxide      = "latest"
+dust        = "latest"
+duf         = "latest"
+tree-sitter = "latest"
+
+# --- Git / dev ---
+gh      = "latest"
+git-lfs = "latest"
+lazygit = "latest"
+direnv  = "latest"
+starship = "latest"
+atuin   = "latest"
+zellij  = "latest"
+
+# --- Monitoring ---
+# btop's GitHub releases (the aqua backend) are Linux-only, so we pull it from
+# conda-forge instead — it builds a native macOS binary, giving one cross-platform
+# line (this is the source pixi used). mise's conda backend has rattler built in,
+# so no conda/micromamba install is required.
+"conda:btop" = "latest"
+
+# --- Language / package tooling ---
+uv   = "latest"
+pixi = "latest"
+
+# --- Secrets ---
+age = "latest"
+
+# --- Typesetting ---
+typst = "latest"
+
+# --- AI / LLM CLIs (track latest — the up-to-date case) ---
+"npm:@anthropic-ai/claude-code" = "latest"
+"npm:@google/gemini-cli"        = "latest"
+"conda:claude-agent-acp"        = "latest"   # conda-forge (as in pixi)
+
+# --- From-source tools (compiled at install time; no binary backend exists) ---
+# sshr: no GitHub releases/tags, not on crates.io -> cargo from git.
+"cargo:https://github.com/DoeringChristian/sshr" = "branch:main"
+# stow + passage: not on conda-forge / no release binary -> built from source by
+# the in-repo `src:` backend (plugins/mise-src), the analog of pixi's ext/ recipes.
+# The build is HERMETIC: make/perl come from conda-forge via `mise x` at install
+# time, so the HOST needs no build toolchain (like pixi's recipe build deps).
+"src:stow"    = "latest"
+"src:passage" = "latest"
+# perl is stow's RUNTIME interpreter (stow is a Perl program); provide it via mise
+# so it's guaranteed on PATH and we never depend on a host perl.
+"conda:perl"  = "latest"
+
+# --- GUI apps (always installed) ---
+# First-class mise tools via the in-repo `app:` backend (plugins/mise-app):
+# official prebuilt GitHub binaries, versions resolved live from releases (no
+# hashes), laid out with a bin/ launcher + a desktop entry (.app on macOS /
+# .desktop on Linux). Add an app by copying the `tev` entry in registry.lua.
+"app:kitty" = "latest"   # GPU terminal (kovidgoyal/kitty)
+"app:tev"   = "latest"   # HDR/EXR image viewer (Tom94/tev)
+
+# --- VPN helper (python, via pipx) ---
+"pipx:vpn-slice" = "latest"
+
+# --- Base CLI utilities (conda-forge, matching the old pixi set) ---
+# Present by default on macOS and most Linux, but pixi managed them explicitly
+# for hermeticity (and minimal Linux servers can lack curl/unzip/zip/gzip). Same
+# conda-forge source pixi used, so versions match.
+"conda:curl"  = "latest"
+"conda:unzip" = "latest"
+"conda:zip"   = "latest"
+"conda:gzip"  = "latest"
+"conda:which" = "latest"
+"conda:file"  = "latest"
+"conda:less"  = "latest"
+
+# --- System CLIs (conda-forge; were the brew/apt "native layer", as in pixi) ---
+"conda:git"   = "latest"
+"conda:fish"  = "latest"   # login shell — chsh to its path (or the mise shim) to use it
+"conda:tree"  = "latest"
+"conda:wget"  = "latest"
+"conda:mosh"  = "latest"
+"conda:ncdu"  = "latest"
+
+# --- Linux-only extras (os-gated; install only where they apply) ---
+"conda:xsel"        = { version = "latest", os = ["linux"] }   # X11 clipboard
+"conda:nvtop"       = { version = "latest", os = ["linux"] }   # GPU monitor
+"conda:openconnect" = { version = "latest", os = ["linux"] }   # VPN client
+"aqua:ollama/ollama" = { version = "latest", os = ["linux"] }  # local LLM runtime (GPU)
+
+[settings]
+# vfox/aqua/github backends are first-class; keep experimental on for nightly
+# refs and newer backend features.
+experimental = true
+# Write mise.lock on install: "latest" tools stay floating in this file but are
+# pinned to exact versions+checksums in the lockfile -> reproducible per machine,
+# advanced deliberately with `mise upgrade`.
+lockfile = true
+
+# --- Orchestration tasks -----------------------------------------------------
+
+[tasks.sync]
+description = "Install everything in mise.toml (tools, runtimes, GUI apps, from-source builds)"
+# NOTE: the in-repo `app:`/`src:` backend plugins must be linked first via
+# scripts/link-plugins.sh — bootstrap.sh does this before calling sync.
+# Linking can't live in a mise task: `mise run` resolves the tool env (which
+# references those plugins) before the task body runs. The repo's top-level
+# sync.sh wraps this with the stow / Git-LFS / fonts / dconf steps.
+run = "mise install"
+
+[tasks.doctor]
+description = "Show resolved tool versions and flag anything missing"
+run = "mise ls --current"
