@@ -7,9 +7,15 @@ fish_config theme choose "Catppuccin Macchiato"
 set -gx fish_key_bindings fish_user_key_bindings
 
 fish_add_path -g ~/.local/bin
-# globally-installed mise tools (mise -> ~/.local/share/mise/shims)
+# globally-installed mise tools: just put the shims on PATH (like pixi's
+# ~/.pixi/bin). We deliberately do NOT run `mise activate` — its per-prompt
+# hook-env would invoke mise on every prompt, and a slow/failed version
+# resolution there can pile up processes. Shims are enough for one global
+# toolset; they resolve versions lazily only when a tool is actually run.
 fish_add_path -g ~/.local/share/mise/shims
-command -v mise >/dev/null 2>&1; and mise activate fish | source
+# pixi (standalone package manager, for project toolchains) — append so it only
+# provides the `pixi` command and never shadows the mise tools above.
+fish_add_path -ga ~/.pixi/bin
 
 status is-login; and begin
 

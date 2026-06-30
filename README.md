@@ -94,27 +94,30 @@ The tool list is [`mise.toml`](mise.toml) — edit it, then `./sync.sh`.
 Everything is a mise tool in the single `mise.toml`, installed on every machine.
 Linux-only tools are gated with `os = ["linux"]`; there are no profiles.
 
-## Decommissioning the old pixi `global` env
+## pixi after the migration
 
-After migrating, retire the `pixi global` "dotfiles" environment that used to own
-`~/.pixi/bin`. **Do this only once mise is global and verified** (so you're never
-left without tools):
+The `pixi global` "dotfiles" environment that used to own `~/.pixi/bin` is retired
+— mise now owns the whole toolset. **pixi the binary stays**, though: it's a
+package manager in its own right, still used for project toolchains (mitsuba, …).
+It self-updates (`pixi self-update`) and the shell configs **append** `~/.pixi/bin`
+to PATH, so it only provides the `pixi` command and never shadows a mise tool.
+pixi is deliberately *not* a mise tool (installing it via mise was redundant and
+broke on GitHub attestation verification).
+
+If you're migrating a machine that still has the old global env:
 
 ```bash
-# 1. Make mise global + install everything (kitty/tev included), then verify:
 ./sync.sh
 which kitty            # -> ~/.local/share/mise/shims/kitty  (NOT ~/.pixi/...)
-
-# 2. Remove the pixi global env + its exposed binaries, and the stale manifest:
-pixi global uninstall dotfiles
-rm -f ~/.pixi/manifests/pixi-global.toml
-
-# 3. Drop ~/.pixi/bin from PATH and reload (the fish config no longer adds it):
-exec fish             # or restart your terminal
+pixi global uninstall dotfiles            # retire the old global env
+rm -f ~/.pixi/manifests/pixi-global.toml  # drop the stale manifest
+exec fish                                 # reload PATH (or restart your terminal)
 ```
 
-Keep the `pixi` binary itself — it's still used for project toolchains (mitsuba,
-…); only the global `dotfiles` environment is being retired.
+> **Never add `mise activate`.** The shell configs put `~/.local/share/mise/shims`
+> on PATH directly. `mise activate`'s per-prompt hook can pile up hung mise
+> processes (e.g. on slow cross-platform version resolution) until the shell can't
+> `fork`. Shims are all a single global toolset needs.
 
 See [`CLAUDE.md`](CLAUDE.md) for the detailed architecture.
 

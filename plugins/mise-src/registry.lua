@@ -41,4 +41,23 @@ return {
     build_tools = { "conda:make" },
     build = [[make install PREFIX="$PREFIX" WITH_ALLCOMP=yes]],
   },
+
+  -- sshr: your SSH wrapper (Rust). Built with cargo (from the `rust` mise tool);
+  -- the C linker comes from the host like any cargo build. Crucially we also copy
+  -- the cloned repo's share data — `shpool/` (prebuilt remote binaries sshr scp's
+  -- to hosts) and `kitty/` — into $PREFIX/share/sshr, exactly as the old pixi
+  -- ext/sshr build.sh did. sshr's find_shpool_dir() walks up from its own binary
+  -- and finds $PREFIX/share/sshr/shpool/bin (the same "nix layout" path it probes).
+  -- Tracks `main`; force a rebuild to advance it (update.sh does this).
+  sshr = {
+    version = "main",
+    fetch = { kind = "git", repo = "https://github.com/DoeringChristian/sshr.git", ref = "main" },
+    build_tools = { "rust" },
+    build = [[
+cargo install --locked --no-track --force --root "$PREFIX" --path .
+mkdir -p "$PREFIX/share/sshr"
+[ -d kitty ]  && cp -R kitty  "$PREFIX/share/sshr/" || true
+[ -d shpool ] && cp -R shpool "$PREFIX/share/sshr/" || true
+]],
+  },
 }

@@ -35,7 +35,11 @@ skip secrets with `SKIP_SECRETS=1`). Pick a profile with the arg or `MISE_ENV`
 1. **mise** — trust the config, link the in-repo backend plugins
    (`scripts/link-plugins.sh`), symlink `mise.toml` to `~/.config/mise/config.toml`
    (so tools are global), then `mise install` (the whole toolset). `mise.lock`
-   keeps versions reproducible.
+   keeps versions reproducible. Then a guarded fixup runs claude-code's
+   `install.cjs` postinstall — mise's npm backend installs with `--ignore-scripts`,
+   which skips the step that finalizes claude's native binary, so a fresh install
+   or upgrade would otherwise leave `claude` erroring "native binary not installed".
+   The fixup is a no-op when `claude --version` already works.
 2. **Git LFS** — `git lfs pull` (fonts, `.local/bin` payloads).
 3. **GNU Stow** — symlinks configs (`common` everywhere, `darwin` on macOS); on
    macOS also copies fonts into `~/Library/Fonts` (CoreText ignores symlinks).
@@ -113,21 +117,31 @@ conda/micromamba install. Use `os = ["linux"]`/`["macos"]` to gate per platform.
     spec (tarball or git) + a `build_tools` list + build commands run with
     `$PREFIX` = the install dir. The build is **hermetic**: `build_tools` (make,
     perl) are supplied from conda-forge via `mise x`, so the HOST needs no
-    toolchain (matching pixi's recipe build deps). Used for GNU `stow` and
-    `passage`. A tool's runtime interpreter (perl for stow) is a regular mise
-    tool (`conda:perl`) so it's guaranteed on PATH — never a host perl.
+    toolchain (matching pixi's recipe build deps). Used for GNU `stow`, `passage`,
+    and `sshr` (Rust/cargo; also installs `share/sshr/{shpool,kitty}` — see the
+    sshr note below). A tool's runtime interpreter (perl for stow) is a regular
+    mise tool (`conda:perl`) so it's guaranteed on PATH — never a host perl.
 - **No native layer.** There is deliberately no brew/apt/dnf step. System CLIs
   (git, fish, tree, wget, mosh, ncdu, curl, …) come from `conda:`; GPU/desktop
   Linux tools (nvtop, xsel, openconnect, ollama) are `conda:`/`aqua:` os-gated to
   Linux. CUDA/drivers themselves remain the distro's job, outside this repo.
 
 ### sshr (special case)
-`sshr` (your SSH wrapper) installs via the `cargo:` backend (built from `main`).
-Its **kitty kittens** (`smart_launch.py` / `smart_close.py`) are vendored into
-this repo at `common/.config/sshr/kitty/` (stow-linked to `~/.config/sshr/kitty/`)
-and referenced from `kitty.conf` there — they are NOT installed by sshr. If sshr
-also needs its shpool remote binaries at runtime, that is not yet wired into the
-mise setup (the old pixi recipe shipped them under `share/sshr/shpool`).
+`sshr` (your SSH wrapper) installs via the in-repo **`src:` backend** (built from
+`main`; see `plugins/mise-src/registry.lua`). A plain `cargo install` would drop
+its data files, so the recipe also installs `share/sshr/{shpool,kitty}` next to
+the binary — `shpool` is the set of prebuilt remote binaries `sshr` scp's to a
+host on first connect, found at runtime by walking up from the binary for
+`share/sshr/shpool/bin` (or `$SSHR_SHPOOL_DIR`). Its **kitty kittens**
+(`smart_launch.py` / `smart_close.py`) are *also* vendored into this repo at
+`common/.config/sshr/kitty/` (stow-linked to `~/.config/sshr/kitty/`) and
+referenced from `kitty.conf` there.
+
+Note on local state: on Linux sshr writes its session WAL to `$XDG_DATA_HOME`
+(`~/.local/share/sshr`); on **macOS** the `dirs` crate maps that to
+`~/Library/Application Support/sshr` instead — so `~/.local/share/sshr` legitimately
+won't exist on a Mac. The `~/.local/share/sshr/...` paths baked into the binary are
+*remote*-host paths (where shpool lands on the server), created on connect.
 
 ## Repository Structure
 
@@ -158,10 +172,25 @@ dotfiles/
   stowed in addition to `common` on macOS only.
 - **`stow/.stow-global-ignore`**: applied first so ignore rules are in place.
 - **`mise.toml`**: the tool list. mise installs into `~/.local/share/mise` and
-  shims go on PATH (replacing the old `~/.pixi/bin`). Profiles overlay via
-  `MISE_ENV`. The `app:` backend is linked from `plugins/` by
-  `scripts/link-plugins.sh` before `mise install` (a `mise run` task can't link
-  it — it resolves the tool env first).
+  its **shims** dir (`~/.local/share/mise/shims`) goes on PATH (replacing the old
+  `~/.pixi/bin`). There are no profiles — one tool list for every machine, with
+  per-tool `os = [...]` gating. The `app:`/`src:` backends are linked from
+  `plugins/` by `scripts/link-plugins.sh` before `mise install` (a `mise run` task
+  can't link them — it resolves the tool env first).
+- **Shell PATH (no `mise activate`)**: the shell configs put
+  `~/.local/share/mise/shims` on PATH directly and deliberately do **not** run
+  `mise activate`. `mise activate`'s per-prompt `hook-env` re-invokes mise on every
+  prompt; if a version resolution there is slow (e.g. an os-gated tool with no
+  build for this platform), the hung invocations pile up — once enough accumulate
+  you hit the per-user process cap and the shell can't `fork` ("Resource not
+  available"). Shims resolve versions lazily only when a tool actually runs, which
+  is all a single global toolset needs. **Do not add `mise activate` back.**
+- **pixi is standalone, not a mise tool**: pixi is a package manager in its own
+  right (used for project toolchains like mitsuba). It lives at `~/.pixi/bin`,
+  self-updates via `pixi self-update`, and the shell configs **append** that dir to
+  PATH so it only provides `pixi` and never shadows a mise tool. Installing pixi
+  via mise's `github:` backend was redundant and broke on GitHub attestation
+  verification, so it is intentionally absent from `mise.toml`.
 - **Fonts**: source of truth is `common/.local/share/fonts/` (Git LFS). On Linux
   it's stow-linked to `~/.local/share/fonts` (fontconfig follows symlinks). On
   macOS `sync.sh` copies real files into `~/Library/Fonts` because **CoreText
@@ -174,8 +203,9 @@ dotfiles/
 
 - **Git LFS**: binaries in `.local/bin/` and `*.ttf` fonts are tracked via LFS.
 - **Catppuccin Macchiato**: theme across starship, fish, bat, btop, kitty, eza.
-- **Fish shell**: default shell with vi-mode keybindings; `mise activate fish` is
-  sourced from `config.fish`.
+- **Fish shell**: default shell with vi-mode keybindings. `config.fish` puts the
+  mise shims dir on PATH via `fish_add_path` — it does **not** `mise activate`
+  (see the PATH note under Architecture).
 - **Adding a config**: place under `common/` mirroring the home path, then
   `stow -t ~ -R common`. macOS-only configs go in `darwin/`.
 - **Adding a tool**: edit `mise.toml`, then `./sync.sh` (installs on all machines).

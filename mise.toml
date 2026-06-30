@@ -10,38 +10,38 @@
 #   - Everything else is "latest" but pinned exactly by mise.lock, so machines
 #     stay reproducible while `mise upgrade` advances the lock on demand.
 #
-# Per-machine extras live in profiles/mise.<env>.toml and load when a machine
-# sets MISE_ENV=workstation|server in its own (untracked) mise.local.toml.
+# One tool list for every machine — no profiles. Platform differences are handled
+# per-tool with `os = ["linux"]`/`["macos"]` gating.
 
 [tools]
 # --- Language runtimes (pinned) ---
-node   = "22"
+node = "22"
 python = "3.13"
-rust   = "stable"
+rust = "stable"
 
 # --- Editors / shells helpers ---
-neovim = "nightly"            # vfox-neovim; matches the flake's nightly overlay
-"conda:vim" = "latest"        # classic vim alongside nvim (conda-forge, as in pixi)
+neovim = "nightly"     # vfox-neovim; matches the flake's nightly overlay
+"conda:vim" = "latest" # classic vim alongside nvim (conda-forge, as in pixi)
 
 # --- Search / files / nav ---
-ripgrep     = "latest"
-fd          = "latest"
-eza         = "latest"
-bat         = "latest"
-fzf         = "latest"
-zoxide      = "latest"
-dust        = "latest"
-duf         = "latest"
+ripgrep = "latest"
+fd = "latest"
+eza = "latest"
+bat = "latest"
+fzf = "latest"
+zoxide = "latest"
+dust = "latest"
+duf = "latest"
 tree-sitter = "latest"
 
 # --- Git / dev ---
-gh      = "latest"
+gh = "latest"
 git-lfs = "latest"
 lazygit = "latest"
-direnv  = "latest"
+direnv = "latest"
 starship = "latest"
-atuin   = "latest"
-zellij  = "latest"
+atuin = "latest"
+zellij = "latest"
 
 # --- Monitoring ---
 # btop's GitHub releases (the aqua backend) are Linux-only, so we pull it from
@@ -51,8 +51,12 @@ zellij  = "latest"
 "conda:btop" = "latest"
 
 # --- Language / package tooling ---
-uv   = "latest"
-pixi = "latest"
+uv = "latest"
+# NOTE: pixi is intentionally NOT a mise tool. It's a package manager in its own
+# right (like mise itself) — installed standalone in ~/.pixi/bin and self-updated
+# with `pixi self-update`; used for project toolchains (mitsuba, …). Installing it
+# via mise's github backend was redundant AND broke on GitHub attestation
+# verification. ~/.pixi/bin is added to PATH by the shell configs instead.
 
 # --- Secrets ---
 age = "latest"
@@ -62,29 +66,31 @@ typst = "latest"
 
 # --- AI / LLM CLIs (track latest — the up-to-date case) ---
 "npm:@anthropic-ai/claude-code" = "latest"
-"npm:@google/gemini-cli"        = "latest"
-"conda:claude-agent-acp"        = "latest"   # conda-forge (as in pixi)
+"npm:@google/gemini-cli" = "latest"
+"conda:claude-agent-acp" = "latest"        # conda-forge (as in pixi)
 
-# --- From-source tools (compiled at install time; no binary backend exists) ---
-# sshr: no GitHub releases/tags, not on crates.io -> cargo from git.
-"cargo:https://github.com/DoeringChristian/sshr" = "branch:main"
-# stow + passage: not on conda-forge / no release binary -> built from source by
-# the in-repo `src:` backend (plugins/mise-src), the analog of pixi's ext/ recipes.
-# The build is HERMETIC: make/perl come from conda-forge via `mise x` at install
-# time, so the HOST needs no build toolchain (like pixi's recipe build deps).
-"src:stow"    = "latest"
-"src:passage" = "latest"
+# --- From-source tools (built at install time by the in-repo `src:` backend,
+#     the analog of pixi's ext/ recipes; see plugins/mise-src/registry.lua) ---
+# The build is HERMETIC: build tools (make/perl for stow/passage; rust/cargo for
+# sshr) come via `mise x` so the HOST needs no toolchain, like pixi's build deps.
+"src:stow" = "latest"    # not on conda-forge / no release binary
+"src:passage" = "latest" # not on conda-forge / no release binary
+# sshr: no GitHub releases/tags, not on crates.io. The recipe also installs sshr's
+# share/sshr/{shpool,kitty} data next to the binary (shpool = the prebuilt remote
+# binaries `sshr` scp's to hosts), which a plain cargo install would drop. Tracks
+# `main`; update.sh force-rebuilds it.
+"src:sshr" = "latest"
 # perl is stow's RUNTIME interpreter (stow is a Perl program); provide it via mise
 # so it's guaranteed on PATH and we never depend on a host perl.
-"conda:perl"  = "latest"
+"conda:perl" = "latest"
 
 # --- GUI apps (always installed) ---
 # First-class mise tools via the in-repo `app:` backend (plugins/mise-app):
 # official prebuilt GitHub binaries, versions resolved live from releases (no
 # hashes), laid out with a bin/ launcher + a desktop entry (.app on macOS /
 # .desktop on Linux). Add an app by copying the `tev` entry in registry.lua.
-"app:kitty" = "latest"   # GPU terminal (kovidgoyal/kitty)
-"app:tev"   = "latest"   # HDR/EXR image viewer (Tom94/tev)
+"app:kitty" = "latest" # GPU terminal (kovidgoyal/kitty)
+"app:tev" = "latest"   # HDR/EXR image viewer (Tom94/tev)
 
 # --- VPN helper (python, via pipx) ---
 "pipx:vpn-slice" = "latest"
@@ -93,27 +99,31 @@ typst = "latest"
 # Present by default on macOS and most Linux, but pixi managed them explicitly
 # for hermeticity (and minimal Linux servers can lack curl/unzip/zip/gzip). Same
 # conda-forge source pixi used, so versions match.
-"conda:curl"  = "latest"
+"conda:curl" = "latest"
 "conda:unzip" = "latest"
-"conda:zip"   = "latest"
-"conda:gzip"  = "latest"
+"conda:zip" = "latest"
+"conda:gzip" = "latest"
 "conda:which" = "latest"
-"conda:file"  = "latest"
-"conda:less"  = "latest"
+"conda:file" = "latest"
+"conda:less" = "latest"
 
 # --- System CLIs (conda-forge; were the brew/apt "native layer", as in pixi) ---
-"conda:git"   = "latest"
-"conda:fish"  = "latest"   # login shell — chsh to its path (or the mise shim) to use it
-"conda:tree"  = "latest"
-"conda:wget"  = "latest"
-"conda:mosh"  = "latest"
-"conda:ncdu"  = "latest"
+"conda:git" = "latest"
+"conda:fish" = "latest" # login shell — chsh to its path (or the mise shim) to use it
+"conda:tree" = "latest"
+"conda:wget" = "latest"
+"conda:mosh" = "latest"
+"conda:ncdu" = "latest"
 
-# --- Linux-only extras (os-gated; install only where they apply) ---
-"conda:xsel"        = { version = "latest", os = ["linux"] }   # X11 clipboard
-"conda:nvtop"       = { version = "latest", os = ["linux"] }   # GPU monitor
-"conda:openconnect" = { version = "latest", os = ["linux"] }   # VPN client
-"aqua:ollama/ollama" = { version = "latest", os = ["linux"] }  # local LLM runtime (GPU)
+# --- Linux-only extras (Linux workstations only) ---
+# Commented out by default: these aren't in the pixi set and, although os-gated,
+# `mise upgrade` still tries to RESOLVE their versions cross-platform, which
+# stalls for ~20s each on macOS (conda-forge osx-arm64 / GitHub have no macOS
+# build). Uncomment on a Linux GPU box; they install only there (os = ["linux"]).
+# "conda:xsel"         = { version = "latest", os = ["linux"] }   # X11 clipboard
+# "conda:nvtop"        = { version = "latest", os = ["linux"] }   # GPU monitor
+# "conda:openconnect"  = { version = "latest", os = ["linux"] }   # VPN client
+# "aqua:ollama/ollama" = { version = "latest", os = ["linux"] }   # local LLM runtime (GPU)
 
 [settings]
 # vfox/aqua/github backends are first-class; keep experimental on for nightly

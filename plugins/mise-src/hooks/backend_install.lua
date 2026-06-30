@@ -55,9 +55,10 @@ function PLUGIN:BackendInstall(ctx)
         build_sh,
         -- Normalize any installed Perl launcher's shebang to on-PATH perl, so it
         -- runs on the conda:perl that mise.toml guarantees (not the ephemeral
-        -- build perl, and not a host perl). No-op for non-Perl tools.
+        -- build perl, and not a host perl). Guarded to a `#!...perl` shebang so it
+        -- never touches a compiled binary (e.g. sshr).
         'for b in "$PREFIX"/bin/*; do [ -f "$b" ] || continue; '
-            .. 'if head -1 "$b" | grep -q "perl"; then '
+            .. 'if head -1 "$b" | grep -q "^#!.*perl"; then '
             .. 'sed "1s|^#!.*perl.*|#!/usr/bin/env perl|" "$b" > "$b.tmp" && '
             .. 'cat "$b.tmp" > "$b" && rm -f "$b.tmp"; fi; done',
     }, "\n")

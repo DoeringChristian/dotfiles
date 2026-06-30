@@ -142,6 +142,36 @@ function install_launcher(os_key, tool, dest, L, p)
 
     if os_key == "darwin" then
         local appsdir = os.getenv("MISE_APP_LAUNCHER_DIR") or (os.getenv("HOME") .. "/Applications")
+        if p.app then
+            -- The app shipped a REAL macOS .app bundle (e.g. kitty.app from the
+            -- .dmg). Install that bundle itself into ~/Applications so Spotlight /
+            -- Launch Services index and launch it exactly like a normally-dragged
+            -- app (it's complete and code-signed) — far more robust than a shim
+            -- whose executable is an unsigned shell script. `lsregister -f`
+            -- registers it immediately so it shows up without waiting for a scan.
+            local src = dest .. "/libexec/" .. p.app
+            local dst = appsdir .. "/" .. p.app
+            local lsreg = "/System/Library/Frameworks/CoreServices.framework/Frameworks/"
+                .. "LaunchServices.framework/Support/lsregister"
+            local script = table.concat({
+                "set -e",
+                "SRC=" .. q(src),
+                "DST=" .. q(dst),
+                'mkdir -p ' .. q(appsdir),
+                'rm -rf "$DST"',
+                -- ditto (not cp -R) is the macOS-correct way to copy a bundle:
+                -- preserves the code signature, symlinks and metadata intact.
+                'ditto "$SRC" "$DST"',
+                'xattr -dr com.apple.quarantine "$DST" 2>/dev/null || true',
+                -- register with Launch Services + force a Spotlight import so it
+                -- shows up / launches immediately (mdls is empty until imported).
+                '[ -x ' .. q(lsreg) .. ' ] && ' .. q(lsreg) .. ' -f "$DST" 2>/dev/null || true',
+                'command -v mdimport >/dev/null 2>&1 && mdimport "$DST" 2>/dev/null || true',
+            }, "\n")
+            assert(os.execute(script) == true or os.execute(script) == 0)
+            return
+        end
+        -- No .app bundle (a bare-binary macOS tool): fall back to a shim .app.
         local appdir = appsdir .. "/" .. display .. ".app"
         local plist = table.concat({
             '<?xml version="1.0" encoding="UTF-8"?>',

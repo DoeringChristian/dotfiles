@@ -36,12 +36,10 @@ cat <<'EOF'
 
 ==> setup complete.
 
-If your shell rc still puts ~/.pixi/bin on PATH, replace that with mise:
+Tools are exposed via the mise shims dir on PATH (the dotfiles' fish/zsh configs
+already add ~/.local/share/mise/shims — like the old ~/.pixi/bin). Do NOT add
+`mise activate`: its per-prompt hook re-invokes mise on every prompt and can pile
+up processes; the shims are all you need for one global toolset.
 
-    # ~/.zshrc / ~/.bashrc
-    eval "$(mise activate zsh)"     # or 'mise activate bash'
-    # fish: ~/.config/fish/config.fish
-    #   mise activate fish | source
-
-Then restart your shell. `mise ls` / `mise doctor` show the active toolset.
+Then open a fresh terminal. `mise ls` / `mise doctor` show the active toolset.
 EOF
