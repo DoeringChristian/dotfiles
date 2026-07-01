@@ -47,16 +47,10 @@ mise install
 
 # claude-code finalizes its native binary in a postinstall (install.cjs), but
 # mise's npm backend installs with --ignore-scripts so that step is skipped ->
-# `claude` errors with "native binary not installed". Run it ourselves. Guarded
-# by a working `claude`, so it's a no-op unless a fresh install / upgrade broke
-# it. (gemini-cli is pure JS and needs nothing.)
-if ! claude --version >/dev/null 2>&1; then
-    cc="$HOME/.local/share/mise/installs/npm-anthropic-ai-claude-code/latest/lib/node_modules/@anthropic-ai/claude-code"
-    if [ -f "$cc/install.cjs" ]; then
-        echo "==> finalizing claude-code native binary (postinstall)"
-        ( cd "$cc" && node install.cjs ) >/dev/null 2>&1 || true
-    fi
-fi
+# `claude` errors with "native binary not installed". The helper runs it; it's
+# idempotent and a no-op unless a fresh install / upgrade broke claude.
+# (gemini-cli is pure JS and needs nothing.)
+bash "$PROJECT_DIR/scripts/fix-claude-code.sh" || true
 
 # 2. Git LFS payloads (fonts, .local/bin binaries) — git-lfs comes from mise.
 git lfs install --local >/dev/null 2>&1 || true

@@ -26,13 +26,20 @@ bash "$PROJECT_DIR/scripts/link-plugins.sh"
 
 if [ "$#" -gt 0 ]; then
     echo "==> upgrading: $*"
-    mise upgrade "$@"
+    # Non-fatal: one tool failing to upgrade (e.g. a flaky network resolution)
+    # must not abort before the re-sync below, which heals claude-code etc.
+    mise upgrade "$@" || echo "!! some tools failed to upgrade; continuing"
 else
     echo "==> upgrading all tools to latest allowed versions"
-    mise upgrade
+    mise upgrade || echo "!! some tools failed to upgrade; continuing"
     echo "==> force-rebuilding moving-ref source builds: ${MOVING_REF[*]}"
     mise install --force "${MOVING_REF[@]}" || true
 fi
+
+# `mise upgrade` reinstalls claude-code with --ignore-scripts, breaking its native
+# binary. Heal it here directly (defense in depth — sync.sh does it too, but only
+# if we reach it).
+bash "$PROJECT_DIR/scripts/fix-claude-code.sh" || true
 
 # Re-install/upgrade mise tools + re-apply stow/fonts/dconf.
 echo "==> re-syncing configs"
