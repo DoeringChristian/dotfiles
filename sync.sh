@@ -72,6 +72,19 @@ fi
 # GUI apps (kitty, tev): their .app/.desktop launchers are created by the `app:`
 # mise backend during `mise install` (above), so no install/*.sh loop is needed.
 
+# 3b. macOS LaunchAgents (e.g. the ollama server). Stowed above into
+#     ~/Library/LaunchAgents; bootstrap any into the GUI launchd domain so they
+#     start now and at login. Idempotent: bootstrap is a no-op (nonzero, ignored)
+#     if already loaded, and we do NOT kickstart -k, so a running server is left
+#     undisturbed. To pick up a plist change: launchctl kickstart -k gui/$(id -u)/<label>.
+if [ "$OS" = Darwin ] && [ -d ~/Library/LaunchAgents ]; then
+    for plist in ~/Library/LaunchAgents/com.ollama.server.plist; do
+        [ -e "$plist" ] || continue
+        echo "==> Loading LaunchAgent: $(basename "$plist")"
+        launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null || true
+    done
+fi
+
 # 4. dconf (Linux/GNOME only).
 if [ "$OS" = Linux ] && [ -f dconf.ini ]; then
     echo "==> Loading dconf:"

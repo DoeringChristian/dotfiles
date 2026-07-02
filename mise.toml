@@ -68,6 +68,11 @@ typst = "latest"
 "npm:@anthropic-ai/claude-code" = "latest"
 "npm:@google/gemini-cli" = "latest"
 "conda:claude-agent-acp" = "latest"        # conda-forge (as in pixi)
+# Local LLM runtime. Cross-platform: the aqua backend ships a universal macOS
+# build with Metal GPU (mlx_metal) and Linux amd64/arm64 builds with CUDA, so no
+# os-gating is needed. On macOS the server is autostarted by a LaunchAgent (in the
+# darwin/ stow package); run `ollama serve` yourself on other platforms.
+"aqua:ollama/ollama" = "latest"
 
 # --- From-source tools (built at install time by the in-repo `src:` backend,
 #     the analog of pixi's ext/ recipes; see plugins/mise-src/registry.lua) ---
@@ -123,7 +128,8 @@ typst = "latest"
 # "conda:xsel"         = { version = "latest", os = ["linux"] }   # X11 clipboard
 # "conda:nvtop"        = { version = "latest", os = ["linux"] }   # GPU monitor
 # "conda:openconnect"  = { version = "latest", os = ["linux"] }   # VPN client
-# "aqua:ollama/ollama" = { version = "latest", os = ["linux"] }   # local LLM runtime (GPU)
+# (ollama is NOT here — it ships macOS + Linux builds, so it's a plain
+#  cross-platform tool up in the AI/LLM section, no os-gating.)
 
 [settings]
 # vfox/aqua/github backends are first-class; keep experimental on for nightly

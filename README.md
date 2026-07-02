@@ -47,9 +47,11 @@ picked up. Pick a machine profile with `MISE_ENV=workstation|server` (omit for b
 | npm / pipx / cargo tools | mise backends (`npm:`, `pipx:`, `cargo:`) in `mise.toml` |
 | System CLIs + base utils (git, fish, curl, …) | mise's built-in `conda:` backend (no conda install needed) |
 | GUI apps (kitty, tev) | in-repo `app:` backend (`plugins/mise-app`) — GitHub prebuilt binaries + `.app`/`.desktop` launchers |
-| From-source tools (stow, passage) | in-repo `src:` backend (`plugins/mise-src`) — build at install time |
-| Linux-only tools (nvtop, xsel, ollama) | `conda:`/`aqua:` with `os = ["linux"]` gating |
+| From-source tools (stow, passage, sshr) | in-repo `src:` backend (`plugins/mise-src`) — build at install time |
+| Local LLM (ollama) | `aqua:` (universal macOS build w/ Metal GPU, Linux amd64/arm64 w/ CUDA); server autostarted on macOS by a LaunchAgent |
+| Linux-only tools (nvtop, xsel, openconnect) | `conda:`/`aqua:` with `os = ["linux"]` gating |
 | Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
+| macOS background services | LaunchAgents in `darwin/Library/LaunchAgents/`, bootstrapped by `sync.sh` |
 | Fonts | `common/.local/share/fonts/` (LFS); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
 | Secrets | [age](https://github.com/FiloSottile/age) + [passage](https://github.com/FiloSottile/passage) |
 

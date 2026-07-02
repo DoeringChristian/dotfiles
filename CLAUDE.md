@@ -43,6 +43,11 @@ skip secrets with `SKIP_SECRETS=1`). Pick a profile with the arg or `MISE_ENV`
 2. **Git LFS** — `git lfs pull` (fonts, `.local/bin` payloads).
 3. **GNU Stow** — symlinks configs (`common` everywhere, `darwin` on macOS); on
    macOS also copies fonts into `~/Library/Fonts` (CoreText ignores symlinks).
+3b. **LaunchAgents** (macOS) — `launchctl bootstrap` any plist under
+   `~/Library/LaunchAgents` that `darwin/` stowed (currently the ollama server,
+   `com.ollama.server`). Idempotent and non-disruptive: bootstrap is a no-op if
+   already loaded, and it does **not** `kickstart -k`, so a running service is left
+   alone. To apply a plist change: `launchctl kickstart -k gui/$(id -u)/<label>`.
 4. **dconf** — loads GNOME settings (Linux only).
 
 ### Update
@@ -143,6 +148,24 @@ Note on local state: on Linux sshr writes its session WAL to `$XDG_DATA_HOME`
 won't exist on a Mac. The `~/.local/share/sshr/...` paths baked into the binary are
 *remote*-host paths (where shpool lands on the server), created on connect.
 
+### ollama (local LLM runtime)
+Installed via the **`aqua:` backend** (`"aqua:ollama/ollama" = "latest"`), which
+ships a universal macOS build with **Metal GPU** (bundled `mlx_metal` metallibs)
+and Linux amd64/arm64 builds with CUDA — so it's a plain cross-platform tool, NOT
+os-gated. The macOS tarball extracts flat (the `ollama` binary sits at the install
+root beside its dylibs, not in `bin/`); aqua's registry knows this, so the shim
+resolves correctly.
+
+ollama needs a running server (`ollama serve`). On macOS that's a **LaunchAgent**,
+`darwin/Library/LaunchAgents/com.ollama.server.plist` (replacing the old
+`brew services` ollama). It can't rely on a login PATH — launchd gives agents a
+minimal env and there's no `~/.profile` — so the plist wraps `ollama serve` in
+`/bin/sh -c` that prepends `$HOME/.local/share/mise/shims` to PATH (`$HOME` is set
+by launchd; no hardcoded username) and logs to `~/Library/Logs/ollama.log`.
+`sync.sh` bootstraps it (step 3b). On Linux, run `ollama serve` yourself (systemd
+unit / the official installer for best GPU integration). Models live in `~/.ollama`
+regardless of which ollama binary, so switching binaries keeps pulled models.
+
 ## Repository Structure
 
 ```
@@ -151,7 +174,7 @@ dotfiles/
 │   ├── .config/      # XDG config (fish, starship, atuin, kitty, zellij, sshr/kitty, …)
 │   ├── .local/bin/   # User binaries (claudebox, Git LFS payloads)
 │   └── .local/share/fonts/  # Nerd Fonts (Git LFS)
-├── darwin/           # macOS-only stow package (config overrides)
+├── darwin/           # macOS-only stow package (config overrides, LaunchAgents)
 ├── stow/             # Stow global ignore rules (.stow-global-ignore)
 ├── setup/            # Encrypted secrets (age-key.age)
 ├── mise.toml         # THE tool list (source of truth — the whole toolset)
