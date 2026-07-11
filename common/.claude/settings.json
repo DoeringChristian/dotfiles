@@ -1,13 +1,17 @@
 {
-  "tui": "default",
+  "permissions": {
+    "defaultMode": "auto"
+  },
+  "model": "opus",
   "enabledPlugins": {
     "rust-analyzer-lsp@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
-    "clangd-lsp@claude-plugins-official": true
+    "clangd-lsp@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "nvidia-skills@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true
   },
+  "tui": "default",
   "skipDangerousModePermissionPrompt": true,
-  "skipAutoPermissionPrompt": true,
-  "permissions": {
-    "defaultMode": "auto"
-  }
+  "skipAutoPermissionPrompt": true
 }
