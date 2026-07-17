@@ -45,12 +45,8 @@ mise install
 # (No native package layer — everything, incl. system CLIs / GUI apps / from-
 # source tools / Linux GPU extras, is a mise tool in mise.toml.)
 
-# claude-code finalizes its native binary in a postinstall (install.cjs), but
-# mise's npm backend installs with --ignore-scripts so that step is skipped ->
-# `claude` errors with "native binary not installed". The helper runs it; it's
-# idempotent and a no-op unless a fresh install / upgrade broke claude.
-# (gemini-cli is pure JS and needs nothing.)
-bash "$PROJECT_DIR/scripts/fix-claude-code.sh" || true
+# (claude-code's native-binary postinstall now runs at `mise install` time via
+# npm_args = "--ignore-scripts=false" in mise.toml, so no heal step is needed.)
 
 # 2. Git LFS payloads (fonts, .local/bin binaries) — git-lfs comes from mise.
 git lfs install --local >/dev/null 2>&1 || true

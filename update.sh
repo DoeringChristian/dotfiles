@@ -36,10 +36,8 @@ else
     mise install --force "${MOVING_REF[@]}" || true
 fi
 
-# `mise upgrade` reinstalls claude-code with --ignore-scripts, breaking its native
-# binary. Heal it here directly (defense in depth — sync.sh does it too, but only
-# if we reach it).
-bash "$PROJECT_DIR/scripts/fix-claude-code.sh" || true
+# (claude-code no longer needs a postinstall heal after upgrade: its native binary
+# is finalized at install time via npm_args = "--ignore-scripts=false" in mise.toml.)
 
 # Re-install/upgrade mise tools + re-apply stow/fonts/dconf.
 echo "==> re-syncing configs"

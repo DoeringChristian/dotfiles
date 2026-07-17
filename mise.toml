@@ -65,7 +65,13 @@ age = "latest"
 typst = "latest"
 
 # --- AI / LLM CLIs (track latest — the up-to-date case) ---
-"npm:@anthropic-ai/claude-code" = "latest"
+# claude-code ships its real CLI as a native binary fetched by an npm postinstall
+# (install.cjs). mise's npm backend passes --ignore-scripts by default, which skips
+# that step -> `claude` errors "native binary not installed" after every install/
+# upgrade. npm 10.x here is too old for allow_builds=[pkg] (needs npm >= 11.16.0),
+# so we opt the postinstall back in with npm_args. claude-code's install graph is
+# just the wrapper + one prebuilt-binary optional dep, so no other build runs.
+"npm:@anthropic-ai/claude-code" = { version = "latest", npm_args = "--ignore-scripts=false" }
 "npm:@google/gemini-cli" = "latest"
 "conda:claude-agent-acp" = "latest"        # conda-forge (as in pixi)
 # Local LLM runtime. Cross-platform: the aqua backend ships a universal macOS

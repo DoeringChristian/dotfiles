@@ -35,11 +35,13 @@ skip secrets with `SKIP_SECRETS=1`). Pick a profile with the arg or `MISE_ENV`
 1. **mise** — trust the config, link the in-repo backend plugins
    (`scripts/link-plugins.sh`), symlink `mise.toml` to `~/.config/mise/config.toml`
    (so tools are global), then `mise install` (the whole toolset). `mise.lock`
-   keeps versions reproducible. Then a guarded fixup runs claude-code's
-   `install.cjs` postinstall — mise's npm backend installs with `--ignore-scripts`,
-   which skips the step that finalizes claude's native binary, so a fresh install
-   or upgrade would otherwise leave `claude` erroring "native binary not installed".
-   The fixup is a no-op when `claude --version` already works.
+   keeps versions reproducible. (claude-code ships its real CLI as a native binary
+   fetched by an npm postinstall, `install.cjs`. mise's npm backend passes
+   `--ignore-scripts` by default, which skips it -> `claude` errors "native binary
+   not installed". Its `mise.toml` entry sets `npm_args = "--ignore-scripts=false"`
+   so the postinstall runs at install/upgrade time. On npm >= 11.16.0 the tighter
+   `allow_builds = ["@anthropic-ai/claude-code"]` is preferable; npm 10.x needs the
+   `npm_args` form.)
 2. **Git LFS** — `git lfs pull` (fonts, `.local/bin` payloads).
 3. **GNU Stow** — symlinks configs (`common` everywhere, `darwin` on macOS); on
    macOS also copies fonts into `~/Library/Fonts` (CoreText ignores symlinks).
