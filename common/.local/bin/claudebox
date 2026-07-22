@@ -189,11 +189,14 @@ if [[ -n "$SHELL_MODE" ]]; then
     fi
     ENTRY_ARGS=()
 else
-    if [[ "$OS" == "Darwin" ]]; then
-        ENTRY_BIN="$(command -v claude 2>/dev/null || true)"
-    else
-        ENTRY_BIN="$(readlink -f "$(command -v claude)" 2>/dev/null || true)"
-    fi
+    # Use `claude` from PATH as-is — the same thing your shell execs. Do NOT
+    # `readlink -f` it: the mise `claude` shim is a symlink to the `mise` binary,
+    # so resolving it collapses argv[0] to "mise", discarding the "claude" name
+    # that tells mise which tool to dispatch. bwrap/sandbox-exec would then run
+    # `mise --dangerously-skip-permissions` and mise rejects the flag. Exec'ing the
+    # shim directly keeps argv[0]=claude and dispatches correctly; the mise tree is
+    # bound into the sandbox below so the shim resolves there.
+    ENTRY_BIN="$(command -v claude 2>/dev/null || true)"
     if [[ -z "$ENTRY_BIN" || ! -x "$ENTRY_BIN" ]]; then
         echo "Error: claude not found in PATH" >&2
         exit 1
