@@ -189,14 +189,15 @@ if [[ -n "$SHELL_MODE" ]]; then
     fi
     ENTRY_ARGS=()
 else
-    # Use `claude` from PATH as-is — the same thing your shell execs. Do NOT
-    # `readlink -f` it: the mise `claude` shim is a symlink to the `mise` binary,
-    # so resolving it collapses argv[0] to "mise", discarding the "claude" name
-    # that tells mise which tool to dispatch. bwrap/sandbox-exec would then run
-    # `mise --dangerously-skip-permissions` and mise rejects the flag. Exec'ing the
-    # shim directly keeps argv[0]=claude and dispatches correctly; the mise tree is
-    # bound into the sandbox below so the shim resolves there.
-    ENTRY_BIN="$(command -v claude 2>/dev/null || true)"
+    # Resolve `claude` to its CONCRETE binary here, in the full outer environment,
+    # and exec THAT inside the sandbox. Do NOT let bwrap/sandbox-exec run the mise
+    # `claude` shim: inside the sandbox $HOME is a tmpfs and mise's cache/state are
+    # gone, so the shim re-resolves the tool version there and can return a stale
+    # one (observed: 2.1.148 instead of the shell's 2.1.224). `mise which` follows
+    # the shim to the real install binary using the correct outer resolution; for a
+    # non-mise claude, `command -v` is already the real binary. Neither hardcodes a
+    # path — both resolve whatever your environment points `claude` at right now.
+    ENTRY_BIN="$(mise which claude 2>/dev/null || command -v claude 2>/dev/null || true)"
     if [[ -z "$ENTRY_BIN" || ! -x "$ENTRY_BIN" ]]; then
         echo "Error: claude not found in PATH" >&2
         exit 1
