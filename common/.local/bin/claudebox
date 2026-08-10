@@ -297,54 +297,25 @@ fi
 # Nix store (read-only) - needed for nix-installed claude and tools
 [[ -e /nix ]] && BWRAP_ARGS+=(--ro-bind /nix /nix)
 
-# Home directory as tmpfs base so child bind mounts have a mountpoint
-BWRAP_ARGS+=(--tmpfs "$HOME")
+# Expose the real home READ-ONLY. This makes claude — however it's installed
+# (a mise shim, a native binary, nvm, nix, a plain PATH entry, …) — resolve and
+# run exactly as it does in your shell, WITHOUT this script knowing or naming any
+# install mechanism. Writable bits (the project dir + claude's own state) are
+# overlaid below; secrets are masked. Mirrors the macOS profile: reads allowed,
+# only writes denied.
+BWRAP_ARGS+=(--ro-bind "$HOME" "$HOME")
 
-# Git config
-[[ -f "$HOME/.gitconfig" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.gitconfig" "$HOME/.gitconfig")
-[[ -d "$HOME/.config/git" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.config/git" "$HOME/.config/git")
-
-# Nix profile symlinks (so nix-installed tools like pixi are on PATH)
-[[ -e "$HOME/.nix-profile" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.nix-profile" "$HOME/.nix-profile")
-[[ -d "$HOME/.local/state/nix" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/state/nix" "$HOME/.local/state/nix")
-
-# Node/nvm (needed for claude's node runtime)
-[[ -d "$HOME/.nvm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.nvm" "$HOME/.nvm")
-[[ -d "$HOME/.fnm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.fnm" "$HOME/.fnm")
-[[ -d "$HOME/.npm" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.npm" "$HOME/.npm")
-
-# Claude native installer: launcher (~/.local/bin/claude) execs a versioned
-# binary under ~/.local/share/claude/versions/*, so both must be visible inside
-# the sandbox (the tmpfs $HOME above hides them otherwise).
-[[ -e "$HOME/.local/bin/claude" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/bin/claude" "$HOME/.local/bin/claude")
-[[ -d "$HOME/.local/share/claude" ]] && BWRAP_ARGS+=(--ro-bind "$HOME/.local/share/claude" "$HOME/.local/share/claude")
-
-# mise: the `claude` shim (~/.local/share/mise/shims/claude) execs `mise`, which
-# resolves the real npm-backed binary under ~/.local/share/mise/installs. Bind
-# the mise binary + its install/shim tree so the whole chain is visible (the
-# tmpfs $HOME above hides them otherwise).
-[[ -e "$HOME/.local/bin/mise" ]]      && BWRAP_ARGS+=(--ro-bind "$HOME/.local/bin/mise" "$HOME/.local/bin/mise")
-[[ -d "$HOME/.local/share/mise" ]]    && BWRAP_ARGS+=(--ro-bind "$HOME/.local/share/mise" "$HOME/.local/share/mise")
-[[ -d "$HOME/.config/mise" ]]         && BWRAP_ARGS+=(--ro-bind "$HOME/.config/mise" "$HOME/.config/mise")
-# mise's global config (~/.config/mise/config.toml) is usually a SYMLINK into the
-# dotfiles repo. Bind its real target's directory so the symlink isn't dangling
-# inside the sandbox — otherwise mise can't read the config and resolves tool
-# versions differently than your shell (this is why `claude` inside claudebox
-# disagreed with `claude` outside, and only in dirs other than the dotfiles repo).
-if [[ -e "$HOME/.config/mise/config.toml" ]]; then
-    _mise_cfg_dir="$(dirname "$(readlink -f "$HOME/.config/mise/config.toml")")"
-    [[ -d "$_mise_cfg_dir" && "$_mise_cfg_dir" != "$HOME/.config/mise" ]] \
-        && BWRAP_ARGS+=(--ro-bind "$_mise_cfg_dir" "$_mise_cfg_dir")
+# Mask ~/.ssh by default with an empty tmpfs; --ssh re-exposes it (read-only, via
+# the ro-bound home above — nothing extra needed).
+if [[ "$BIND_SSH" != true ]] && [[ -d "$HOME/.ssh" ]]; then
+    BWRAP_ARGS+=(--tmpfs "$HOME/.ssh")
 fi
 
-# Claude auth and config (read-write so sessions persist)
+# Claude's own read-write state, overlaid on the read-only home so sessions/config
+# persist and its cache stays writable. (Claude's data — not any package manager.)
 [[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
 [[ -f "$HOME/.claude.json" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude.json" "$HOME/.claude.json")
-
-# SSH (optional)
-if [[ "$BIND_SSH" == true ]] && [[ -d "$HOME/.ssh" ]]; then
-    BWRAP_ARGS+=(--ro-bind "$HOME/.ssh" "$HOME/.ssh")
-fi
+[[ -d "$HOME/.cache" ]] && BWRAP_ARGS+=(--bind "$HOME/.cache" "$HOME/.cache")
 
 # Project directory (read-write)
 BWRAP_ARGS+=(
