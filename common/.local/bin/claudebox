@@ -189,15 +189,9 @@ if [[ -n "$SHELL_MODE" ]]; then
     fi
     ENTRY_ARGS=()
 else
-    # Resolve `claude` to its CONCRETE binary here, in the full outer environment,
-    # and exec THAT inside the sandbox. Do NOT let bwrap/sandbox-exec run the mise
-    # `claude` shim: inside the sandbox $HOME is a tmpfs and mise's cache/state are
-    # gone, so the shim re-resolves the tool version there and can return a stale
-    # one (observed: 2.1.148 instead of the shell's 2.1.224). `mise which` follows
-    # the shim to the real install binary using the correct outer resolution; for a
-    # non-mise claude, `command -v` is already the real binary. Neither hardcodes a
-    # path — both resolve whatever your environment points `claude` at right now.
-    ENTRY_BIN="$(mise which claude 2>/dev/null || command -v claude 2>/dev/null || true)"
+    # Resolve `claude` exactly as your shell does — whatever is first on PATH.
+    # Install-mechanism-agnostic: works for a mise shim, a native binary, npm, etc.
+    ENTRY_BIN="$(command -v claude 2>/dev/null || true)"
     if [[ -z "$ENTRY_BIN" || ! -x "$ENTRY_BIN" ]]; then
         echo "Error: claude not found in PATH" >&2
         exit 1
@@ -332,6 +326,16 @@ BWRAP_ARGS+=(--tmpfs "$HOME")
 [[ -e "$HOME/.local/bin/mise" ]]      && BWRAP_ARGS+=(--ro-bind "$HOME/.local/bin/mise" "$HOME/.local/bin/mise")
 [[ -d "$HOME/.local/share/mise" ]]    && BWRAP_ARGS+=(--ro-bind "$HOME/.local/share/mise" "$HOME/.local/share/mise")
 [[ -d "$HOME/.config/mise" ]]         && BWRAP_ARGS+=(--ro-bind "$HOME/.config/mise" "$HOME/.config/mise")
+# mise's global config (~/.config/mise/config.toml) is usually a SYMLINK into the
+# dotfiles repo. Bind its real target's directory so the symlink isn't dangling
+# inside the sandbox — otherwise mise can't read the config and resolves tool
+# versions differently than your shell (this is why `claude` inside claudebox
+# disagreed with `claude` outside, and only in dirs other than the dotfiles repo).
+if [[ -e "$HOME/.config/mise/config.toml" ]]; then
+    _mise_cfg_dir="$(dirname "$(readlink -f "$HOME/.config/mise/config.toml")")"
+    [[ -d "$_mise_cfg_dir" && "$_mise_cfg_dir" != "$HOME/.config/mise" ]] \
+        && BWRAP_ARGS+=(--ro-bind "$_mise_cfg_dir" "$_mise_cfg_dir")
+fi
 
 # Claude auth and config (read-write so sessions persist)
 [[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
