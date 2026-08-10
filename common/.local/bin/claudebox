@@ -190,7 +190,8 @@ if [[ -n "$SHELL_MODE" ]]; then
     ENTRY_ARGS=()
 else
     # Resolve `claude` exactly as your shell does — whatever is first on PATH.
-    # Install-mechanism-agnostic: works for a mise shim, a native binary, npm, etc.
+    # Install-mechanism-agnostic: works for a version-manager shim, a native
+    # binary, a plain PATH entry — the script special-cases nothing.
     ENTRY_BIN="$(command -v claude 2>/dev/null || true)"
     if [[ -z "$ENTRY_BIN" || ! -x "$ENTRY_BIN" ]]; then
         echo "Error: claude not found in PATH" >&2
@@ -298,7 +299,7 @@ fi
 [[ -e /nix ]] && BWRAP_ARGS+=(--ro-bind /nix /nix)
 
 # Expose the real home READ-ONLY. This makes claude — however it's installed
-# (a mise shim, a native binary, nvm, nix, a plain PATH entry, …) — resolve and
+# (a version-manager shim, a native binary, a plain PATH entry, …) — resolve and
 # run exactly as it does in your shell, WITHOUT this script knowing or naming any
 # install mechanism. Writable bits (the project dir + claude's own state) are
 # overlaid below; secrets are masked. Mirrors the macOS profile: reads allowed,
