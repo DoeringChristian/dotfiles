@@ -31,6 +31,7 @@ report itself — can be regenerated from scratch with a single command.
 project/
 ├── pixi.toml          # workspace, tasks, dependencies
 ├── pixi.lock          # committed — reproducibility
+├── .envrc             # direnv: auto-activate the pixi env
 ├── .gitignore         # ignore .pixi/, results/, report.html
 ├── src/<pkg>/         # reusable code (optional, as the project grows)
 ├── experiments/       # scripts that produce results into results/
