@@ -60,13 +60,13 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --bind)
-        resolved="$(cd "$2" && pwd)"
+        resolved="$(cd "$2" && pwd -P)"
         EXTRA_BINDS+=("--bind" "$resolved" "$resolved")
         EXTRA_WRITE_PATHS+=("$resolved")
         shift 2
         ;;
     --ro-bind)
-        resolved="$(cd "$2" && pwd)"
+        resolved="$(cd "$2" && pwd -P)"
         EXTRA_BINDS+=("--ro-bind" "$resolved" "$resolved")
         shift 2
         ;;
@@ -100,7 +100,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
-PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
+# Physical path (resolve symlinks): the project dir is bind-mounted into the
+# sandbox, and a symlinked path (e.g. ~/workspace -> elsewhere) makes bwrap unable
+# to create the mountpoint ("Can't mkdir …: No such file or directory").
+PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd -P)"
 
 if [[ ! -d "$PROJECT_DIR" ]]; then
     echo "Error: $PROJECT_DIR is not a directory" >&2
@@ -161,7 +164,7 @@ if [[ -n "$CONFIG_FILE" ]]; then
             mounts)
                 local_path="$(expand_path "$value")"
                 [[ -e "$local_path" ]] || continue
-                local_path="$(cd "$local_path" && pwd)"
+                local_path="$(cd "$local_path" && pwd -P)"
                 case "$key" in
                     bind)
                         EXTRA_BINDS+=("--bind" "$local_path" "$local_path")
