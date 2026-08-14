@@ -1,0 +1,86 @@
+# packages — the whole toolset, one line per tool: <name> <method> [key=val ...]
+#
+# Every tool tracks the LATEST version. The METHOD says how it's installed AND how
+# it stays current — pick whatever is most natural for that tool:
+#
+#   pkg     package manager: Homebrew on macOS / conda-forge via `pixi global` on
+#           Linux (rootless). Latest via upgrade.        opt: conda=<name> (if the
+#           conda-forge name differs from the brew name)
+#   cask    GUI app: Homebrew cask on macOS / official build on Linux.
+#           opt: github=<owner/repo> (Linux release source)
+#   conda   conda-forge via pixi on BOTH platforms (things Homebrew lacks)
+#   npm     npm global (latest).                          opt: pkg=<npm-name>
+#   uv      uv tool install (Python CLIs, latest)
+#   self    the tool's OWN installer; it self-updates (this is fine/wanted).
+#           opt: url=<installer>
+#   source  build from git main (= latest).  opt: url=<git>  build=<cargo|make>
+#
+# Add a tool = add a line. Change how it's managed = change its method.
+
+# --- language runtimes ---
+node              pkg     conda=nodejs
+python            pkg
+rust              pkg
+
+# --- editors ---
+neovim            pkg
+vim               pkg
+
+# --- search / files / navigation ---
+ripgrep           pkg
+fd                pkg     conda=fd-find
+eza               pkg
+bat               pkg
+fzf               pkg
+zoxide            pkg
+dust              pkg
+duf               pkg
+tree-sitter       pkg     conda=tree-sitter-cli
+
+# --- git / dev ---
+gh                pkg
+git-lfs           pkg
+lazygit           pkg
+direnv            pkg
+starship          pkg
+atuin             pkg
+zellij            pkg
+
+# --- monitoring / tooling / secrets / typesetting / config ---
+btop              pkg
+uv                pkg
+age               pkg
+typst             pkg
+stow              pkg
+
+# --- base + system CLIs ---
+git               pkg
+fish              pkg
+tree              pkg
+wget              pkg
+mosh              pkg
+ncdu              pkg
+curl              pkg
+unzip             pkg
+zip               pkg
+gzip              pkg
+less              pkg
+
+# --- local LLM runtime ---
+ollama            pkg
+
+# --- AI CLIs ---
+claude            self    url=https://claude.ai/install.sh   # self-managed, auto-updates
+gemini-cli        npm     pkg=@google/gemini-cli
+claude-agent-acp  conda
+
+# --- GUI apps (cask on macOS / official build on Linux) ---
+kitty             cask    github=kovidgoyal/kitty
+tev               cask    github=Tom94/tev
+
+# --- from source (git main = latest) ---
+sshr              source  url=https://github.com/DoeringChristian/sshr  build=cargo
+passage           source  url=https://github.com/FiloSottile/passage   build=make
+
+# --- python CLI ---
+vpn-slice         uv
