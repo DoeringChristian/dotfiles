@@ -14,6 +14,7 @@ exists**. No shims, backends, or plugins.
 |--------|-------------------------------|---------|
 | `pkg`   | Homebrew (macOS) / conda-forge via `pixi global` (Linux, **rootless**). `conda=<name>` if the name differs. | `ripgrep`, `neovim` |
 | `cask`  | Homebrew cask (macOS GUI) / official build on Linux (`github=<owner/repo>`). | `kitty`, `tev` |
+| `bin`   | official GitHub **release binary** on both platforms (for tools the package manager ships too old). `github=<repo>`, `tag=<latest\|nightly\|stable>`, `bin=<exe-name>`. | `neovim` (nightly) |
 | `conda` | conda-forge via pixi on both platforms (things Homebrew lacks). | `claude-agent-acp` |
 | `npm`   | `npm install -g …@latest`. `pkg=<npm-name>`. | `gemini-cli` |
 | `uv`    | `uv tool install` (Python CLIs). | `vpn-slice` |

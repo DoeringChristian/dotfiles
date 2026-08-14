@@ -23,7 +23,10 @@ python            pkg
 rust              pkg
 
 # --- editors ---
-neovim            pkg
+# neovim: the package-manager version (esp. conda-forge) is too old for the config,
+# so pull the official release binary. tag=nightly = newest; tag=stable = latest
+# stable if nightly ever breaks a plugin. bin=nvim (the executable name != tool name).
+neovim            bin     github=neovim/neovim tag=nightly bin=nvim
 vim               pkg
 
 # --- search / files / navigation ---

@@ -71,6 +71,35 @@ install_source() {
     rm -rf "$tmp"
 }
 
+# ---------------------------------------------------------- official release binary
+# For tools whose package-manager build is too old (e.g. neovim on conda-forge).
+# Picks the OS+arch asset from a GitHub release (tag=latest|nightly|stable|vX),
+# extracts, symlinks the binary into ~/.local/bin. Works on macOS + Linux.
+install_release() {
+    local name="$1" repo="$2" tag="$3" binname="${4:-$1}"
+    local tagpath="latest"; [ -n "$tag" ] && tagpath="tags/$tag"
+    local os arch
+    case "$OS" in Darwin) os='macos|darwin' ;; *) os='linux' ;; esac
+    case "$(uname -m)" in arm64|aarch64) arch='arm64|aarch64' ;; *) arch='x86_64|amd64|x64' ;; esac
+    local assets url
+    assets="$(curl -fsSL "https://api.github.com/repos/$repo/releases/$tagpath" \
+        | grep -oE '"browser_download_url": *"[^"]*"' | cut -d'"' -f4 \
+        | grep -iE "$os" | grep -iE "$arch" | grep -viE '\.(sha256|asc|sig|zsync|deb|rpm)$')"
+    # prefer a tarball (no FUSE needed) over an AppImage/other single-file asset
+    url="$(printf '%s\n' "$assets" | grep -iE '\.(tar\.(gz|xz|zst|bz2)|tgz|txz)$' | head -1)"
+    [ -n "$url" ] || url="$(printf '%s\n' "$assets" | head -1)"
+    [ -n "$url" ] || { echo "!! $name: no release asset for $OS/$(uname -m) in $repo@${tag:-latest}"; return; }
+    echo "==> $name (release $repo@${tag:-latest})"
+    local d="$PREFIX/opt/$name"; rm -rf "$d"; mkdir -p "$d"
+    case "$url" in
+        *.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.zst|*.tar.bz2) curl -fsSL "$url" | tar x -C "$d" 2>/dev/null ;;
+        *)  curl -fsSL "$url" -o "$d/$binname" && chmod +x "$d/$binname" ;;
+    esac
+    local bin; bin="$(find "$d" -type f -name "$binname" -perm -u+x 2>/dev/null | head -1)"
+    [ -n "$bin" ] && ln -sfn "$bin" "$PREFIX/bin/$binname" && echo "   -> ~/.local/bin/$binname" \
+        || echo "!! $name: binary '$binname' not found after extract"
+}
+
 # ---------------------------------------------------------- Linux GUI/app fetch
 # On macOS these are casks; on Linux fetch the latest official build. Kept simple;
 # verify on a real server. (kitty has its own installer; others: latest release.)
@@ -115,6 +144,7 @@ for line in ${OTHER_LINES[@]+"${OTHER_LINES[@]}"}; do
         npm)    have npm && { p="$(opt "$rest" pkg)"; echo "==> $n (npm)"; npm install -g "${p:-$n}@latest"; } || echo "!! $n: npm missing" ;;
         uv)     have uv  && { echo "==> $n (uv)"; uv tool install "$n"; } || echo "!! $n: uv missing" ;;
         source) install_source "$n" "$(opt "$rest" url)" "$(opt "$rest" build)" ;;
+        bin)    install_release "$n" "$(opt "$rest" github)" "$(opt "$rest" tag)" "$(opt "$rest" bin)" ;;
     esac
 done
 
