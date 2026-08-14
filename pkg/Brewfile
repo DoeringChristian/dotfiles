@@ -1,0 +1,79 @@
+# Brewfile — the complete toolset on macOS (rootless-ish: Homebrew installs into
+# its own prefix, no per-formula sudo). Install with:  brew bundle --file Brewfile
+#
+# This is the macOS half of the "simple package system". The Linux half is
+# pkg/pixi-global.toml (conda-forge via `pixi global`), and the handful neither
+# packages (kitty/tev on Linux, sshr, passage) is pkg/extras.sh. pkg/install.sh
+# picks the right half per OS. Adding a tool = one line here + the pixi manifest.
+
+# --- Language runtimes ---
+brew "node"
+brew "python@3.13"
+brew "rust"
+
+# --- Editors ---
+brew "neovim"          # stable (0.12.x); for nightly see pkg/extras.sh
+brew "vim"
+
+# --- Search / files / navigation ---
+brew "ripgrep"
+brew "fd"
+brew "eza"
+brew "bat"
+brew "fzf"
+brew "zoxide"
+brew "dust"
+brew "duf"
+brew "tree-sitter"
+
+# --- Git / dev ---
+brew "gh"
+brew "git-lfs"
+brew "lazygit"
+brew "direnv"
+brew "starship"
+brew "atuin"
+brew "zellij"
+
+# --- Monitoring ---
+brew "btop"
+
+# --- Language / package tooling ---
+brew "uv"
+
+# --- Secrets / typesetting ---
+brew "age"
+brew "typst"
+
+# --- AI / LLM CLIs ---
+brew "gemini-cli"
+# claude-code + claude-agent-acp: the CLI is the `claude-code` cask below; the ACP
+# adapter (conda-forge on Linux) is installed by pkg/extras.sh on macOS.
+
+# --- Local LLM runtime ---
+brew "ollama"
+
+# --- Config / from-source helpers ---
+brew "stow"
+
+# --- Base + system CLIs ---
+brew "git"
+brew "fish"
+brew "tree"
+brew "wget"
+brew "mosh"
+brew "ncdu"
+brew "curl"
+brew "unzip"
+brew "zip"
+brew "gzip"
+brew "less"
+# (`which` and `file` are provided by the system on macOS/Linux — not packaged.)
+
+# --- VPN helper ---
+brew "vpn-slice"
+
+# --- GUI apps + the Claude CLI (macOS casks; Linux equivalents in extras.sh) ---
+cask "kitty" if OS.mac?          # GPU terminal (.app, Spotlight-launchable)
+cask "tev" if OS.mac?            # HDR/EXR image viewer
+cask "claude-code" if OS.mac?    # installs the `claude` CLI, brew-managed (no self-update mess)
