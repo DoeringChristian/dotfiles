@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Autostart the mise-managed ollama server on macOS (replaces the Homebrew
-  `ollama serve` / `brew services`). Stowed to ~/Library/LaunchAgents by the
-  darwin/ package; sync.sh bootstraps it into the GUI launchd domain.
-
-  We can't rely on a login PATH here: launchd starts agents with a minimal
-  environment and this machine has no ~/.profile. So the wrapper prepends the
-  mise shims dir (via $HOME, which launchd DOES set) and execs the ollama shim,
-  which resolves the version from ~/.config/mise/config.toml. No hardcoded
-  username -> portable across machines.
+  Autostart the (brew-installed) ollama server on macOS. Stowed to
+  ~/Library/LaunchAgents by the darwin/ package; setup.sh bootstraps it into the
+  GUI launchd domain. launchd starts agents with a minimal PATH, so the wrapper
+  prepends Homebrew's bin (where `ollama` lives) before exec'ing `ollama serve`.
 -->
 <plist version="1.0">
 <dict>
@@ -20,7 +15,7 @@
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>export PATH="$HOME/.local/share/mise/shims:$PATH"; exec ollama serve &gt;&gt; "$HOME/Library/Logs/ollama.log" 2&gt;&amp;1</string>
+        <string>export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"; exec ollama serve &gt;&gt; "$HOME/Library/Logs/ollama.log" 2&gt;&amp;1</string>
     </array>
 
     <!-- Start at login and keep the server up (restart if it exits/crashes). -->

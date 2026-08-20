@@ -1,4 +1,4 @@
 shell = "fish"
 
 [env]
-PATH = "$PATH:$HOME/.local/bin:$HOME/.local/share/mise/shims"
+PATH = "$PATH:$HOME/.local/bin:/opt/homebrew/bin:/home/linuxbrew/.linuxbrew/bin:$HOME/.homebrew/bin"
