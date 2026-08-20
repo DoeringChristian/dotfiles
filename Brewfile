@@ -57,6 +57,10 @@ brew "zip"
 brew "gzip"
 brew "less"
 
+# --- Linux clipboard (nvim's +register needs a helper; macOS has pbcopy built in) ---
+brew "wl-clipboard" if OS.linux?   # Wayland (wl-copy/wl-paste) — GNOME default
+brew "xclip" if OS.linux?          # X11 fallback
+
 # --- LLM runtime + AI CLIs ---
 brew "ollama"
 brew "gemini-cli"               # brew trails npm a little; accepted for uniformity
