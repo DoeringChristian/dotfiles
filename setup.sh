@@ -50,28 +50,24 @@ brew trust "$TAP" >/dev/null 2>&1 || true
 echo "==> brew bundle"
 brew bundle --file "$REPO/Brewfile"
 
-# 4. Linux GUI apps: Homebrew has no cask support on Linux, so fetch official builds.
-if [ "$OS" != Darwin ]; then
-    echo "==> Linux GUI apps (kitty / tev / claude)"
-    PREFIX="$HOME/.local"; mkdir -p "$PREFIX/bin"
-    if curl -fsSL https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin launch=n dest="$PREFIX" 2>/dev/null; then
-        ln -sfn "$PREFIX/kitty.app/bin/kitty"  "$PREFIX/bin/kitty"
-        ln -sfn "$PREFIX/kitty.app/bin/kitten" "$PREFIX/bin/kitten"
-        # Desktop integration so kitty shows up in the app launcher.
-        mkdir -p "$PREFIX/share/applications"
-        cp -f "$PREFIX/kitty.app/share/applications/"kitty*.desktop "$PREFIX/share/applications/" 2>/dev/null || true
-        # Make Exec/TryExec/Icon absolute — GNOME hides an entry whose TryExec name
-        # isn't on its (minimal) session PATH, and needs an absolute icon path.
-        sed -i "s|Icon=kitty|Icon=$PREFIX/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g; \
-                s|Exec=kitty|Exec=$PREFIX/bin/kitty|g; \
-                s|TryExec=kitty|TryExec=$PREFIX/bin/kitty|g" \
-            "$PREFIX/share/applications/"kitty*.desktop 2>/dev/null || true
-        update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true
-    else echo "!! kitty failed"; fi
-    turl="$(curl -fsSL https://api.github.com/repos/Tom94/tev/releases/latest \
-        | grep -oE '"browser_download_url": *"[^"]*[Ll]inux[^"]*"' | head -1 | cut -d'"' -f4)"
-    [ -n "$turl" ] && curl -fsSL "$turl" -o "$PREFIX/bin/tev" && chmod +x "$PREFIX/bin/tev" || echo "!! tev skipped"
-    curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 || echo "!! claude failed"
+# 4. Linux: kitty/tev/claude installed as casks above (they ship Linux variations).
+#    The kitty cask installs the binary but not a GNOME .desktop entry, so make one
+#    pointing at the brew binary.
+if [ "$OS" != Darwin ] && command -v kitty >/dev/null 2>&1; then
+    kbin="$(command -v kitty)"
+    mkdir -p ~/.local/share/applications
+    cat > ~/.local/share/applications/kitty.desktop <<EOF_DESKTOP
+[Desktop Entry]
+Type=Application
+Name=kitty
+GenericName=Terminal emulator
+Comment=Fast, feature-rich, GPU-based terminal
+Exec=$kbin
+TryExec=$kbin
+Icon=kitty
+Categories=System;TerminalEmulator;
+EOF_DESKTOP
+    update-desktop-database ~/.local/share/applications 2>/dev/null || true
 fi
 
 # 5. Configs via GNU Stow (stow itself came from brew above).

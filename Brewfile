@@ -67,7 +67,8 @@ brew "gemini-cli"               # brew trails npm a little; accepted for uniform
 brew "doeringc/local/sshr", args: ["HEAD"]      # Rust SSH wrapper
 brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 
-# --- GUI apps + the claude CLI (macOS casks; Linux builds handled by setup.sh) ---
-cask "kitty" if OS.mac?
-cask "tev" if OS.mac?
-cask "claude-code" if OS.mac?   # the `claude` CLI; auto-update disabled in ~/.claude/settings.json
+# --- GUI apps + the claude CLI (brew casks — these all ship Linux variations,
+#     so `brew bundle` installs them on Linux too, not just macOS) ---
+cask "kitty"
+cask "tev"
+cask "claude-code"   # the `claude` CLI; auto-update disabled in ~/.claude/settings.json
