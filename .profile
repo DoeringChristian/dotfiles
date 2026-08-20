@@ -1,6 +1,6 @@
-# POSIX login-shell profile — mise edition (replaces the ~/.pixi/bin one).
-# mise's shims expose the managed tools; we put them on PATH directly (like
-# pixi's ~/.pixi/bin) and deliberately do NOT run `mise activate` — its
-# per-prompt hook can pile up processes on a slow version resolution.
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+# POSIX login-shell profile. The toolset is Homebrew; put its prefix on PATH.
+for b in /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin; do
+    [ -x "$b/brew" ] && eval "$("$b/brew" shellenv)" && break
+done
+export PATH="$HOME/.local/bin:$PATH:$HOME/.pixi/bin"
 export EDITOR=nvim

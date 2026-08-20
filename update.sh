@@ -1,44 +1,22 @@
 #!/usr/bin/env bash
-# update.sh — refresh the mise-managed toolset (mise edition).
-#
-#   ./update.sh             Advance every tool within its version spec and update
-#                           mise.lock; "latest" tools (claude-code, gemini-cli,
-#                           neovim nightly, app:kitty/app:tev) re-resolve to the
-#                           newest upstream. Then re-sync configs.
-#
-#   ./update.sh <tool>...   Upgrade only the named tools, e.g.
-#                           `./update.sh app:kitty claude-code`.
-#
-# Most tools just need `mise upgrade`. The exception is moving-ref source builds
-# (`src:sshr` tracks `main`): mise sees a static version string, so it won't
-# rebuild on its own — we force-reinstall them (mirrors pixi update.sh, which
-# force-rebuilt its moving-ref ext/ packages).
+# update.sh — bring the whole toolset to the newest version.
+#   brew formulae/casks: brew upgrade.  --HEAD formulae (neovim, sshr, passage):
+#   refreshed from git via brew upgrade --fetch-HEAD.
 set -euo pipefail
+REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
+TAP="doeringc/local"
 
-PROJECT_DIR=$(cd "$(dirname "$0")" && pwd)
-cd "$PROJECT_DIR"
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+for p in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+    [ -x "$p" ] && eval "$("$p" shellenv)"
+done
 
-# Moving-ref source builds to force-rebuild on a full update.
-MOVING_REF=("src:sshr")
+# refresh the tap in case Formula/*.rb changed in the repo
+brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
+cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
 
-bash "$PROJECT_DIR/scripts/link-plugins.sh"
-
-if [ "$#" -gt 0 ]; then
-    echo "==> upgrading: $*"
-    # Non-fatal: one tool failing to upgrade (e.g. a flaky network resolution)
-    # must not abort before the re-sync below, which heals claude-code etc.
-    mise upgrade "$@" || echo "!! some tools failed to upgrade; continuing"
-else
-    echo "==> upgrading all tools to latest allowed versions"
-    mise upgrade || echo "!! some tools failed to upgrade; continuing"
-    echo "==> force-rebuilding moving-ref source builds: ${MOVING_REF[*]}"
-    mise install --force "${MOVING_REF[@]}" || true
-fi
-
-# (claude-code no longer needs a postinstall heal after upgrade: its native binary
-# is finalized at install time via npm_args = "--ignore-scripts=false" in mise.toml.)
-
-# Re-install/upgrade mise tools + re-apply stow/fonts/dconf.
-echo "==> re-syncing configs"
-./sync.sh
+echo "==> brew update && upgrade"
+brew update && brew upgrade
+[ "$(uname -s)" = Darwin ] && brew upgrade --cask
+echo "==> rebuild --HEAD formulae (neovim, sshr, passage) from latest git"
+brew upgrade --fetch-HEAD neovim "$TAP/sshr" "$TAP/passage" 2>/dev/null || true
+echo "==> done."

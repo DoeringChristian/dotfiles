@@ -7,14 +7,16 @@ fish_config theme choose "Catppuccin Macchiato"
 set -gx fish_key_bindings fish_user_key_bindings
 
 fish_add_path -g ~/.local/bin
-# globally-installed mise tools: just put the shims on PATH (like pixi's
-# ~/.pixi/bin). We deliberately do NOT run `mise activate` — its per-prompt
-# hook-env would invoke mise on every prompt, and a slow/failed version
-# resolution there can pile up processes. Shims are enough for one global
-# toolset; they resolve versions lazily only when a tool is actually run.
-fish_add_path -g ~/.local/share/mise/shims
+# Homebrew — the toolset lives here (macOS /opt/homebrew or /usr/local; Linux
+# /home/linuxbrew). `brew shellenv` puts its bin/sbin on PATH.
+for b in /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin
+    if test -x $b/brew
+        $b/brew shellenv fish | source
+        break
+    end
+end
 # pixi (standalone package manager, for project toolchains) — append so it only
-# provides the `pixi` command and never shadows the mise tools above.
+# provides the `pixi` command and never shadows the tools above.
 fish_add_path -ga ~/.pixi/bin
 
 status is-login; and begin

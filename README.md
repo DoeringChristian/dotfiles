@@ -1,126 +1,74 @@
 # dotfiles
 
-Cross-platform (Linux & macOS) dotfiles, managed with two tools:
+Cross-platform (macOS & Linux) dotfiles, managed with two tools:
 
 - **[GNU Stow](https://www.gnu.org/software/stow/)** — symlinks config files from
   this repo into `~`.
-- **[mise](https://mise.jdx.dev)** — installs **every** tool (CLI, language
-  runtime, GUI app, even from-source builds) into `~/.local/share/mise`, on `PATH`
-  via shims. No brew/apt. Two in-repo mise **backend plugins** (`plugins/`) cover
-  what the standard backends can't: `app:` (GUI apps) and `src:` (from source).
-
-> Migrated from `pixi global` to mise. The tool list is now
-> [`mise.toml`](mise.toml) (was `pixi-global.toml`); the `ext/` recipes and the
-> brew/apt native layer are gone — everything is a mise tool.
+- **[Homebrew](https://brew.sh)** — installs **every** tool from a single
+  [`Brewfile`](Brewfile). Two from-source tools (`sshr`, `passage`) come from an
+  in-repo tap ([`Formula/`](Formula)); GUI apps are casks on macOS and official
+  builds on Linux.
 
 ## Quick start
 
-On a fresh machine — one line. It installs the only prerequisites (git + curl),
-clones the repo, and lets mise pull in everything else:
+Fresh machine — one line (installs git+curl, clones, installs Homebrew + everything):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash -s -- workstation
+curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
 ```
 
 Or by hand:
 
 ```bash
 git clone https://github.com/doeringchristian/dotfiles ~/dotfiles
-cd ~/dotfiles && MISE_ENV=workstation ./setup.sh   # installs mise, syncs, sets up secrets
+cd ~/dotfiles && ./setup.sh
 ```
 
 Day-to-day:
 
 ```bash
-./sync.sh       # mise install + Git-LFS + stow configs + fonts (+ dconf on Linux)
-./update.sh     # mise upgrade, then sync
+./setup.sh    # install/refresh the toolset (brew bundle) + stow configs + secrets
+./update.sh   # bump everything to the newest version
 ```
 
-After a sync, **restart your terminal** so new tools, fonts, and GUI apps are
-picked up. Pick a machine profile with `MISE_ENV=workstation|server` (omit for base).
+After setup, **restart your terminal**.
 
 ## How it works
 
 | Concern | Mechanism |
 |---|---|
-| CLI tools + runtimes | mise, defined by [`mise.toml`](mise.toml) → `~/.local/share/mise` |
-| npm / pipx / cargo tools | mise backends (`npm:`, `pipx:`, `cargo:`) in `mise.toml` |
-| System CLIs + base utils (git, fish, curl, …) | mise's built-in `conda:` backend (no conda install needed) |
-| GUI apps (kitty, tev) | in-repo `app:` backend (`plugins/mise-app`) — GitHub prebuilt binaries + `.app`/`.desktop` launchers |
-| From-source tools (stow, passage, sshr) | in-repo `src:` backend (`plugins/mise-src`) — build at install time |
-| Local LLM (ollama) | `aqua:` (universal macOS build w/ Metal GPU, Linux amd64/arm64 w/ CUDA); server autostarted on macOS by a LaunchAgent |
-| Linux-only tools (nvtop, xsel, openconnect) | `conda:`/`aqua:` with `os = ["linux"]` gating |
+| CLI tools + runtimes | Homebrew, one line each in [`Brewfile`](Brewfile) |
+| neovim (nightly) | `brew "neovim", args: ["HEAD"]` (master build) |
+| From-source tools (`sshr`, `passage`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
+| GUI apps (kitty, tev) + the `claude` CLI | brew **casks** on macOS; **official builds** on Linux (`setup.sh`) |
 | Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
-| macOS background services | LaunchAgents in `darwin/Library/LaunchAgents/`, bootstrapped by `sync.sh` |
 | Fonts | `common/.local/share/fonts/` (LFS); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
+| macOS services | LaunchAgents in `darwin/Library/LaunchAgents/` (e.g. the ollama server) |
 | Secrets | [age](https://github.com/FiloSottile/age) + [passage](https://github.com/FiloSottile/passage) |
+
+`claude` is the `claude-code` cask with its self-updater disabled
+(`~/.claude/settings.json` `autoUpdates:false`), so Homebrew is the sole owner —
+bump it with `brew upgrade --cask`.
 
 ## Layout
 
 ```
-common/   # portable config (stowed on all platforms)
-darwin/   # macOS-only config (stowed on macOS)
-plugins/  # in-repo mise backends: mise-app (app:), mise-src (src:)
-scripts/  # link-plugins.sh, test-shell.sh
-stow/     # stow global ignore rules
-setup/    # encrypted age key
-tests/    # docker-based bootstrap tests (tests/run.sh)
-mise.toml + mise.lock   # the tool set (source of truth)
-bootstrap.sh / setup.sh / sync.sh / update.sh
+Brewfile            # THE tool list (source of truth)
+Formula/            # in-repo brew tap: sshr.rb, passage.rb
+common/             # portable config (stowed on all platforms)
+darwin/             # macOS-only config (stowed on macOS), incl. LaunchAgents
+stow/               # stow global ignore rules
+setup/              # encrypted age key
+setup.sh / bootstrap.sh / update.sh
 ```
-
-## Try tools without changing anything global
-
-```bash
-bash scripts/test-shell.sh             # isolated throwaway shell (examples/test.mise.toml)
-bash scripts/test-shell.sh mise.toml   # test the real base config
-```
-
-Spins up a shell with the tools active in a temp dir outside the repo — nothing
-global is touched. `rm -rf` the printed workdir to wipe.
 
 ## Adding things
 
-The tool list is [`mise.toml`](mise.toml) — edit it, then `./sync.sh`.
-
+- **A tool**: add a line to [`Brewfile`](Brewfile) (`brew "…"` / `cask "…" if OS.mac?`),
+  then `./setup.sh` (or `brew bundle`).
+- **A from-source tool**: add `Formula/<name>.rb` and a
+  `brew "doeringc/local/<name>"` line to the Brewfile.
 - **A config file**: drop it under `common/` mirroring its `~` path, then
-  `stow -t ~ -R common`.
-- **A CLI tool / runtime**: add a line under `[tools]` (`ripgrep = "latest"`,
-  `node = "22"`, `"npm:…" = "latest"`, …), then `./sync.sh`.
-- **A GUI app**: add an entry to `plugins/mise-app/registry.lua` (copy `tev`) and
-  a `"app:<name>" = "latest"` line to `mise.toml`.
-- **A system CLI / base util**: `"conda:<name>" = "latest"` (conda-forge).
-- **A from-source tool**: add a recipe to `plugins/mise-src/registry.lua` (copy
-  `passage`) and a `"src:<name>" = "latest"` line.
-
-Everything is a mise tool in the single `mise.toml`, installed on every machine.
-Linux-only tools are gated with `os = ["linux"]`; there are no profiles.
-
-## pixi after the migration
-
-The `pixi global` "dotfiles" environment that used to own `~/.pixi/bin` is retired
-— mise now owns the whole toolset. **pixi the binary stays**, though: it's a
-package manager in its own right, still used for project toolchains (mitsuba, …).
-It self-updates (`pixi self-update`) and the shell configs **append** `~/.pixi/bin`
-to PATH, so it only provides the `pixi` command and never shadows a mise tool.
-pixi is deliberately *not* a mise tool (installing it via mise was redundant and
-broke on GitHub attestation verification).
-
-If you're migrating a machine that still has the old global env:
-
-```bash
-./sync.sh
-which kitty            # -> ~/.local/share/mise/shims/kitty  (NOT ~/.pixi/...)
-pixi global uninstall dotfiles            # retire the old global env
-rm -f ~/.pixi/manifests/pixi-global.toml  # drop the stale manifest
-exec fish                                 # reload PATH (or restart your terminal)
-```
-
-> **Never add `mise activate`.** The shell configs put `~/.local/share/mise/shims`
-> on PATH directly. `mise activate`'s per-prompt hook can pile up hung mise
-> processes (e.g. on slow cross-platform version resolution) until the shell can't
-> `fork`. Shims are all a single global toolset needs.
+  `stow -t ~ -R common`. macOS-only configs go in `darwin/`.
 
 See [`CLAUDE.md`](CLAUDE.md) for the detailed architecture.
-
-> Note: `tests/` still targets the old pixi bootstrap and needs updating for mise.

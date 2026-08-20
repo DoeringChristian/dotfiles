@@ -1,238 +1,89 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working in this repository.
 
 ## Overview
 
-Cross-platform (Linux & macOS) dotfiles using:
-- **GNU Stow** for symlink management of config files, and
-- **mise** (mise-en-place) for **all** package management — every tool (CLI,
-  language runtime, GUI app, even from-source builds) is a mise tool in
-  `mise.toml`, installed into `~/.local/share/mise` and exposed on PATH via shims.
-  There is **no brew/apt "native layer"** — that's the whole point. Two in-repo
-  mise **backend plugins** (`plugins/`) cover what the standard backends can't:
-  `app:` (GUI apps from prebuilt binaries) and `src:` (from-source builds).
+Cross-platform (macOS & Linux) dotfiles using:
+- **GNU Stow** for symlinking config files into `~`, and
+- **Homebrew** for **all** tool management. The tool list is a single
+  [`Brewfile`](Brewfile); install with `brew bundle`. Two from-source tools come
+  from an in-repo tap (`Formula/*.rb`).
 
-> Migrated from `pixi global` to mise. The package manifest is now `mise.toml`
-> (not `pixi-global.toml`); `ext/` recipes are gone. If you see references to
-> `~/.pixi` or a `native/` layer anywhere, they are stale.
+There is no version manager (no mise/pixi/nix). Every tool is a brew formula or
+cask; `brew upgrade` keeps them latest.
 
-## Key Commands
+## Key commands
 
-### Initial Setup (new machine)
-One-liner (installs git+curl, clones, runs setup):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash -s -- workstation
-```
-`bootstrap.sh` → `setup.sh` (installs mise, runs sync.sh, decrypts the age key;
-skip secrets with `SKIP_SECRETS=1`). Pick a profile with the arg or `MISE_ENV`
-(`workstation` | `server`; omit for base).
-
-### Full Sync
-```bash
-./sync.sh
-```
-1. **mise** — trust the config, link the in-repo backend plugins
-   (`scripts/link-plugins.sh`), symlink `mise.toml` to `~/.config/mise/config.toml`
-   (so tools are global), then `mise install` (the whole toolset). `mise.lock`
-   keeps versions reproducible. (claude-code ships its real CLI as a native binary
-   fetched by an npm postinstall, `install.cjs`. mise's npm backend passes
-   `--ignore-scripts` by default, which skips it -> `claude` errors "native binary
-   not installed". Its `mise.toml` entry sets `npm_args = "--ignore-scripts=false"`
-   so the postinstall runs at install/upgrade time. On npm >= 11.16.0 the tighter
-   `allow_builds = ["@anthropic-ai/claude-code"]` is preferable; npm 10.x needs the
-   `npm_args` form.)
-2. **Git LFS** — `git lfs pull` (fonts, `.local/bin` payloads).
-3. **GNU Stow** — symlinks configs (`common` everywhere, `darwin` on macOS); on
-   macOS also copies fonts into `~/Library/Fonts` (CoreText ignores symlinks).
-3b. **LaunchAgents** (macOS) — `launchctl bootstrap` any plist under
-   `~/Library/LaunchAgents` that `darwin/` stowed (currently the ollama server,
-   `com.ollama.server`). Idempotent and non-disruptive: bootstrap is a no-op if
-   already loaded, and it does **not** `kickstart -k`, so a running service is left
-   alone. To apply a plist change: `launchctl kickstart -k gui/$(id -u)/<label>`.
-4. **dconf** — loads GNOME settings (Linux only).
-
-### Update
-```bash
-./update.sh                    # mise upgrade (all) + re-sync
-./update.sh app:kitty claude-code   # upgrade only named tools
-```
-No build caches to bust (unlike the old pixi recipes) — mise installs prebuilt
-artifacts, so `mise upgrade` is the whole story. `latest`-tracking tools
-(claude-code, gemini-cli, neovim nightly, `app:kitty`/`app:tev`) re-resolve to
-newest; pinned ones stay put.
-
-### Try tools without touching anything global
-```bash
-bash scripts/test-shell.sh             # isolated throwaway shell, examples/test.mise.toml
-bash scripts/test-shell.sh mise.toml   # test the real base config
-```
-Copies a config to a temp dir outside the repo, points all mise data there, links
-the plugins, and drops you into a shell where the test shims outrank your global
-PATH. Nothing global changes; `rm -rf` the printed workdir to wipe.
-
-### Stow Operations
-```bash
-stow -t ~ common        # apply (symlink into ~)
-stow -t ~ -D common     # remove
-stow -t ~ -R common     # re-stow (after adding files)
-```
-**Ordering matters**: `stow -t ~ stow` runs before `common` so the global ignore
-rules are in place. `sync.sh` handles this.
-
-### mise (the package manager)
-**`mise.toml` at the repo root is the hand-edited source of truth** — the tool
-list (like the old flake's `paths` / pixi's `pixi-global.toml`). **All** mise
-tools, including the GUI apps (`app:kitty`, `app:tev`) and `vpn-slice`, live here
-and install on every machine. `sync.sh` symlinks it to mise's global config
-(`~/.config/mise/config.toml`) so the tools are on PATH everywhere — the analog
-of the old `pixi global` / `~/.pixi/bin`.
-
-There are no profiles and no `MISE_ENV` switching: it's one tool list for every
-machine. Platform differences are handled per-tool with `os = ["linux"]` /
-`["macos"]` gating inside `mise.toml` (e.g. Linux-only `nvtop`, `xsel`, `ollama`).
-
-To add a tool, edit `mise.toml` and run `./sync.sh`:
-```toml
-[tools]
-ripgrep = "latest"                       # aqua/registry backend
-node = "22"                              # pinned runtime
-"npm:@anthropic-ai/claude-code" = "latest"   # npm backend
-"cargo:https://github.com/me/foo" = "branch:main"  # build a Rust tool from git
-"conda:git" = "latest"                   # conda-forge package (system CLIs, base utils, …)
-"app:kitty" = "latest"                   # GUI app (in-repo app: backend)
-"src:stow" = "latest"                    # from-source build (in-repo src: backend)
-"conda:nvtop" = { version = "latest", os = ["linux"] }   # os-gate Linux-only tools
-```
-Pick the backend by where the tool lives: registry/aqua for tools with a GitHub
-release binary; `npm:`/`pipx:`/`cargo:` for language-ecosystem tools; `app:` for
-GUI apps; `conda:` for anything conda-forge builds that has no good release binary
-(system CLIs like git/fish/curl, btop on macOS, …); `src:` for tools built from
-source. mise's `conda:` backend has rattler built in, so it needs **no**
-conda/micromamba install. Use `os = ["linux"]`/`["macos"]` to gate per platform.
-
-- **In-repo backend plugins** (`plugins/`, linked locally by
-  `scripts/link-plugins.sh` — no need to publish them):
-  - `app:` (`plugins/mise-app`) — GUI apps from each project's **official
-    prebuilt GitHub binaries**. `registry.lua` declares a repo + per-platform
-    download-URL template; versions resolve live from GitHub releases (no hashes).
-    Installs `.dmg`/`.txz`/AppImage, puts launchers on PATH, and creates a desktop
-    entry (`.app` in `~/Applications` on macOS, `.desktop` on Linux). Add an app
-    by copying the `tev` entry in `registry.lua`.
-  - `src:` (`plugins/mise-src`) — **from-source builds** (the analog of pixi's
-    `ext/` recipes) for tools with no binary backend. `registry.lua` holds a fetch
-    spec (tarball or git) + a `build_tools` list + build commands run with
-    `$PREFIX` = the install dir. The build is **hermetic**: `build_tools` (make,
-    perl) are supplied from conda-forge via `mise x`, so the HOST needs no
-    toolchain (matching pixi's recipe build deps). Used for GNU `stow`, `passage`,
-    and `sshr` (Rust/cargo; also installs `share/sshr/{shpool,kitty}` — see the
-    sshr note below). A tool's runtime interpreter (perl for stow) is a regular
-    mise tool (`conda:perl`) so it's guaranteed on PATH — never a host perl.
-- **No native layer.** There is deliberately no brew/apt/dnf step. System CLIs
-  (git, fish, tree, wget, mosh, ncdu, curl, …) come from `conda:`; GPU/desktop
-  Linux tools (nvtop, xsel, openconnect, ollama) are `conda:`/`aqua:` os-gated to
-  Linux. CUDA/drivers themselves remain the distro's job, outside this repo.
-
-### sshr (special case)
-`sshr` (your SSH wrapper) installs via the in-repo **`src:` backend** (built from
-`main`; see `plugins/mise-src/registry.lua`). A plain `cargo install` would drop
-its data files, so the recipe also installs `share/sshr/{shpool,kitty}` next to
-the binary — `shpool` is the set of prebuilt remote binaries `sshr` scp's to a
-host on first connect, found at runtime by walking up from the binary for
-`share/sshr/shpool/bin` (or `$SSHR_SHPOOL_DIR`). Its **kitty kittens**
-(`smart_launch.py` / `smart_close.py`) are *also* vendored into this repo at
-`common/.config/sshr/kitty/` (stow-linked to `~/.config/sshr/kitty/`) and
-referenced from `kitty.conf` there.
-
-Note on local state: on Linux sshr writes its session WAL to `$XDG_DATA_HOME`
-(`~/.local/share/sshr`); on **macOS** the `dirs` crate maps that to
-`~/Library/Application Support/sshr` instead — so `~/.local/share/sshr` legitimately
-won't exist on a Mac. The `~/.local/share/sshr/...` paths baked into the binary are
-*remote*-host paths (where shpool lands on the server), created on connect.
-
-### ollama (local LLM runtime)
-Installed via the **`aqua:` backend** (`"aqua:ollama/ollama" = "latest"`), which
-ships a universal macOS build with **Metal GPU** (bundled `mlx_metal` metallibs)
-and Linux amd64/arm64 builds with CUDA — so it's a plain cross-platform tool, NOT
-os-gated. The macOS tarball extracts flat (the `ollama` binary sits at the install
-root beside its dylibs, not in `bin/`); aqua's registry knows this, so the shim
-resolves correctly.
-
-ollama needs a running server (`ollama serve`). On macOS that's a **LaunchAgent**,
-`darwin/Library/LaunchAgents/com.ollama.server.plist` (replacing the old
-`brew services` ollama). It can't rely on a login PATH — launchd gives agents a
-minimal env and there's no `~/.profile` — so the plist wraps `ollama serve` in
-`/bin/sh -c` that prepends `$HOME/.local/share/mise/shims` to PATH (`$HOME` is set
-by launchd; no hardcoded username) and logs to `~/Library/Logs/ollama.log`.
-`sync.sh` bootstraps it (step 3b). On Linux, run `ollama serve` yourself (systemd
-unit / the official installer for best GPU integration). Models live in `~/.ollama`
-regardless of which ollama binary, so switching binaries keeps pulled models.
-
-## Repository Structure
-
-```
-dotfiles/
-├── common/           # Main stow package — portable configs (both platforms)
-│   ├── .config/      # XDG config (fish, starship, atuin, kitty, zellij, sshr/kitty, …)
-│   ├── .local/bin/   # User binaries (claudebox, Git LFS payloads)
-│   └── .local/share/fonts/  # Nerd Fonts (Git LFS)
-├── darwin/           # macOS-only stow package (config overrides, LaunchAgents)
-├── stow/             # Stow global ignore rules (.stow-global-ignore)
-├── setup/            # Encrypted secrets (age-key.age)
-├── mise.toml         # THE tool list (source of truth — the whole toolset)
-├── mise.lock         # pinned versions/checksums for reproducibility
-├── plugins/          # in-repo mise backends: mise-app (app:), mise-src (src:)
-├── scripts/          # link-plugins.sh, test-shell.sh
-├── examples/         # test.mise.toml (one entry per backend, for test-shell)
-├── dconf.ini         # GNOME settings (Linux only)
-├── bootstrap.sh      # one-liner entry: install git/curl, clone, run setup.sh
-├── setup.sh          # first-time: install mise, sync, decrypt age key
-├── sync.sh           # mise install + Git-LFS + stow + fonts + dconf
-└── update.sh         # mise upgrade + sync
+./bootstrap.sh   # one-liner entry: install git/curl, clone, run setup.sh
+./setup.sh       # install Homebrew, register the tap, `brew bundle`, stow, secrets
+./update.sh      # brew update && upgrade (+ rebuild the --HEAD formulae from git)
 ```
 
-## Architecture
+`setup.sh` steps: install Homebrew → register the `doeringc/local` tap (copy
+`Formula/*.rb` in) → `brew bundle --file Brewfile` → on Linux fetch the GUI apps
+that can't be casks (kitty/tev/claude) → `stow` configs (+ macOS fonts/LaunchAgents)
+→ decrypt the age key.
 
-- **`common/`** / **`darwin/`**: stow packages symlinked into `~`. `darwin` is
-  stowed in addition to `common` on macOS only.
-- **`stow/.stow-global-ignore`**: applied first so ignore rules are in place.
-- **`mise.toml`**: the tool list. mise installs into `~/.local/share/mise` and
-  its **shims** dir (`~/.local/share/mise/shims`) goes on PATH (replacing the old
-  `~/.pixi/bin`). There are no profiles — one tool list for every machine, with
-  per-tool `os = [...]` gating. The `app:`/`src:` backends are linked from
-  `plugins/` by `scripts/link-plugins.sh` before `mise install` (a `mise run` task
-  can't link them — it resolves the tool env first).
-- **Shell PATH (no `mise activate`)**: the shell configs put
-  `~/.local/share/mise/shims` on PATH directly and deliberately do **not** run
-  `mise activate`. `mise activate`'s per-prompt `hook-env` re-invokes mise on every
-  prompt; if a version resolution there is slow (e.g. an os-gated tool with no
-  build for this platform), the hung invocations pile up — once enough accumulate
-  you hit the per-user process cap and the shell can't `fork` ("Resource not
-  available"). Shims resolve versions lazily only when a tool actually runs, which
-  is all a single global toolset needs. **Do not add `mise activate` back.**
-- **pixi is standalone, not a mise tool**: pixi is a package manager in its own
-  right (used for project toolchains like mitsuba). It lives at `~/.pixi/bin`,
-  self-updates via `pixi self-update`, and the shell configs **append** that dir to
-  PATH so it only provides `pixi` and never shadows a mise tool. Installing pixi
-  via mise's `github:` backend was redundant and broke on GitHub attestation
-  verification, so it is intentionally absent from `mise.toml`.
-- **Fonts**: source of truth is `common/.local/share/fonts/` (Git LFS). On Linux
-  it's stow-linked to `~/.local/share/fonts` (fontconfig follows symlinks). On
-  macOS `sync.sh` copies real files into `~/Library/Fonts` because **CoreText
-  ignores symlinked fonts**. (Not installed via mise/brew.)
+## The Brewfile (source of truth)
+
+Each line is a tool. Notable entries:
+- `brew "neovim", args: ["HEAD"]` — nightly-equivalent (brew pulls cmake/gettext).
+- `brew "tree-sitter-cli"` — the CLI (the `tree-sitter` formula is only the library).
+- `brew "python@3.13"` — provides `python3`; brew doesn't link a bare `python` on macOS.
+- `brew "doeringc/local/sshr"`, `…/passage` — the in-repo tap formulae (`--HEAD`, git main).
+- `cask "kitty"/"tev"/"claude-code" if OS.mac?` — macOS GUI apps + the `claude` CLI.
+  On **Linux** casks don't exist, so `setup.sh` installs these from official builds.
+
+`claude` is the `claude-code` cask with auto-update disabled via
+`~/.claude/settings.json` (`autoUpdates:false`) so brew is the sole owner (no
+version drift). Bump with `brew upgrade --cask`.
+
+To add a tool: add a `Brewfile` line, run `./setup.sh`. From-source: add
+`Formula/<name>.rb` + a `brew "doeringc/local/<name>"` line.
+
+## Repository structure
+
+```
+Brewfile          # the tool list
+Formula/          # in-repo brew tap (sshr.rb, passage.rb)
+common/           # portable stow package (both platforms)
+darwin/           # macOS-only stow package (config overrides + LaunchAgents)
+stow/             # .stow-global-ignore
+setup/            # encrypted age key (age-key.age)
+setup.sh / bootstrap.sh / update.sh
+```
+
+## Architecture notes
+
+- **Stow ordering**: `stow -t ~ stow` runs before `common` so the global ignore
+  rules are in place; `darwin` is stowed in addition to `common` on macOS.
+- **Fonts**: source is `common/.local/share/fonts/` (Git LFS). Linux follows the
+  stow symlink; macOS copies real files into `~/Library/Fonts` (CoreText ignores
+  symlinked fonts).
+- **PATH**: the shell configs put the Homebrew prefix on PATH via `brew shellenv`,
+  plus `~/.local/bin`, and append `~/.pixi/bin` (pixi is kept standalone for
+  project toolchains). No version-manager shims.
 - **Secrets**: age + passage. `setup/age-key.age` is decrypted to
-  `~/.local/share/age/key.txt` by `setup.sh`, which calls `age` via
-  `mise exec -- age` (age is a mise tool).
+  `~/.local/share/age/key.txt` (and `~/.passage/identities`) by `setup.sh`.
+- **claudebox** (`common/.local/bin/claudebox`): sandboxes `claude` (Seatbelt on
+  macOS / Bubblewrap on Linux). It resolves `command -v claude` and binds the real
+  `$HOME` read-only — install-mechanism-agnostic, no special-casing.
+
+## sshr (special case)
+
+`sshr` (SSH wrapper) is the `doeringc/local/sshr` tap formula (`--HEAD`, git main).
+The formula also installs its `share/sshr/{shpool,kitty}` data next to the binary
+(shpool = prebuilt remote binaries it scp's to hosts). Its **kitty kittens** are
+also vendored at `common/.config/sshr/kitty/` (stow-linked) and referenced from
+`kitty.conf`. Local state: Linux `~/.local/share/sshr`; macOS
+`~/Library/Application Support/sshr` (the `dirs` crate) — so `~/.local/share/sshr`
+legitimately won't exist on a Mac.
 
 ## Conventions
 
-- **Git LFS**: binaries in `.local/bin/` and `*.ttf` fonts are tracked via LFS.
+- **Git LFS**: `.local/bin/` binaries and `*.ttf` fonts.
 - **Catppuccin Macchiato**: theme across starship, fish, bat, btop, kitty, eza.
-- **Fish shell**: default shell with vi-mode keybindings. `config.fish` puts the
-  mise shims dir on PATH via `fish_add_path` — it does **not** `mise activate`
-  (see the PATH note under Architecture).
-- **Adding a config**: place under `common/` mirroring the home path, then
-  `stow -t ~ -R common`. macOS-only configs go in `darwin/`.
-- **Adding a tool**: edit `mise.toml`, then `./sync.sh` (installs on all machines).
-  Everything is a mise tool — pick the backend (see "mise (the package manager)"
-  above); os-gate Linux-only tools with `os = ["linux"]`.
+- **Fish** is the default shell (vi-mode). PATH is set in `config.fish` via
+  `brew shellenv`; no `mise activate` or version-manager hooks.
