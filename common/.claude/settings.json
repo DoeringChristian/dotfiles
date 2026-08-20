@@ -25,5 +25,5 @@
   "skipWorkflowUsageWarning": true,
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "autoUpdates": false
+  "autoUpdates": true
 }
