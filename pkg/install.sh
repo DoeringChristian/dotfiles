@@ -1,150 +1,94 @@
 #!/usr/bin/env bash
-# install.sh — install the whole toolset (pkg/packages) at LATEST, rootless, per
-# each tool's declared method. Safe alongside mise: installs into the package
-# manager's prefix + ~/.local, never touches ~/.local/share/mise or PATH files.
+# install.sh — install the whole toolset (pkg/packages) at LATEST via Homebrew,
+# per each tool's declared method, plus a local tap for the custom formulae.
+#
+# SAFE alongside mise: everything lands in the Homebrew prefix + ~/.local. It does
+# NOT touch ~/.local/share/mise or any PATH file, so your current setup keeps
+# working. Whether the brew tools "win" depends only on PATH order — flip that
+# yourself once you've verified (see pkg/README.md). Nothing is removed.
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$DIR/.." && pwd)"
 OS="$(uname -s)"
 MANIFEST="$DIR/packages"
+TAP="local/dotfiles"
 PREFIX="$HOME/.local"; mkdir -p "$PREFIX/bin" "$PREFIX/share"
 
 have() { command -v "$1" >/dev/null 2>&1; }
-opt()  { printf '%s\n' "$1" | grep -oE "$2=[^ ]+" | head -1 | cut -d= -f2-; }  # opt "$rest" conda
+opt()  { printf '%s\n' "$1" | grep -oE "$2=[^ ]+" | head -1 | cut -d= -f2-; }
 
-# ---------------------------------------------------------- package managers
-if [ "$OS" = Darwin ]; then
-    have brew || NONINTERACTIVE=1 /bin/bash -c \
+# ---------------------------------------------------------- ensure Homebrew
+if ! have brew; then
+    echo "==> installing Homebrew"
+    NONINTERACTIVE=1 /bin/bash -c \
         "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$p" ] && eval "$("$p" shellenv)"; done
-else
-    if ! have pixi && [ ! -x "$HOME/.pixi/bin/pixi" ]; then
-        curl -fsSL https://pixi.sh/install.sh | bash
-    fi
-    export PATH="$HOME/.pixi/bin:$PATH"
 fi
+for p in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+    [ -x "$p" ] && eval "$("$p" shellenv)"
+done
 
 # ---------------------------------------------------------- parse the manifest
-PKG_NAMES=(); CASK_LINES=(); CONDA_NAMES=(); OTHER_LINES=()
+PKG=(); PKG_HEAD=(); CASK_LINES=(); FORMULA=(); OTHER_LINES=()
 while read -r name method rest || [ -n "${name:-}" ]; do
     case "${name:-}" in ''|\#*) continue ;; esac
     rest="${rest%%#*}"
     case "$method" in
-        pkg)
-            if [ "$OS" = Darwin ]; then PKG_NAMES+=("$name")
-            else c="$(opt "$rest" conda)"; PKG_NAMES+=("${c:-$name}"); fi ;;
-        cask)  CASK_LINES+=("$name|$rest") ;;
-        conda) CONDA_NAMES+=("$name") ;;
-        *)     OTHER_LINES+=("$name|$method|$rest") ;;
+        pkg)     if [ "$(opt "$rest" head)" = true ]; then PKG_HEAD+=("$name"); else PKG+=("$name"); fi ;;
+        cask)    CASK_LINES+=("$name|$rest") ;;
+        formula) FORMULA+=("$name") ;;
+        *)       OTHER_LINES+=("$name|$method|$rest") ;;
     esac
 done < "$MANIFEST"
 
-# ---------------------------------------------------------- pkg tools first
-# (they provide node/uv/cargo/make/git that the other methods need)
-echo "==> package manager: installing ${#PKG_NAMES[@]} tools at latest"
-if [ "$OS" = Darwin ]; then
-    brew install ${PKG_NAMES[@]+"${PKG_NAMES[@]}"}
-else
-    pixi global install ${PKG_NAMES[@]+"${PKG_NAMES[@]}"}
-fi
-if [ "${#CONDA_NAMES[@]}" -gt 0 ]; then
-    if have pixi; then
-        echo "==> conda-forge (pixi): ${CONDA_NAMES[*]}"
-        pixi global install "${CONDA_NAMES[@]}"
-    else
-        echo "!! pixi not found — skipping conda tools: ${CONDA_NAMES[*]}"
-    fi
+# ---------------------------------------------------------- brew formulae
+echo "==> brew install (${#PKG[@]} bottled tools)"
+brew install ${PKG[@]+"${PKG[@]}"}
+for h in ${PKG_HEAD[@]+"${PKG_HEAD[@]}"}; do
+    echo "==> brew install --HEAD $h"; brew install --HEAD "$h"
+done
+
+# ---------------------------------------------------------- custom formulae (tap)
+if [ "${#FORMULA[@]}" -gt 0 ]; then
+    echo "==> local tap $TAP (custom formulae)"
+    brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
+    cp -f "$DIR/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
+    for f in "${FORMULA[@]}"; do echo "==> brew install --HEAD $TAP/$f"; brew install --HEAD "$TAP/$f"; done
 fi
 
-# ---------------------------------------------------------- source builds
-install_source() {
-    local n="$1" url="$2" build="$3" tmp; tmp="$(mktemp -d)"
-    echo "==> $n (source: $build)"
-    if ! git clone --depth 1 "$url" "$tmp/$n" 2>/dev/null; then echo "!! clone $n failed"; rm -rf "$tmp"; return; fi
-    case "$build" in
-        cargo) have cargo && ( cd "$tmp/$n" && cargo install --path . --root "$PREFIX" ) || echo "!! $n: cargo missing/failed"
-               [ -d "$tmp/$n/share" ] && cp -R "$tmp/$n/share/." "$PREFIX/share/" 2>/dev/null || true ;;
-        make)  have make && make -C "$tmp/$n" install PREFIX="$PREFIX" >/dev/null 2>&1 || echo "!! $n: make missing/failed" ;;
-        *)     echo "!! $n: unknown build '$build'" ;;
-    esac
-    rm -rf "$tmp"
-}
-
-# ---------------------------------------------------------- official release binary
-# For tools whose package-manager build is too old (e.g. neovim on conda-forge).
-# Picks the OS+arch asset from a GitHub release (tag=latest|nightly|stable|vX),
-# extracts, symlinks the binary into ~/.local/bin. Works on macOS + Linux.
-install_release() {
-    local name="$1" repo="$2" tag="$3" binname="${4:-$1}"
-    local tagpath="latest"; [ -n "$tag" ] && tagpath="tags/$tag"
-    local os arch
-    case "$OS" in Darwin) os='macos|darwin' ;; *) os='linux' ;; esac
-    case "$(uname -m)" in arm64|aarch64) arch='arm64|aarch64' ;; *) arch='x86_64|amd64|x64' ;; esac
-    local assets url
-    assets="$(curl -fsSL "https://api.github.com/repos/$repo/releases/$tagpath" \
-        | grep -oE '"browser_download_url": *"[^"]*"' | cut -d'"' -f4 \
-        | grep -iE "$os" | grep -iE "$arch" | grep -viE '\.(sha256|asc|sig|zsync|deb|rpm)$')"
-    # prefer a tarball (no FUSE needed) over an AppImage/other single-file asset
-    url="$(printf '%s\n' "$assets" | grep -iE '\.(tar\.(gz|xz|zst|bz2)|tgz|txz)$' | head -1)"
-    [ -n "$url" ] || url="$(printf '%s\n' "$assets" | head -1)"
-    [ -n "$url" ] || { echo "!! $name: no release asset for $OS/$(uname -m) in $repo@${tag:-latest}"; return; }
-    echo "==> $name (release $repo@${tag:-latest})"
-    local d="$PREFIX/opt/$name"; rm -rf "$d"; mkdir -p "$d"
-    case "$url" in
-        *.tar.gz|*.tgz|*.tar.xz|*.txz|*.tar.zst|*.tar.bz2) curl -fsSL "$url" | tar x -C "$d" 2>/dev/null ;;
-        *)  curl -fsSL "$url" -o "$d/$binname" && chmod +x "$d/$binname" ;;
-    esac
-    local bin; bin="$(find "$d" -type f -name "$binname" -perm -u+x 2>/dev/null | head -1)"
-    [ -n "$bin" ] && ln -sfn "$bin" "$PREFIX/bin/$binname" && echo "   -> ~/.local/bin/$binname" \
-        || echo "!! $name: binary '$binname' not found after extract"
-}
-
-# ---------------------------------------------------------- Linux GUI/app fetch
-# On macOS these are casks; on Linux fetch the latest official build. Kept simple;
-# verify on a real server. (kitty has its own installer; others: latest release.)
+# ---------------------------------------------------------- GUI apps
+# macOS: brew casks. Linux: Homebrew has no cask support, so fetch official builds.
 install_app_linux() {
     local n="$1" repo="$2"
     case "$n" in
         kitty)
-            echo "==> kitty (official installer)"
             curl -fsSL https://sw.kovidgoyal.net/kitty/installer.sh \
                 | sh /dev/stdin launch=n dest="$PREFIX" 2>/dev/null || { echo "!! kitty failed"; return; }
             ln -sfn "$PREFIX/kitty.app/bin/kitty"  "$PREFIX/bin/kitty"
             ln -sfn "$PREFIX/kitty.app/bin/kitten" "$PREFIX/bin/kitten" ;;
         *)
-            echo "==> $n (latest release from $repo)"
             local url
             url="$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
-                | grep -oE '"browser_download_url": *"[^"]*(inux|x86_64|amd64)[^"]*"' \
-                | grep -viE '\.(sha256|asc|sig)"' | head -1 | cut -d'"' -f4)"
+                | grep -oE '"browser_download_url": *"[^"]*"' | cut -d'"' -f4 \
+                | grep -iE 'linux' | grep -iE 'x86_64|amd64|x64' \
+                | grep -viE '\.(sha256|asc|sig)"?$' | head -1)"
             [ -n "$url" ] || { echo "!! no Linux asset for $n"; return; }
-            case "$url" in
-                *.txz|*.tar.xz|*.tar.gz|*.tgz|*.tar.zst)
-                    local d="$PREFIX/opt/$n"; mkdir -p "$d"
-                    curl -fsSL "$url" | tar x -C "$d" 2>/dev/null
-                    find "$d" -maxdepth 3 -type f -name "$n" -perm -u+x -exec ln -sfn {} "$PREFIX/bin/$n" \; 2>/dev/null ;;
-                *)  curl -fsSL "$url" -o "$PREFIX/bin/$n" && chmod +x "$PREFIX/bin/$n" ;;
-            esac ;;
+            curl -fsSL "$url" -o "$PREFIX/bin/$n" && chmod +x "$PREFIX/bin/$n" ;;
     esac
 }
-
-# ---------------------------------------------------------- casks / GUI apps
 for line in ${CASK_LINES[@]+"${CASK_LINES[@]}"}; do
     n="${line%%|*}"; rest="${line#*|}"
     if [ "$OS" = Darwin ]; then echo "==> $n (cask)"; brew install --cask "$n"
-    else install_app_linux "$n" "$(opt "$rest" github)"; fi
+    else echo "==> $n (Linux official build)"; install_app_linux "$n" "$(opt "$rest" github)"; fi
 done
 
-# ---------------------------------------------------------- self / npm / uv / source
+# ---------------------------------------------------------- npm / self / uv
 for line in ${OTHER_LINES[@]+"${OTHER_LINES[@]}"}; do
     n="${line%%|*}"; r="${line#*|}"; method="${r%%|*}"; rest="${r#*|}"
     case "$method" in
-        self)   url="$(opt "$rest" url)"; echo "==> $n (self-installer, self-updating)"; curl -fsSL "$url" | bash || echo "!! $n installer failed" ;;
-        npm)    have npm && { p="$(opt "$rest" pkg)"; echo "==> $n (npm)"; npm install -g "${p:-$n}@latest"; } || echo "!! $n: npm missing" ;;
-        uv)     have uv  && { echo "==> $n (uv)"; uv tool install "$n"; } || echo "!! $n: uv missing" ;;
-        source) install_source "$n" "$(opt "$rest" url)" "$(opt "$rest" build)" ;;
-        bin)    install_release "$n" "$(opt "$rest" github)" "$(opt "$rest" tag)" "$(opt "$rest" bin)" ;;
+        self) url="$(opt "$rest" url)"; echo "==> $n (self-installer, self-updating)"; curl -fsSL "$url" | bash || echo "!! $n installer failed" ;;
+        npm)  have npm && { p="$(opt "$rest" pkg)"; echo "==> $n (npm)"; npm install -g "${p:-$n}@latest"; } || echo "!! $n: npm missing" ;;
+        uv)   have uv  && { echo "==> $n (uv)"; uv tool install "$n"; } || echo "!! $n: uv missing" ;;
     esac
 done
 
@@ -160,7 +104,6 @@ if have stow; then
 fi
 
 echo
-echo "==> done (all at latest). Ensure PATH has:"
-[ "$OS" = Darwin ] && echo "     \$(brew --prefix)/bin  and  ~/.local/bin" \
-                   || echo "     ~/.pixi/bin  and  ~/.local/bin"
-echo "   mise was NOT touched."
+echo "==> done (all at latest via brew + ~/.local). mise was NOT touched."
+echo "   To switch to it, put \$(brew --prefix)/bin and ~/.local/bin ahead of the"
+echo "   mise shims on PATH, restart your shell, and verify. Remove mise only after."
