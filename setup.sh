@@ -22,9 +22,11 @@ for p in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/b
     [ -x "$p" ] && eval "$("$p" shellenv)"
 done
 
-# 2. Register the in-repo tap for the custom formulae (sshr, passage).
+# 2. Register + trust the in-repo tap for the custom formulae (sshr, passage).
+#    Homebrew refuses to load formulae from an untrusted third-party tap.
 brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/"
+brew trust "$TAP" >/dev/null 2>&1 || true
 
 # 3. Install everything in the Brewfile.
 echo "==> brew bundle"

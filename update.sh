@@ -13,6 +13,7 @@ done
 # refresh the tap in case Formula/*.rb changed in the repo
 brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
+brew trust "$TAP" >/dev/null 2>&1 || true
 
 echo "==> brew update && upgrade"
 brew update && brew upgrade
