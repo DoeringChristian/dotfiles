@@ -27,8 +27,10 @@ cd ~/dotfiles && ./setup.sh
 Day-to-day:
 
 ```bash
-./setup.sh    # install/refresh the toolset (brew bundle) + stow configs + secrets
+./sync.sh     # install any missing packages (brew bundle) + re-apply configs. Run
+              # this after adding a tool to the Brewfile or a config to common/.
 ./update.sh   # bump everything to the newest version
+# (or just `brew bundle` for packages only; `./setup.sh` is the first-time full run)
 ```
 
 After setup, **restart your terminal**.

@@ -17,9 +17,14 @@ cask; `brew upgrade` keeps them latest.
 
 ```bash
 ./bootstrap.sh   # one-liner entry: install git/curl, clone, run setup.sh
-./setup.sh       # install Homebrew, register the tap, `brew bundle`, stow, secrets
+./setup.sh       # first-time: install Homebrew, then sync.sh, then decrypt secrets
+./sync.sh        # reconcile: register/trust the tap, `brew bundle` (install missing),
+                 # kitty .desktop on Linux, stow configs. No brew-install, no secrets.
 ./update.sh      # brew update && upgrade (+ rebuild the --HEAD formulae from git)
 ```
+`setup.sh` = install Homebrew → `sync.sh` → decrypt the age key. So the package/
+config logic lives once, in `sync.sh`; `setup.sh` just adds the one-time bits. For
+packages only, `brew bundle` alone works (after the tap is registered).
 
 `setup.sh` steps: install Homebrew → register the `doeringc/local` tap (copy
 `Formula/*.rb` in) → `brew bundle --file Brewfile` → on Linux fetch the GUI apps
