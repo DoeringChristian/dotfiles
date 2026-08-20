@@ -37,7 +37,7 @@ fzf               pkg
 zoxide            pkg
 dust              pkg
 duf               pkg
-tree-sitter       pkg     conda=tree-sitter-cli
+tree-sitter-cli   pkg
 
 # --- git / dev ---
 gh                pkg
