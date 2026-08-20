@@ -50,13 +50,7 @@ brew trust "$TAP" >/dev/null 2>&1 || true
 echo "==> brew bundle"
 brew bundle --file "$REPO/Brewfile"
 
-# 3b. claude CLI via its official installer (both platforms). Self-managed so it's
-#     always latest — the brew cask trails upstream, so it's not in the Brewfile.
-#     Installs to ~/.local/bin/claude and keeps itself updated.
-echo "==> claude (official installer, self-updating)"
-curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 || echo "!! claude installer failed"
-
-# 4. Linux: kitty/tev installed as casks above (they ship Linux variations).
+# 4. Linux: kitty/tev/claude installed as casks above (they ship Linux variations).
 #    The kitty cask installs the binary but not a GNOME .desktop entry, so make one
 #    pointing at the brew binary.
 if [ "$OS" != Darwin ] && command -v kitty >/dev/null 2>&1; then

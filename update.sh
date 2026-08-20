@@ -17,7 +17,8 @@ brew trust "$TAP" >/dev/null 2>&1 || true
 
 echo "==> brew update && upgrade"
 brew update && brew upgrade
-[ "$(uname -s)" = Darwin ] && brew upgrade --cask
+# --greedy so version:latest casks (claude-code@latest) re-fetch; casks work on Linux too.
+brew upgrade --cask --greedy
 echo "==> rebuild --HEAD formulae (neovim, sshr, passage) from latest git"
 brew upgrade --fetch-HEAD neovim "$TAP/sshr" "$TAP/passage" 2>/dev/null || true
 echo "==> done."

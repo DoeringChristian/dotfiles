@@ -67,10 +67,10 @@ brew "gemini-cli"               # brew trails npm a little; accepted for uniform
 brew "doeringc/local/sshr", args: ["HEAD"]      # Rust SSH wrapper
 brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 
-# --- GUI apps (brew casks — these ship Linux variations, so `brew bundle`
-#     installs them on Linux too, not just macOS) ---
+# --- GUI apps + claude CLI (brew casks — these ship Linux variations, so
+#     `brew bundle` installs them on Linux too, not just macOS) ---
 cask "kitty"
 cask "tev"
-# claude is NOT here: the brew cask trails upstream and there's no @latest for a
-# cask. The `claude` CLI is installed by setup.sh via its official installer, which
-# self-updates -> always latest. It's the one deliberately self-managed tool.
+# claude-code@latest tracks the newest release (the plain claude-code cask is
+# pinned/older). brew owns it; auto-update is off in ~/.claude/settings.json.
+cask "claude-code@latest"
