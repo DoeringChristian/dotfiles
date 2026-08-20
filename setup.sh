@@ -54,9 +54,16 @@ brew bundle --file "$REPO/Brewfile"
 if [ "$OS" != Darwin ]; then
     echo "==> Linux GUI apps (kitty / tev / claude)"
     PREFIX="$HOME/.local"; mkdir -p "$PREFIX/bin"
-    curl -fsSL https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin launch=n dest="$PREFIX" 2>/dev/null \
-        && ln -sfn "$PREFIX/kitty.app/bin/kitty" "$PREFIX/bin/kitty" \
-        && ln -sfn "$PREFIX/kitty.app/bin/kitten" "$PREFIX/bin/kitten" || echo "!! kitty failed"
+    if curl -fsSL https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin launch=n dest="$PREFIX" 2>/dev/null; then
+        ln -sfn "$PREFIX/kitty.app/bin/kitty"  "$PREFIX/bin/kitty"
+        ln -sfn "$PREFIX/kitty.app/bin/kitten" "$PREFIX/bin/kitten"
+        # Desktop integration so kitty shows up in the app launcher.
+        mkdir -p "$PREFIX/share/applications"
+        cp -f "$PREFIX/kitty.app/share/applications/"kitty*.desktop "$PREFIX/share/applications/" 2>/dev/null || true
+        sed -i "s|Icon=kitty|Icon=$PREFIX/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g;s|Exec=kitty|Exec=$PREFIX/bin/kitty|g" \
+            "$PREFIX/share/applications/"kitty*.desktop 2>/dev/null || true
+        update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true
+    else echo "!! kitty failed"; fi
     turl="$(curl -fsSL https://api.github.com/repos/Tom94/tev/releases/latest \
         | grep -oE '"browser_download_url": *"[^"]*[Ll]inux[^"]*"' | head -1 | cut -d'"' -f4)"
     [ -n "$turl" ] && curl -fsSL "$turl" -o "$PREFIX/bin/tev" && chmod +x "$PREFIX/bin/tev" || echo "!! tev skipped"

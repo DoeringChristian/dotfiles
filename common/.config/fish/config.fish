@@ -36,7 +36,7 @@ status is-interactive; and begin
     alias jn 'jupyter notebook'
     alias jt 'jupytext --update --to notebook'
     alias jpg2webm 'ffmpeg -r 30 -i %d.jpg output.webmm'
-    alias l 'eza -l -g --icons'
+    alias l 'eza -l -g --icons=auto'   # =auto: newer eza's --icons takes an optional WHEN, else it eats the path arg
     alias la ll
     alias ll 'l -a'
     alias lla 'eza -la'
