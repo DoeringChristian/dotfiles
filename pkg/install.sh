@@ -66,6 +66,10 @@ install_app_linux() {
                 | sh /dev/stdin launch=n dest="$PREFIX" 2>/dev/null || { echo "!! kitty failed"; return; }
             ln -sfn "$PREFIX/kitty.app/bin/kitty"  "$PREFIX/bin/kitty"
             ln -sfn "$PREFIX/kitty.app/bin/kitten" "$PREFIX/bin/kitten" ;;
+        claude)
+            # Homebrew has no casks on Linux; use the official installer -> ~/.local/bin.
+            curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 \
+                && echo "   claude installed" || echo "!! claude installer failed" ;;
         *)
             local url
             url="$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
@@ -78,7 +82,8 @@ install_app_linux() {
 }
 for line in ${CASK_LINES[@]+"${CASK_LINES[@]}"}; do
     n="${line%%|*}"; rest="${line#*|}"
-    if [ "$OS" = Darwin ]; then echo "==> $n (cask)"; brew install --cask "$n"
+    token="$(opt "$rest" cask)"; token="${token:-$n}"   # cask token may differ from tool name
+    if [ "$OS" = Darwin ]; then echo "==> $n (cask $token)"; brew install --cask "$token"
     else echo "==> $n (Linux official build)"; install_app_linux "$n" "$(opt "$rest" github)"; fi
 done
 

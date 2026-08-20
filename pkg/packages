@@ -71,9 +71,13 @@ less              pkg
 # --- local LLM runtime ---
 ollama            pkg
 
-# --- AI CLIs ---
-claude            self    url=https://claude.ai/install.sh   # self-managed, auto-updates
-gemini-cli        npm     pkg=@google/gemini-cli             # brew lags this one
+# --- AI CLIs (all brew) ---
+# claude: brew cask (installs the `claude` CLI). Its own auto-updater is disabled
+# (~/.claude/settings.json autoUpdates:false) so brew is the SOLE owner and there's
+# no version drift; bump it with `brew upgrade --cask`. On Linux (no casks) the
+# installer runs (pkg/install.sh install_app_linux). Trails latest by a few patches.
+claude            cask    cask=claude-code
+gemini-cli        pkg                                          # brew (trails npm ~6 minor; accepted for uniformity)
 # claude-agent-acp dropped: only consumer was agentic.nvim (enabled=false). If you
 # re-enable it, add:  claude-agent-acp  npm  pkg=@zed-industries/claude-code-acp
 
