@@ -7,9 +7,9 @@ fish_config theme choose "Catppuccin Macchiato"
 set -gx fish_key_bindings fish_user_key_bindings
 
 fish_add_path -g ~/.local/bin
-# Homebrew — the toolset lives here (macOS /opt/homebrew or /usr/local; Linux
-# /home/linuxbrew). `brew shellenv` puts its bin/sbin on PATH.
-for b in /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin
+# Homebrew — the toolset lives here. `brew shellenv` puts its bin/sbin on PATH.
+# Checks a rootless home prefix (~/.homebrew) first, then the standard prefixes.
+for b in ~/.homebrew/bin /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin
     if test -x $b/brew
         $b/brew shellenv fish | source
         break

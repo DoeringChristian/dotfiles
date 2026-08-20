@@ -61,8 +61,10 @@ brew "ollama"
 brew "gemini-cli"               # brew trails npm a little; accepted for uniformity
 
 # --- from source, via the in-repo tap (setup.sh registers Formula/*.rb) ---
-brew "doeringc/local/sshr"      # Rust SSH wrapper, git main
-brew "doeringc/local/passage"   # age-backed password store
+# HEAD-only formulae (no stable release) -> args: ["HEAD"] so brew bundle builds
+# from git main instead of erroring on a missing stable.
+brew "doeringc/local/sshr", args: ["HEAD"]      # Rust SSH wrapper
+brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 
 # --- GUI apps + the claude CLI (macOS casks; Linux builds handled by setup.sh) ---
 cask "kitty" if OS.mac?

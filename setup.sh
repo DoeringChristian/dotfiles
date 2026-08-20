@@ -12,15 +12,33 @@ OS="$(uname -s)"
 TAP="doeringc/local"
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# 1. Homebrew. On Linux it installs into the standard prefix (one sudo prompt).
+# 1. Homebrew.
+#   Default: standard prefix (macOS is rootless; Linux /home/linuxbrew needs one
+#   sudo prompt) — this gets prebuilt bottles.
+#   Rootless option (no root at all, e.g. a locked-down server):
+#       BREW_PREFIX="$HOME/.homebrew" ./setup.sh
+#   installs Homebrew into your home dir with no sudo. CAVEAT: a non-standard prefix
+#   has NO prebuilt bottles, so most formulae build from SOURCE (needs a compiler +
+#   time). Use it only where you can't get the standard prefix.
+BREW_PREFIX="${BREW_PREFIX:-}"
 if ! have brew; then
-    echo "==> installing Homebrew"
-    NONINTERACTIVE=1 /bin/bash -c \
-        "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    if [ -n "$BREW_PREFIX" ]; then
+        echo "==> installing Homebrew (rootless) into $BREW_PREFIX"
+        mkdir -p "$BREW_PREFIX"
+        curl -fsSL https://github.com/Homebrew/brew/tarball/master \
+            | tar xz --strip-components 1 -C "$BREW_PREFIX"
+    else
+        echo "==> installing Homebrew"
+        NONINTERACTIVE=1 /bin/bash -c \
+            "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
 fi
-for p in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
-    [ -x "$p" ] && eval "$("$p" shellenv)"
+for p in "${BREW_PREFIX:+$BREW_PREFIX/bin/brew}" \
+         "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew \
+         /home/linuxbrew/.linuxbrew/bin/brew; do
+    [ -n "$p" ] && [ -x "$p" ] && { eval "$("$p" shellenv)"; break; }
 done
+[ -n "$BREW_PREFIX" ] && brew update --force --quiet 2>/dev/null || true
 
 # 2. Register + trust the in-repo tap for the custom formulae (sshr, passage).
 #    Homebrew refuses to load formulae from an untrusted third-party tap.
