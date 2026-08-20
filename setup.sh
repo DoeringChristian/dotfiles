@@ -60,7 +60,11 @@ if [ "$OS" != Darwin ]; then
         # Desktop integration so kitty shows up in the app launcher.
         mkdir -p "$PREFIX/share/applications"
         cp -f "$PREFIX/kitty.app/share/applications/"kitty*.desktop "$PREFIX/share/applications/" 2>/dev/null || true
-        sed -i "s|Icon=kitty|Icon=$PREFIX/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g;s|Exec=kitty|Exec=$PREFIX/bin/kitty|g" \
+        # Make Exec/TryExec/Icon absolute — GNOME hides an entry whose TryExec name
+        # isn't on its (minimal) session PATH, and needs an absolute icon path.
+        sed -i "s|Icon=kitty|Icon=$PREFIX/kitty.app/share/icons/hicolor/256x256/apps/kitty.png|g; \
+                s|Exec=kitty|Exec=$PREFIX/bin/kitty|g; \
+                s|TryExec=kitty|TryExec=$PREFIX/bin/kitty|g" \
             "$PREFIX/share/applications/"kitty*.desktop 2>/dev/null || true
         update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true
     else echo "!! kitty failed"; fi
