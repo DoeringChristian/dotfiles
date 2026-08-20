@@ -39,6 +39,7 @@ brew "zellij"
 # --- monitoring / tooling / secrets / typesetting / config ---
 brew "btop"
 brew "uv"
+brew "pixi"                     # package manager for project toolchains (mitsuba, …)
 brew "age"
 brew "typst"
 brew "stow"
