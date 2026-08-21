@@ -7,6 +7,17 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
 OS="$(uname -s)"; TAP="doeringc/local"
 
+# --type <profile> layers Brewfile.<profile> (e.g. workstation) on top of the base
+# Brewfile. No --type = base only (server).
+TYPE=base
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --type)   TYPE="${2:?--type needs a value}"; shift 2 ;;
+        --type=*) TYPE="${1#*=}"; shift ;;
+        *) echo "sync.sh: unknown argument '$1'" >&2; exit 2 ;;
+    esac
+done
+
 # brew on PATH (standard prefixes + rootless ~/.homebrew)
 for p in "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
     [ -x "$p" ] && { eval "$("$p" shellenv)"; break; }
@@ -18,8 +29,16 @@ brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
 brew trust "$TAP" >/dev/null 2>&1 || true
 
-echo "==> brew bundle (install anything missing)"
+echo "==> brew bundle (base)"
 brew bundle --file "$REPO/Brewfile"
+if [ "$TYPE" != base ]; then
+    [ -f "$REPO/Brewfile.$TYPE" ] || {
+        echo "no Brewfile.$TYPE (available: $(ls Brewfile.* 2>/dev/null | sed 's/Brewfile\.//' | tr '\n' ' '))" >&2
+        exit 1
+    }
+    echo "==> brew bundle (profile: $TYPE)"
+    brew bundle --file "$REPO/Brewfile.$TYPE"
+fi
 
 # Linux: kitty's cask installs the binary but not a GNOME .desktop, so make one.
 if [ "$OS" != Darwin ] && command -v kitty >/dev/null 2>&1; then

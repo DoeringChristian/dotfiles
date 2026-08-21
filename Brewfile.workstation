@@ -1,0 +1,12 @@
+# Brewfile.workstation — extra packages for a GUI workstation, layered ON TOP of the
+# base Brewfile. Installed only when this machine's profile is "workstation"
+# (set with `./setup.sh workstation`, stored in ~/.config/dotfiles/profile; see
+# sync.sh). Server machines never install these.
+#
+# Same DSL as the base Brewfile: brew / cask / npm / cargo / ...
+
+cask "inkscape"
+# add more workstation-only apps here, e.g.:
+# cask "blender"
+# cask "gimp"
+cask "obsidian"

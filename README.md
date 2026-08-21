@@ -35,6 +35,22 @@ Day-to-day:
 
 After setup, **restart your terminal**.
 
+## Profiles (per-machine package sets)
+
+The base `Brewfile` is installed everywhere. Extra packages for a machine type live
+in `Brewfile.<profile>` and are layered on top with `--type`:
+
+```bash
+./setup.sh --type workstation   # base + Brewfile.workstation (inkscape, …)
+./sync.sh  --type workstation   # same, day-to-day
+./setup.sh                      # base only (a plain server)
+# one-liner:  … | bash -s -- --type workstation
+```
+
+Add a profile = add a `Brewfile.<name>` (same DSL: `brew`/`cask`/`npm`/…). Servers
+just use the base (no `--type`). `update.sh` upgrades whatever's installed, so it
+needs no profile.
+
 ## How it works
 
 | Concern | Mechanism |

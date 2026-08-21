@@ -2,7 +2,8 @@
 # setup.sh — first-time setup: install Homebrew, then sync (packages + configs via
 # sync.sh), then decrypt the age secret.
 #
-#   ./setup.sh                       # everything
+#   ./setup.sh                       # base toolset
+#   ./setup.sh --type workstation    # base + Brewfile.workstation (GUI apps, …)
 #   SKIP_SECRETS=1 ./setup.sh        # skip the age key (CI / minimal)
 #   BREW_PREFIX="$HOME/.homebrew" ./setup.sh   # ROOTLESS install (no sudo). Caveat:
 #       a non-standard prefix has no prebuilt bottles, so most formulae build from
@@ -35,7 +36,8 @@ done
 [ -n "$BREW_PREFIX" ] && brew update --force --quiet 2>/dev/null || true
 
 # 2. Packages + configs (install everything, stow) — shared with ./sync.sh.
-bash "$REPO/sync.sh"
+#    Forwards --type <profile> (e.g. `./setup.sh --type workstation`).
+bash "$REPO/sync.sh" "$@"
 
 # 3. Secrets: decrypt the age key (age is a brew tool now on PATH).
 if [ "${SKIP_SECRETS:-0}" != 1 ] && [ -f ./setup/age-key.age ]; then

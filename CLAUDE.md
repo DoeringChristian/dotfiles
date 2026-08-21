@@ -45,8 +45,13 @@ Each line is a tool. Notable entries:
 `~/.claude/settings.json` (`autoUpdates:false`) so brew is the sole owner (no
 version drift). Bump with `brew upgrade --cask`.
 
-To add a tool: add a `Brewfile` line, run `./setup.sh`. From-source: add
+To add a tool: add a `Brewfile` line, run `./sync.sh`. From-source: add
 `Formula/<name>.rb` + a `brew "doeringc/local/<name>"` line.
+
+**Profiles**: the base `Brewfile` is installed everywhere; `Brewfile.<profile>`
+(e.g. `Brewfile.workstation`) adds machine-type extras, layered via `--type`
+(`./setup.sh --type workstation` / `./sync.sh --type workstation`). No `--type` =
+base only (server). `sync.sh` parses `--type`; `setup.sh`/`bootstrap.sh` forward it.
 
 ## Repository structure
 

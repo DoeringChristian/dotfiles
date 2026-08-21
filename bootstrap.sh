@@ -3,7 +3,8 @@
 # (which installs Homebrew and everything else).
 #
 #   curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
-#   # or, in a clone:  ./bootstrap.sh
+#   # workstation profile:  ... | bash -s -- --type workstation
+#   # or, in a clone:  ./bootstrap.sh [--type workstation]
 #
 # Env overrides:
 #   DOTFILES_REPO       git URL to clone (default: this repo)
@@ -51,4 +52,4 @@ ensure_prereqs
 fetch_repo
 log "Handing off to setup.sh..."
 cd "$DEST"
-exec ./setup.sh
+exec ./setup.sh "$@"     # forwards e.g. --type workstation
