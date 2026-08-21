@@ -1,11 +1,8 @@
-# mise: local data dir (only created for sandboxed experiments; real installs
-# go to ~/.local/share/mise) and per-machine overrides.
-.mise/
-mise.local.toml
+# per-machine choices (profile, …) written by sync.sh via --type
+dotfiles.lock
 
 # nix leftovers
 result
-nvim.log
 
 # macOS Finder junk
 **/.DS_Store

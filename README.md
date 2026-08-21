@@ -41,15 +41,18 @@ The base `Brewfile` is installed everywhere. Extra packages for a machine type l
 in `Brewfile.<profile>` and are layered on top with `--type`:
 
 ```bash
-./setup.sh --type workstation   # base + Brewfile.workstation (inkscape, …)
-./sync.sh  --type workstation   # same, day-to-day
-./setup.sh                      # base only (a plain server)
+./setup.sh --type workstation   # base + Brewfile.workstation; saves the choice
+./sync.sh                       # bare — reuses the saved profile (no need to retype)
+./sync.sh  --type server        # switch profiles (re-saves)
 # one-liner:  … | bash -s -- --type workstation
 ```
 
+The `--type` choice is saved to **`dotfiles.lock`** (repo root, gitignored,
+per-machine), so bare `./sync.sh` / `./update.sh` reuse it. Precedence:
+`--type` arg → `dotfiles.lock` → base.
+
 Add a profile = add a `Brewfile.<name>` (same DSL: `brew`/`cask`/`npm`/…). Servers
-just use the base (no `--type`). `update.sh` upgrades whatever's installed, so it
-needs no profile.
+just use the base. `update.sh` upgrades whatever's installed, so it needs no profile.
 
 ## How it works
 

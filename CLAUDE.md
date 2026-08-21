@@ -50,8 +50,10 @@ To add a tool: add a `Brewfile` line, run `./sync.sh`. From-source: add
 
 **Profiles**: the base `Brewfile` is installed everywhere; `Brewfile.<profile>`
 (e.g. `Brewfile.workstation`) adds machine-type extras, layered via `--type`
-(`./setup.sh --type workstation` / `./sync.sh --type workstation`). No `--type` =
-base only (server). `sync.sh` parses `--type`; `setup.sh`/`bootstrap.sh` forward it.
+(`./setup.sh --type workstation`). `sync.sh` parses `--type` and persists it to
+`dotfiles.lock` (repo root, gitignored, per-machine) via the `lock_get`/`lock_set`
+helpers, so a bare `./sync.sh` reuses the saved profile. Precedence: `--type` arg >
+`dotfiles.lock` > `base`. `setup.sh`/`bootstrap.sh` forward `--type` to `sync.sh`.
 
 ## Repository structure
 

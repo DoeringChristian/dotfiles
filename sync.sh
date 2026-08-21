@@ -8,15 +8,26 @@ REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
 OS="$(uname -s)"; TAP="doeringc/local"
 
 # --type <profile> layers Brewfile.<profile> (e.g. workstation) on top of the base
-# Brewfile. No --type = base only (server).
-TYPE=base
+# Brewfile. The choice is saved to dotfiles.lock (per-machine, gitignored) so a bare
+# `./sync.sh` / `./update.sh` reuses it. Precedence: --type arg > dotfiles.lock > base.
+LOCK="$REPO/dotfiles.lock"
+lock_get() { sed -n "s/^$1=//p" "$LOCK" 2>/dev/null | tail -1; }
+lock_set() {
+    local t; t="$(mktemp)"
+    { [ -f "$LOCK" ] && grep -vE "^$1=" "$LOCK" > "$t"; } 2>/dev/null || true
+    echo "$1=$2" >> "$t"; mv "$t" "$LOCK"
+}
+
+TYPE_ARG=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --type)   TYPE="${2:?--type needs a value}"; shift 2 ;;
-        --type=*) TYPE="${1#*=}"; shift ;;
+        --type)   TYPE_ARG="${2:?--type needs a value}"; shift 2 ;;
+        --type=*) TYPE_ARG="${1#*=}"; shift ;;
         *) echo "sync.sh: unknown argument '$1'" >&2; exit 2 ;;
     esac
 done
+if [ -n "$TYPE_ARG" ]; then TYPE="$TYPE_ARG"; lock_set type "$TYPE"    # explicit choice -> remember it
+else TYPE="$(lock_get type)"; TYPE="${TYPE:-base}"; fi                # else the saved one, or base
 
 # brew on PATH (standard prefixes + rootless ~/.homebrew)
 for p in "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
