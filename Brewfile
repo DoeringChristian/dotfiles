@@ -63,7 +63,7 @@ brew "xclip" if OS.linux?          # X11 fallback
 
 # --- LLM runtime + AI CLIs ---
 brew "ollama"
-brew "gemini-cli"               # brew trails npm a little; accepted for uniformity
+npm "@google/gemini-cli"        # via brew bundle's npm entry -> latest (brew's formula lags)
 
 # --- from source, via the in-repo tap (setup.sh registers Formula/*.rb) ---
 # HEAD-only formulae (no stable release) -> args: ["HEAD"] so brew bundle builds

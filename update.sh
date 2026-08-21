@@ -21,4 +21,7 @@ brew update && brew upgrade
 brew upgrade --cask --greedy
 echo "==> rebuild --HEAD formulae (neovim, sshr, passage) from latest git"
 brew upgrade --fetch-HEAD neovim "$TAP/sshr" "$TAP/passage" 2>/dev/null || true
+# brew bundle's npm entry only installs-if-missing, so bump npm globals (gemini-cli).
+echo "==> npm globals -> latest"
+command -v npm >/dev/null 2>&1 && npm update -g 2>/dev/null || true
 echo "==> done."
