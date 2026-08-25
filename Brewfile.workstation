@@ -1,12 +1,20 @@
 # Brewfile.workstation — extra packages for a GUI workstation, layered ON TOP of the
 # base Brewfile. Installed only when this machine's profile is "workstation"
-# (set with `./setup.sh workstation`, stored in ~/.config/dotfiles/profile; see
-# sync.sh). Server machines never install these.
+# (`./setup.sh --type workstation`, remembered in dotfiles.lock; see sync.sh).
+# Server machines never install these.
 #
-# Same DSL as the base Brewfile: brew / cask / npm / cargo / ...
+# Same DSL as the base Brewfile: brew / cask / npm / cargo / tap / ...
 
 cask "inkscape"
+cask "obsidian"
+
+# zathura — keyboard-driven PDF/PS/DjVu viewer (not in homebrew-core).
+# The mupdf plugin needs a one-time symlink into zathura's plugin dir (tap caveat):
+#   ln -s "$(brew --prefix zathura-pdf-mupdf)"/libpdf-mupdf.* "$(brew --prefix zathura)"/lib/zathura/
+tap "homebrew-zathura/zathura"
+brew "homebrew-zathura/zathura/zathura"
+brew "homebrew-zathura/zathura/zathura-pdf-mupdf"
+
 # add more workstation-only apps here, e.g.:
 # cask "blender"
 # cask "gimp"
-cask "obsidian"
