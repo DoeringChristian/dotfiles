@@ -4,18 +4,19 @@ set -euo pipefail
 OS="$(uname -s)"
 
 usage() {
-    echo "Usage: claudebox [OPTIONS] [PROJECT_DIR] [-- CLAUDE_ARGS...]"
+    echo "Usage: claudebox [OPTIONS] [PROJECT_DIR] [-- AGENT_ARGS...]"
     echo ""
     if [[ "$OS" == "Darwin" ]]; then
-        echo "Run Claude Code with --dangerously-skip-permissions inside a Seatbelt sandbox."
+        echo "Run Claude Code or Codex without internal permissions inside a Seatbelt sandbox."
     else
-        echo "Run Claude Code with --dangerously-skip-permissions inside a Bubblewrap sandbox."
+        echo "Run Claude Code or Codex without internal permissions inside a Bubblewrap sandbox."
     fi
     echo ""
     echo "Arguments:"
     echo "  PROJECT_DIR          Project directory (default: current directory)"
     echo ""
     echo "Options:"
+    echo "  --agent NAME         Agent to launch: claude (default) or codex"
     echo "  --bash               Launch a bash shell inside the sandbox"
     if [[ "$OS" != "Darwin" ]]; then
         echo "  --bind PATH          Bind extra directory read-write (repeatable)"
@@ -27,23 +28,26 @@ usage() {
     echo "  --no-block-env       Don't block any .env files"
     echo "  -h, --help           Show this help"
     echo ""
-    echo "Anything after -- is passed directly to claude."
+    echo "Anything after -- is passed directly to the selected agent."
     echo ""
     echo "Examples:"
     echo "  claudebox ~/projects/myapp"
     echo "  claudebox ~/projects/myapp -- 'Review the code'"
     echo "  claudebox --ssh ~/projects/myapp"
+    echo "  claudebox --agent codex ~/projects/myapp"
+    echo "  codexbox ~/projects/myapp  # shorthand for --agent codex"
     echo "  claudebox  # uses current directory"
 }
 
 BIND_SSH=false
 SHARE_PID=false
+AGENT=claude
 BLOCK_ENV=".env,.env.local,.env.production"
 PROJECT_DIR=""
 SHELL_MODE=""
 EXTRA_BINDS=()
 EXTRA_WRITE_PATHS=()
-CLAUDE_ARGS=()
+AGENT_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -54,6 +58,10 @@ while [[ $# -gt 0 ]]; do
     --bash)
         SHELL_MODE=bash
         shift
+        ;;
+    --agent)
+        AGENT="$2"
+        shift 2
         ;;
     --share-pid)
         SHARE_PID=true
@@ -84,20 +92,28 @@ while [[ $# -gt 0 ]]; do
         ;;
     --)
         shift
-        CLAUDE_ARGS+=("$@")
+        AGENT_ARGS+=("$@")
         break
         ;;
     *)
         if [[ -z "$PROJECT_DIR" && -d "$1" ]]; then
             PROJECT_DIR="$1"
         else
-            # Forward unrecognized args to claude
-            CLAUDE_ARGS+=("$1")
+            # Forward unrecognized args to the selected agent
+            AGENT_ARGS+=("$1")
         fi
         shift
         ;;
     esac
 done
+
+case "$AGENT" in
+    claude | codex) ;;
+    *)
+        echo "Error: unsupported agent '$AGENT' (expected claude or codex)" >&2
+        exit 2
+        ;;
+esac
 
 PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
 # Physical path (resolve symlinks): the project dir is bind-mounted into the
@@ -192,15 +208,19 @@ if [[ -n "$SHELL_MODE" ]]; then
     fi
     ENTRY_ARGS=()
 else
-    # Resolve `claude` exactly as your shell does — whatever is first on PATH.
+    # Resolve the selected agent exactly as your shell does — whatever is first on PATH.
     # Install-mechanism-agnostic: works for a version-manager shim, a native
     # binary, a plain PATH entry — the script special-cases nothing.
-    ENTRY_BIN="$(command -v claude 2>/dev/null || true)"
+    ENTRY_BIN="$(command -v "$AGENT" 2>/dev/null || true)"
     if [[ -z "$ENTRY_BIN" || ! -x "$ENTRY_BIN" ]]; then
-        echo "Error: claude not found in PATH" >&2
+        echo "Error: $AGENT not found in PATH" >&2
         exit 1
     fi
-    ENTRY_ARGS=(--dangerously-skip-permissions ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"})
+    if [[ "$AGENT" == "claude" ]]; then
+        ENTRY_ARGS=(--dangerously-skip-permissions ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"})
+    else
+        ENTRY_ARGS=(--dangerously-bypass-approvals-and-sandbox ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"})
+    fi
 fi
 
 # ── macOS: Seatbelt sandbox ──────────────────────────────────────────────────
@@ -220,10 +240,6 @@ if [[ "$OS" == "Darwin" ]]; then
 ;; Allow writes to project directory
 (allow file-write* (subpath "'"$PROJECT_DIR"'"))
 
-;; Allow writes to Claude config
-(allow file-write* (subpath "'"$HOME/.claude"'"))
-(allow file-write* (literal "'"$HOME/.claude.json"'"))
-
 ;; Allow writes to temp directories
 (allow file-write* (subpath "/private/tmp"))
 (allow file-write* (subpath "/private/var/folders"))
@@ -242,6 +258,17 @@ if [[ "$OS" == "Darwin" ]]; then
 (allow file-write* (subpath "'"$HOME/Library/Application Support/Claude"'"))
 (allow file-write* (subpath "'"$HOME/Library/Caches/claude-cli-nodejs"'"))
 '
+
+    if [[ "$AGENT" == "claude" ]]; then
+        PROFILE+=';; Allow writes to Claude config
+(allow file-write* (subpath "'"$HOME/.claude"'"))
+(allow file-write* (literal "'"$HOME/.claude.json"'"))
+'
+    elif [[ "$AGENT" == "codex" ]]; then
+        PROFILE+=';; Allow writes to Codex config and session state
+(allow file-write* (subpath "'"$HOME/.codex"'"))
+'
+    fi
 
     # Extra write paths from --bind or .claudebox config
     for extra_path in "${EXTRA_WRITE_PATHS[@]+"${EXTRA_WRITE_PATHS[@]}"}"; do
@@ -315,10 +342,14 @@ if [[ "$BIND_SSH" != true ]] && [[ -d "$HOME/.ssh" ]]; then
     BWRAP_ARGS+=(--tmpfs "$HOME/.ssh")
 fi
 
-# Claude's own read-write state, overlaid on the read-only home so sessions/config
-# persist and its cache stays writable. (Claude's data — not any package manager.)
-[[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
-[[ -f "$HOME/.claude.json" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude.json" "$HOME/.claude.json")
+# The selected agent's read-write state, overlaid on the read-only home so
+# sessions and config persist.
+if [[ "$AGENT" == "claude" ]]; then
+    [[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
+    [[ -f "$HOME/.claude.json" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude.json" "$HOME/.claude.json")
+elif [[ "$AGENT" == "codex" ]]; then
+    [[ -d "$HOME/.codex" ]] && BWRAP_ARGS+=(--bind "$HOME/.codex" "$HOME/.codex")
+fi
 [[ -d "$HOME/.cache" ]] && BWRAP_ARGS+=(--bind "$HOME/.cache" "$HOME/.cache")
 
 # Project directory (read-write)

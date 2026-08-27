@@ -79,9 +79,11 @@ setup.sh / bootstrap.sh / update.sh
   project toolchains). No version-manager shims.
 - **Secrets**: age + passage. `setup/age-key.age` is decrypted to
   `~/.local/share/age/key.txt` (and `~/.passage/identities`) by `setup.sh`.
-- **claudebox** (`common/.local/bin/claudebox`): sandboxes `claude` (Seatbelt on
-  macOS / Bubblewrap on Linux). It resolves `command -v claude` and binds the real
-  `$HOME` read-only — install-mechanism-agnostic, no special-casing.
+- **claudebox / codexbox** (`common/.local/bin/`): sandboxes Claude Code or Codex
+  (Seatbelt on macOS / Bubblewrap on Linux). `codexbox` is shorthand for
+  `claudebox --agent codex`. The launcher resolves the selected agent from `PATH`
+  and binds the real `$HOME` read-only — install-mechanism-agnostic, no
+  special-casing.
 
 ## sshr (special case)
 
