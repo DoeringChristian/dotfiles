@@ -78,3 +78,4 @@ cask "tev"
 # claude-code@latest tracks the newest release (the plain claude-code cask is
 # pinned/older). brew owns it; auto-update is off in ~/.claude/settings.json.
 cask "claude-code@latest"
+cask "codex"
