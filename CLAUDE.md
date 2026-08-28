@@ -84,6 +84,10 @@ setup.sh / bootstrap.sh / update.sh
   `claudebox --agent codex`. The launcher resolves the selected agent from `PATH`
   and binds the real `$HOME` read-only — install-mechanism-agnostic, no
   special-casing.
+- **Shared research skill**: Claude owns the canonical
+  `common/.claude/skills/research-project-init/`; the Codex entry at
+  `common/.agents/skills/research-project-init/` delegates to it so its workflow
+  and bundled `registry.py` remain single-source.
 
 ## sshr (special case)
 
