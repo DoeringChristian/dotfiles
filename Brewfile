@@ -64,6 +64,12 @@ brew "xclip" if OS.linux?          # X11 fallback
 # --- LLM runtime + AI CLIs ---
 brew "ollama"
 npm "@google/gemini-cli"        # via brew bundle's npm entry -> latest (brew's formula lags)
+npm "@earendil-works/pi-coding-agent"
+
+# claude-code@latest tracks the newest release (the plain claude-code cask is
+# pinned/older). brew owns it; auto-update is off in ~/.claude/settings.json.
+cask "claude-code@latest"
+cask "codex"
 
 # --- from source, via the in-repo tap (setup.sh registers Formula/*.rb) ---
 # HEAD-only formulae (no stable release) -> args: ["HEAD"] so brew bundle builds
@@ -75,7 +81,3 @@ brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 #     `brew bundle` installs them on Linux too, not just macOS) ---
 cask "kitty"
 cask "tev"
-# claude-code@latest tracks the newest release (the plain claude-code cask is
-# pinned/older). brew owns it; auto-update is off in ~/.claude/settings.json.
-cask "claude-code@latest"
-cask "codex"
