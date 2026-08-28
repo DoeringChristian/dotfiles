@@ -65,6 +65,7 @@ brew "xclip" if OS.linux?          # X11 fallback
 brew "ollama"
 npm "@google/gemini-cli"        # via brew bundle's npm entry -> latest (brew's formula lags)
 npm "@earendil-works/pi-coding-agent"
+npm "@agentclientprotocol/codex-acp"
 
 # claude-code@latest tracks the newest release (the plain claude-code cask is
 # pinned/older). brew owns it; auto-update is off in ~/.claude/settings.json.
