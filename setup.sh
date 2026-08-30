@@ -24,7 +24,7 @@ if ! have brew && ! { [ -n "$BREW_PREFIX" ] && [ -x "$BREW_PREFIX/bin/brew" ]; }
         curl -fsSL https://github.com/Homebrew/brew/tarball/master | tar xz --strip-components 1 -C "$BREW_PREFIX"
     else
         echo "==> installing Homebrew"
-        NONINTERACTIVE=1 /bin/bash -c \
+        /bin/bash -c \
             "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
 fi
