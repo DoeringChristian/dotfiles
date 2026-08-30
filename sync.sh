@@ -13,7 +13,10 @@ TAP="doeringc/local"
 # Brewfile. The choice is saved to dotfiles.lock (per-machine, gitignored) so a bare
 # `./sync.sh` / `./update.sh` reuses it. Precedence: --type arg > dotfiles.lock > base.
 LOCK="$REPO/dotfiles.lock"
-lock_get() { sed -n "s/^$1=//p" "$LOCK" 2>/dev/null | tail -1; }
+lock_get() {
+    [ -f "$LOCK" ] || return 0
+    sed -n "s/^$1=//p" "$LOCK" | tail -1
+}
 lock_set() {
     local t
     t="$(mktemp)"
