@@ -6,9 +6,26 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
 TAP="doeringc/local"
 
-for p in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
-    [ -x "$p" ] && eval "$("$p" shellenv)"
+for p in "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+    [ -x "$p" ] && {
+        eval "$("$p" shellenv)"
+        break
+    }
 done
+command -v brew >/dev/null 2>&1 || {
+    echo "brew not found — run ./setup.sh first" >&2
+    exit 1
+}
+
+# Keep Homebrew's modern Node ahead of an old distro Node. npm's env-based
+# launcher otherwise fails on imports such as `node:path`.
+brew list --versions node >/dev/null 2>&1 || brew install node
+export PATH="$(brew --prefix node)/bin:$PATH"
+hash -r
+
+if [ "$(uname -s)" = Linux ]; then
+    export HOMEBREW_MAKE_JOBS="${HOMEBREW_MAKE_JOBS:-2}"
+fi
 
 # refresh the tap in case Formula/*.rb changed in the repo
 brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true

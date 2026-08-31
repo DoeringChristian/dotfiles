@@ -62,6 +62,24 @@ command -v brew >/dev/null 2>&1 || {
     exit 1
 }
 
+# npm's launcher uses `#!/usr/bin/env node`. Some Linux machines have an old
+# distro Node earlier on PATH, which cannot resolve modern `node:` imports even
+# though Homebrew's npm is selected. Install Node first and pin its bin directory
+# ahead of the system PATH before brew bundle processes npm entries.
+brew list --versions node >/dev/null 2>&1 || brew install node
+export PATH="$(brew --prefix node)/bin:$PATH"
+hash -r
+node -e "require('node:path')" >/dev/null 2>&1 || {
+    echo "Homebrew Node is not active (node: $(command -v node), version: $(node --version 2>/dev/null || echo unknown))" >&2
+    exit 1
+}
+
+# HEAD builds can otherwise exhaust memory by compiling once per CPU core on
+# Linux servers. Callers can still override this (for example, set it to 8).
+if [ "$OS" = Linux ]; then
+    export HOMEBREW_MAKE_JOBS="${HOMEBREW_MAKE_JOBS:-2}"
+fi
+
 # Custom-formula tap (sshr, passage) must be registered + trusted for brew bundle.
 brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
