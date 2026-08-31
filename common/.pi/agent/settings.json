@@ -6,6 +6,8 @@
   "packages": [
     "npm:@juicesharp/rpiv-ask-user-question",
     "npm:pi-web-access",
-    "npm:pi-subagents"
+    "npm:pi-subagents",
+    "npm:remote-pi",
+    "npm:pi-background-tasks"
   ]
 }
