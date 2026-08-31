@@ -62,17 +62,32 @@ command -v brew >/dev/null 2>&1 || {
     exit 1
 }
 
-# npm's launcher uses `#!/usr/bin/env node`. Some Linux machines have an old
-# distro Node earlier on PATH, which cannot resolve modern `node:` imports even
-# though Homebrew's npm is selected. Install Node first and pin its bin directory
-# ahead of the system PATH before brew bundle processes npm entries.
+# npm uses `#!/usr/bin/env node`. Ensure Homebrew's Node is installed and first
+# on PATH before brew bundle handles npm entries; otherwise an older distro Node
+# (for example Ubuntu's /usr/bin/node) may execute Homebrew's modern npm.
 brew list --versions node >/dev/null 2>&1 || brew install node
-export PATH="$(brew --prefix node)/bin:$PATH"
+NODE_PREFIX="$(brew --prefix node)"
+export PATH="$NODE_PREFIX/bin:$PATH"
 hash -r
 node -e "require('node:path')" >/dev/null 2>&1 || {
-    echo "Homebrew Node is not active (node: $(command -v node), version: $(node --version 2>/dev/null || echo unknown))" >&2
+    echo "Homebrew Node is not active (found $(command -v node), $(node --version 2>/dev/null || echo unknown))" >&2
     exit 1
 }
+
+# Homebrew Bundle discovers npm separately, then npm's env-based shebang can pick
+# an old distro Node from Bundle's sanitized PATH. Put a temporary npm wrapper at
+# the front of the PATH Bundle captures; it still uses the npm declarations in
+# the Brewfile, but pins their execution to Homebrew's Node and npm.
+NPM_WRAPPER_DIR="$(mktemp -d)"
+cleanup_npm_wrapper() { rm -rf "$NPM_WRAPPER_DIR"; }
+trap cleanup_npm_wrapper EXIT
+cat >"$NPM_WRAPPER_DIR/npm" <<EOF_NPM
+#!/bin/sh
+exec "$NODE_PREFIX/bin/node" "$NODE_PREFIX/bin/npm" "\$@"
+EOF_NPM
+chmod +x "$NPM_WRAPPER_DIR/npm"
+export PATH="$NPM_WRAPPER_DIR:$PATH"
+hash -r
 
 # HEAD builds can otherwise exhaust memory by compiling once per CPU core on
 # Linux servers. Callers can still override this (for example, set it to 8).
@@ -95,6 +110,12 @@ if [ "$TYPE" != base ]; then
     echo "==> brew bundle (profile: $TYPE)"
     brew bundle --file "$REPO/Brewfile.$TYPE"
 fi
+
+# Bundle is finished; remove the compatibility wrapper now rather than at exit.
+export PATH="${PATH#"$NPM_WRAPPER_DIR:"}"
+cleanup_npm_wrapper
+trap - EXIT
+hash -r
 
 # Linux: kitty's cask installs the binary but not a GNOME .desktop, so make one.
 if [ "$OS" != Darwin ] && command -v kitty >/dev/null 2>&1; then

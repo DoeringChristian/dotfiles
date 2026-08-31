@@ -20,7 +20,10 @@ command -v brew >/dev/null 2>&1 || {
 # Keep Homebrew's modern Node ahead of an old distro Node. npm's env-based
 # launcher otherwise fails on imports such as `node:path`.
 brew list --versions node >/dev/null 2>&1 || brew install node
-export PATH="$(brew --prefix node)/bin:$PATH"
+NODE_PREFIX="$(brew --prefix node)"
+NODE="$NODE_PREFIX/bin/node"
+NPM_CLI="$NODE_PREFIX/bin/npm"
+export PATH="$NODE_PREFIX/bin:$PATH"
 hash -r
 
 if [ "$(uname -s)" = Linux ]; then
@@ -38,7 +41,8 @@ brew update && brew upgrade
 brew upgrade --cask --greedy
 echo "==> rebuild --HEAD formulae (neovim, sshr, passage) from latest git"
 brew upgrade --fetch-HEAD neovim "$TAP/sshr" "$TAP/passage" 2>/dev/null || true
-# brew bundle's npm entry only installs-if-missing, so bump npm globals (gemini-cli).
+# brew bundle's npm entry only installs-if-missing, so bump npm globals. Invoke
+# npm through Homebrew's Node explicitly to avoid an old distro Node on PATH.
 echo "==> npm globals -> latest"
-command -v npm >/dev/null 2>&1 && npm update -g 2>/dev/null || true
+[ -f "$NPM_CLI" ] && "$NODE" "$NPM_CLI" update -g 2>/dev/null || true
 echo "==> done."
