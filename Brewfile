@@ -2,8 +2,8 @@
 # One list for every machine. macOS uses casks for GUI apps; on Linux (no cask
 # support) setup.sh installs those from official builds instead.
 #
-# Two tools come from the in-repo tap (Formula/*.rb), which setup.sh registers
-# before `brew bundle`: sshr and passage (built from git main via --HEAD).
+# Three tools come from the in-repo tap (Formula/*.rb), which setup.sh registers
+# before `brew bundle`: neovim, sshr, and passage (built from git main via --HEAD).
 #
 # Add a tool = add a line. Keep everything at latest with `./update.sh`.
 
@@ -13,7 +13,9 @@ brew "node"
 brew "rust"
 
 # --- editors ---
-brew "neovim", args: ["HEAD"]   # master (~= nightly); brew pulls cmake/gettext to build
+# The local formula tracks core but keeps Linux source builds on Homebrew's glibc
+# headers instead of mixing them with the host distro's /usr/include.
+brew "doeringc/local/neovim", args: ["HEAD"]   # master (~= nightly)
 brew "vim"
 
 # --- search / files / navigation ---
@@ -74,7 +76,7 @@ cask "codex"
 
 # --- from source, via the in-repo tap (setup.sh registers Formula/*.rb) ---
 # HEAD-only formulae (no stable release) -> args: ["HEAD"] so brew bundle builds
-# from git main instead of erroring on a missing stable.
+# from git main instead of erroring on a missing stable. Neovim is listed above.
 brew "doeringc/local/sshr", args: ["HEAD"]      # Rust SSH wrapper
 brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 

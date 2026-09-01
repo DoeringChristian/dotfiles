@@ -95,10 +95,18 @@ if [ "$OS" = Linux ]; then
     export HOMEBREW_MAKE_JOBS="${HOMEBREW_MAKE_JOBS:-2}"
 fi
 
-# Custom-formula tap (sshr, passage) must be registered + trusted for brew bundle.
+# Custom-formula tap (neovim, sshr, passage) must be registered + trusted for brew bundle.
 brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
 brew trust "$TAP" >/dev/null 2>&1 || true
+
+# One-time migration from homebrew/core/neovim to the local HEAD formula. The
+# formula names conflict, so remove the core installation before Bundle installs
+# the tap-qualified replacement.
+if brew list --formula --full-name | grep -Eq '^(homebrew/core/)?neovim$'; then
+    echo "==> replacing homebrew/core/neovim with $TAP/neovim"
+    brew uninstall --ignore-dependencies neovim
+fi
 
 echo "==> brew bundle (base)"
 brew bundle --file "$REPO/Brewfile"
