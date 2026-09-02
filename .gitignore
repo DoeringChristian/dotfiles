@@ -6,3 +6,9 @@ result
 
 # macOS Finder junk
 **/.DS_Store
+
+# sunshine runtime state — on a fresh machine stow folds ~/.config/sunshine into
+# the repo, so keep the credentials/state/log it writes there out of git
+common/.config/sunshine/credentials/
+common/.config/sunshine/sunshine_state.json
+common/.config/sunshine/*.log
