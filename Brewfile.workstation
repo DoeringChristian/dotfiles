@@ -9,13 +9,12 @@ cask "inkscape"
 cask "obsidian"
 
 # zathura — keyboard-driven PDF/PS/DjVu viewer (not in homebrew-core).
-# The homebrew-zathura tap is macOS-focused; skip it on Linux instead of
-# breaking workstation sync there.
-# The mupdf plugin needs a one-time symlink into zathura's plugin dir (tap caveat):
-#   ln -s "$(brew --prefix zathura-pdf-mupdf)"/libpdf-mupdf.* "$(brew --prefix zathura)"/lib/zathura/
+# macOS uses the upstream zathura tap; Linux uses our in-repo tap formulae.
 tap "homebrew-zathura/zathura" if OS.mac?
 brew "homebrew-zathura/zathura/zathura" if OS.mac?
 brew "homebrew-zathura/zathura/zathura-pdf-mupdf" if OS.mac?
+brew "doeringc/local/zathura" if OS.linux?
+brew "doeringc/local/zathura-pdf-mupdf" if OS.linux?
 
 cask "moonlight"
 

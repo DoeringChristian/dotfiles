@@ -7,8 +7,8 @@ Guidance for Claude Code working in this repository.
 Cross-platform (macOS & Linux) dotfiles using:
 - **GNU Stow** for symlinking config files into `~`, and
 - **Homebrew** for **all** tool management. The tool list is a single
-  [`Brewfile`](Brewfile); install with `brew bundle`. Three source builds come
-  from an in-repo tap (`Formula/*.rb`).
+  [`Brewfile`](Brewfile); install with `brew bundle`. Some packages come from
+  an in-repo tap (`Formula/*.rb`).
 
 There is no version manager (no mise/pixi/nix). Every tool is a brew formula or
 cask; `brew upgrade` keeps them latest.
@@ -37,7 +37,7 @@ Each line is a tool. Notable entries:
 - `brew "doeringc/local/neovim", args: ["HEAD"]` — nightly-equivalent; the local formula prevents mixed host/Homebrew glibc headers on Linux.
 - `brew "tree-sitter-cli"` — the CLI (the `tree-sitter` formula is only the library).
 - `brew "python@3.13"` — provides `python3`; brew doesn't link a bare `python` on macOS.
-- `brew "doeringc/local/neovim"`, `…/sshr`, `…/passage` — the in-repo tap formulae (`--HEAD`, git main).
+- `brew "doeringc/local/neovim"`, `…/sshr`, `…/passage`, and Linux `…/zathura*` — the in-repo tap formulae.
 - `cask "kitty"/"tev"/"claude-code" if OS.mac?` — macOS GUI apps + the `claude` CLI.
   On **Linux** casks don't exist, so `setup.sh` installs these from official builds.
 
@@ -59,7 +59,7 @@ helpers, so a bare `./sync.sh` reuses the saved profile. Precedence: `--type` ar
 
 ```
 Brewfile          # the tool list
-Formula/          # in-repo brew tap (neovim.rb, sshr.rb, passage.rb)
+Formula/          # in-repo brew tap (neovim.rb, sshr.rb, passage.rb, zathura*.rb)
 common/           # portable stow package (both platforms)
 darwin/           # macOS-only stow package (config overrides + LaunchAgents)
 stow/             # .stow-global-ignore

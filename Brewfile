@@ -2,8 +2,8 @@
 # One list for every machine. macOS uses casks for GUI apps; on Linux (no cask
 # support) setup.sh installs those from official builds instead.
 #
-# Three tools come from the in-repo tap (Formula/*.rb), which setup.sh registers
-# before `brew bundle`: neovim, sshr, and passage (built from git main via --HEAD).
+# Some tools come from the in-repo tap (Formula/*.rb), which setup.sh registers
+# before `brew bundle`: neovim, sshr, passage, and Linux zathura formulae.
 #
 # Add a tool = add a line. Keep everything at latest with `./update.sh`.
 

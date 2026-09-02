@@ -50,6 +50,6 @@ fi
 
 cat <<'EOF'
 
-==> setup complete. Everything is Homebrew (+ the sshr/passage tap formulae).
+==> setup complete. Everything is Homebrew (+ the in-repo tap formulae).
     Day-to-day: ./sync.sh (new packages + configs), ./update.sh (upgrade all).
 EOF

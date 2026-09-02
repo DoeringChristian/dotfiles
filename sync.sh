@@ -95,7 +95,7 @@ if [ "$OS" = Linux ]; then
     export HOMEBREW_MAKE_JOBS="${HOMEBREW_MAKE_JOBS:-2}"
 fi
 
-# Custom-formula tap (neovim, sshr, passage) must be registered + trusted for brew bundle.
+# Custom-formula tap must be registered + trusted for brew bundle.
 brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
 brew trust "$TAP" >/dev/null 2>&1 || true
@@ -103,7 +103,7 @@ brew trust "$TAP" >/dev/null 2>&1 || true
 # Workstation profile taps include formulae outside homebrew/core. Trust them
 # before Bundle loads formula Ruby, otherwise newer Homebrew refuses to install.
 if [ "$TYPE" = workstation ]; then
-    brew trust homebrew-zathura/zathura >/dev/null 2>&1 || true
+    [ "$OS" = Darwin ] && brew trust homebrew-zathura/zathura >/dev/null 2>&1 || true
     brew trust lizardbyte/homebrew >/dev/null 2>&1 || true
 fi
 
