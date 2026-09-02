@@ -100,6 +100,13 @@ brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
 brew trust "$TAP" >/dev/null 2>&1 || true
 
+# Workstation profile taps include formulae outside homebrew/core. Trust them
+# before Bundle loads formula Ruby, otherwise newer Homebrew refuses to install.
+if [ "$TYPE" = workstation ]; then
+    brew trust homebrew-zathura/zathura >/dev/null 2>&1 || true
+    brew trust lizardbyte/homebrew >/dev/null 2>&1 || true
+fi
+
 # One-time migration from homebrew/core/neovim to the local HEAD formula. The
 # formula names conflict, so remove the core installation before Bundle installs
 # the tap-qualified replacement.

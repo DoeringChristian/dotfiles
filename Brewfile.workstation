@@ -17,6 +17,9 @@ brew "homebrew-zathura/zathura/zathura-pdf-mupdf"
 
 cask "moonlight"
 
+tap "LizardByte/homebrew"
+brew "sunshine"
+
 # add more workstation-only apps here, e.g.:
 # cask "blender"
 # cask "gimp"
