@@ -2,7 +2,7 @@
   "lastChangelogVersion": "0.84.3",
   "theme": "dark",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
+  "defaultModel": "gpt-5.6-sol",
   "packages": [
     "npm:@juicesharp/rpiv-ask-user-question",
     "npm:pi-web-access",
