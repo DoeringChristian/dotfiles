@@ -250,14 +250,21 @@ call, not branches.
 There is always a **top-most object that performs the task** — a `Method`
 selected from the config. It *owns* the objects it works on
 (`Method(model, dataset)`, built with
-`build(Method, cfg.method, model=model, dataset=dataset)`) and exposes
-`fit(run) -> dict`: fit, tracking into `run`, return the final metrics. The
-entry point builds it and calls it; it does nothing else.
+`build(Method, cfg.method, model=model, dataset=dataset)`), does the whole
+task while tracking into `run`, and returns the final metrics. The entry point
+builds it and calls it; it does nothing else.
 
-`fit` is the base class's template. It logs the **static** members once, then
-hands over to the subclass's `_fit`. `evaluate` is shared by every method:
-predict on the truth's lattice, let the dataset judge, log the **changing**
-members.
+Which methods `Method` has is the project's choice — `fit(run)` alone, or
+`prepare`/`fit`/`evaluate`, or whatever the task naturally splits into. What
+matters is where responsibilities sit, not the names:
+
+- The **base class** holds what every variant shares: logging the static
+  members once, the evaluation step (predict on the truth's lattice, let the
+  dataset judge, log the changing members), and the `log` that reaches the
+  owned objects.
+- Each **subclass** is one complete procedure that assumes exactly what it
+  needs — an iterating one tracks its own per-step curves and evaluates every
+  so often; a closed-form one solves and evaluates once.
 
 ```python
 # methods/base.py
@@ -269,10 +276,6 @@ class Method(Trackable):
         self.dataset = dataset
 
     def fit(self, run: cairn.Run) -> dict:
-        self.dataset.log("dataset", run)          # static members: once
-        return self._fit(run)
-
-    def _fit(self, run: cairn.Run) -> dict:
         raise NotImplementedError
 
     def evaluate(self, run: cairn.Run, it: int | None = None) -> dict:
@@ -295,7 +298,8 @@ class GradientFit(Method):
         self.loss = build(Loss, loss)
         ...
 
-    def _fit(self, run):
+    def fit(self, run):
+        self.dataset.log("dataset", run)               # static members: once
         for it in range(self.iterations):
             value = self.step()
             run.track(value, name="train.loss", step=it)   # the method's own curve
@@ -311,7 +315,8 @@ class GradientFit(Method):
 # methods/estimate.py
 @register
 class Estimate(Method):                                # closed form: no loop
-    def _fit(self, run):
+    def fit(self, run):
+        self.dataset.log("dataset", run)
         self.model.solve(self.dataset)
         return self.evaluate(run)                      # once, it=None
 ```
@@ -377,7 +382,7 @@ every part unconditionally — no `hasattr` or `isinstance` checks.
 **When it is called.** The method calls `self.log("", run, it)` at every
 **evaluation** and nowhere else, so `log` covers the members that *change*
 while fitting. Static members (the dataset, the reference signal) are logged
-**once** by the base `Method.fit`, so no `log` needs a "first time" check.
+**once**, at the start of the task, so no `log` needs a "first time" check.
 Per-step curves (`train.loss`) are the method's own and are tracked directly in
 its loop, between evaluations. A closed-form method evaluates once with
 `it=None`.
