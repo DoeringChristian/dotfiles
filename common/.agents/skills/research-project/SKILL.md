@@ -4,21 +4,22 @@ description:
   Initialize, extend, or develop a reproducible research project managed with
   pixi (dependencies mainly from PyPI), with a flat layout, hydra-managed
   configs, a registry/build ("type" key) pattern for constructing objects from
-  config, a single top-level task object (Method/Trainer) with hierarchical
-  log(name, run, it, **__) on every component, experiments tracked with
-  cairn-track, and on-demand cairn-plot reports. Use when starting a new
-  research project, setting up pixi/pixi.toml, adding a new method, model, or
-  component, adding experiment, tracking, logging, or report scaffolding, or
-  when the user mentions cairn-track, cairn-plot, experiment tracking,
-  "reproducible report", hydra configs, the registry/build pattern, or pixi
-  project setup.
+  config, one registered Method per way of fitting (no procedure branches on
+  the kind of object it was given), components that log themselves with
+  log(name, run, it), experiments tracked with cairn-track, and on-demand
+  cairn-plot reports. Use when starting a new research project, setting up
+  pixi/pixi.toml, adding a method, model, or component, adding experiment,
+  tracking, logging, or report scaffolding, or when the user mentions
+  cairn-track, cairn-plot, experiment tracking, "reproducible report", hydra
+  configs, the registry/build pattern, component logging, or pixi project
+  setup.
 ---
 
 # Research Project
 
-Set up a research project so that every result — numbers, figures, and tracked
-runs — can be traced to its exact config and regenerated from scratch with a
-single command.
+Set up and develop a research project so that every result — numbers, figures,
+and tracked runs — can be traced to its exact config and regenerated from
+scratch with a single command.
 
 ## Core principles
 
@@ -26,44 +27,33 @@ single command.
    (`[pypi-dependencies]`); use conda-forge (`[dependencies]`) only for things
    PyPI can't provide well (e.g. `python` itself, compilers, CUDA). Always
    commit `pixi.lock` — it is what makes the environment reproducible.
-2. **Everything is reproducible, and every run is tracked.** Experiments are
-   tracked with cairn-track: each run logs its composed hydra config, seed,
-   metrics, figures, and images to the cairn repo, so any result can be traced
-   to the exact config that produced it and regenerated from scratch.
+2. **Everything is reproducible, and every run is tracked.** Each run logs its
+   composed hydra config, seed, metrics, figures, and images to cairn-track, so
+   any result can be traced to the exact config that produced it. Nothing is
+   printed or saved to disk that cairn could show.
 3. **Flat layout.** No `src/<pkg>/` nesting: each kind of thing gets its own
-   top-level directory, named for what this project actually contains (e.g.
-   `methods/`, `datasets/`, `scenes/` — whatever concepts the project has).
-4. **Hydra manages configs.** All run configuration lives in `configs/` and is
-   composed by hydra; each run's composed config (and seed) is saved with its
-   outputs so any run can be reproduced exactly.
-5. **Objects are built from config via a global registry.** Constructors are
+   top-level directory, named for what this project actually contains.
+4. **Hydra manages configs.** All run configuration lives in `configs/`; the
+   composed config and seed of every run are saved with it.
+5. **Objects are built from config via a global registry.** Classes are
    registered with `@register` and instantiated from a config's `"type"` key
-   with `build(Base, cfg)` — including nested sub-objects. See
-   [registry.py](registry.py) and the sections below.
-6. **Graphics use plotly or cairn-plot; images always use cairn-plot**
-   (cairn-plot is installed with cairn-track). During training, log scalars,
-   images, and matplotlib/plotly figures with `run.track(...)`; for standalone
-   reports, cairn-plot generates self-contained offline HTML and wraps plotly
-   figures (`cp.Figure`), images (`cp.Image`), tables, line/scatter/heatmap
-   plots, point clouds, and meshes. For images, always use `cp.Image` (and
-   `cp.Compare` for comparisons) rather than a plotly image trace: cairn-plot's
-   image viewer is far more advanced — arbitrary client-side comparisons
-   (side-by-side / wipe / blend, pixel-diff kernels incl. FLIP and SSIM,
-   synced viewports), true-float HDR images with tone-mapping (EXR/HDR/PFM
-   decoded in the browser), and HDR-FLIP.
-7. **One top-level task object, and hierarchical `log()` on every component.**
-   Whatever the project actually does (training, direct fitting, rendering,
-   evaluation) is owned by a single top-level object (`Method`, `Trainer`,
-   `Fitter`, …) selected from the config — the entry point never branches on
-   *what kind* of task is running. Every component with loggable state
-   implements `log(self, name, run, it, **__)` and forwards to its fields as
-   `log(f"{name}.<field>", run, it)`, so logging is never assembled from the
-   outside. See [Top-level task object and hierarchical logging](#top-level-task-object-and-hierarchical-logging).
+   with `build(Base, cfg)`, including nested sub-objects
+   ([registry.py](registry.py)).
+6. **One registered `Method` per way of fitting.** The task itself — gradient
+   training, a closed-form estimate, rendering, evaluation — is an object
+   selected from the config. No entry point, helper, or method body ever
+   branches on what kind of task or object it was given.
+7. **Components log themselves.** Every component implements
+   `log(name, run, it)`: it tracks what is worth seeing about itself under its
+   own prefix and delegates to its parts under `sub(name, part)`
+   ([track.py](track.py)). Logging is never assembled from outside.
+8. **Graphics use plotly or cairn-plot; images always use cairn-plot.**
+   cairn-plot's image viewer supports arbitrary client-side comparisons
+   (side-by-side / wipe / blend, pixel-diff kernels incl. FLIP and SSIM, synced
+   viewports) and true-float HDR with tone-mapping. Never put an image in a
+   plotly trace.
 
 ## Project layout
-
-The layout is **flat**: no `src/<pkg>/` package nesting. Each kind of thing gets
-a top-level directory named after what it holds:
 
 ```
 project/
@@ -73,19 +63,18 @@ project/
 ├── .gitignore         # ignore .pixi/, .cairn/, outputs/
 ├── .cairn/            # cairn-track repo — all results live here (git-ignored)
 ├── configs/           # hydra configs (config.yaml + config groups)
-├── util/              # registry.py + shared helpers
+├── util/              # registry.py, track.py, shared helpers
 ├── <concept>/         # one flat dir per project concept: base class + one
 ├── <concept>/         #   subclass per variant — named for THIS project
 ├── experiments/       # entry points; every run tracks into cairn
 └── reports/           # on-demand cairn-plot reports, one sub-folder each
 ```
 
-Only `configs/`, `util/`, `experiments/`, and `reports/` are fixed. The
-`<concept>` directories are project-specific: create one per concept the
-project actually has, named for it — an ML project might have `methods/` and
-`datasets/`, a rendering project `integrators/` and `scenes/`. Never copy
-example names from this skill into a project they don't fit, and never nest a
-package hierarchy.
+Only `configs/`, `util/`, `experiments/`, and `reports/` are fixed. Create one
+`<concept>` directory per concept the project actually has, named for it — an
+ML project might have `methods/`, `models/`, and `datasets/`; a rendering
+project `integrators/` and `scenes/`. Never copy example names from this skill
+into a project they don't fit, and never nest a package hierarchy.
 
 ## pixi setup
 
@@ -95,8 +84,6 @@ In a fresh project, initialize git **first**, then pixi:
 git init
 pixi init --format pixi    # only if no pixi.toml exists yet
 ```
-
-Then configure:
 
 ```toml
 [workspace]
@@ -116,255 +103,329 @@ cairn-plot = { git = "https://github.com/doeringchristian/cairn-plot" }
 cairn-track = { git = "https://github.com/doeringchristian/cairn", extras = ["media"] }
 
 [tasks]
+experiment = "python experiments/run.py"
 ui = "cairn ui"          # browse tracked runs at http://localhost:4301/
+all = { depends-on = ["experiment"] }
 ```
 
 - Add PyPI packages with `pixi add --pypi <pkg>`; conda packages with
   `pixi add <pkg>`; git packages with
   `pixi add --pypi "<pkg>[extras] @ git+https://github.com/<owner>/<repo>"`.
 - Encode every runnable step as a pixi task (`experiment`, `ui`, per-report
-  tasks, `all`), and chain them with `depends-on` so `pixi run all` reproduces
-  everything:
-
-```toml
-[tasks]
-experiment = "python experiments/run.py"
-ui = "cairn ui"
-all = { depends-on = ["experiment"] }
-```
+  tasks, `all`) and chain them with `depends-on`, so `pixi run all` reproduces
+  everything.
 
 ## direnv (.envrc)
-
-Add a `.envrc` so entering the project directory activates the pixi environment
-automatically:
 
 ```sh
 watch_file pixi.lock
 eval "$(pixi shell-hook)"
 ```
 
-Then run `direnv allow`.
+Then `direnv allow`.
 
 ## Configs (hydra)
 
 All configuration lives in `configs/`, composed by hydra. Entry points are
 decorated with `@hydra.main`; hydra saves the fully composed config of every run
-under its output dir (`.hydra/config.yaml`), which — together with fixed seeds
-in the config — makes each run reproducible.
+under its output dir (`.hydra/config.yaml`). Put the seed in the config, not in
+code.
 
 ```python
+# experiments/run.py
 import cairn
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
+from datasets import Dataset
 from methods import Method
+from models import Model
 from util.registry import build
 
 # config_path is relative to this file — entry points live in experiments/
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
-    run = cairn.Run(project="<project>", name=cfg.name)
-    run["config"] = OmegaConf.to_container(cfg, resolve=True)
-    build(Method, cfg.method).run(run)   # the top-level task object does the rest
+    with cairn.Run(project="<project>", name=cfg.name) as run:
+        run.config(OmegaConf.to_container(cfg, resolve=True))
+        dataset = build(Dataset, cfg.dataset)
+        model = build(Model, cfg.model)
+        method = build(Method, cfg.method, model=model, dataset=dataset)
+        run.config(metrics=method.fit(run))
 
 if __name__ == "__main__":
     main()
 ```
 
-Use config groups (`configs/method/distill.yaml`, `configs/dataset/…`) so
-variants are selected on the CLI (`python experiments/train.py method=distill`)
-and swept (`-m method=a,b`). Put the seed in the config, not in code.
-
-## Building objects from config (registry + `type` key)
-
-Copy [registry.py](registry.py) into `util/registry.py`. It provides a global
-registry: decorate a class with `@register`, then construct it from any config
-dict whose `"type"` key names the class — remaining keys become constructor
-kwargs (explicit kwargs to `build` override the config). `build(Base, cfg)`
-type-checks the result and passes an existing instance through unchanged, so
-nested objects are configured the same way at every level:
+Use one config group per top-level concept (`configs/method/`,
+`configs/model/`, `configs/dataset/`) so variants are selected on the CLI
+(`python experiments/run.py method=estimate`) and swept (`-m model=a,b`):
 
 ```yaml
 # configs/config.yaml
-method:
-  type: Distillation
-  lr: 0.01
-  model:
-    type: ResNet # nested object, same mechanism
-    depth: 18
+defaults:
+  - method: gradient_fit   # groups that others may override come FIRST
+  - model: mlp
+  - dataset: image
+  - _self_
+name: ${model.type}-${method.type}
+seed: 0
+```
+
+When a variant of one concept requires a particular variant of another (a
+closed-form model needs the closed-form procedure), let its config select that
+too, instead of a check in code. A `# @package _global_` group config can
+carry an override of another group, provided the overridden group appears
+earlier in the primary defaults list:
+
+```yaml
+# configs/model/closed_form.yaml
+# @package _global_
+defaults:
+  - override /method: estimate
+model:
+  type: ClosedForm
+  order: 3
+```
+
+## Building objects from config (registry + `type` key)
+
+Copy [registry.py](registry.py) into `util/registry.py`. Decorate a class with
+`@register`; `build(Base, cfg)` looks up `cfg["type"]` in the global registry,
+passes the remaining keys as constructor kwargs (explicit kwargs to `build`
+override the config), type-checks the result, and passes an existing instance
+through unchanged. Nested objects are configured the same way at every level:
+
+```yaml
+# configs/model/mlp.yaml
+type: MLP
+width: 64
+encoding:
+  type: Fourier          # nested object, same mechanism
+  bands: 8
 ```
 
 ```python
 from util.registry import register, build
 
 @register
-class Distillation(Method):
-    def __init__(self, model: dict | Model, lr: float = 1e-3):
-        self.model = build(Model, model)   # builds nested sub-config
-        self.lr = lr
+class MLP(Model):
+    def __init__(self, encoding: dict | Encoding, width: int = 64):
+        self.encoding = build(Encoding, encoding)   # builds the nested config
+        self.width = width
 ```
 
 ## Class organization (inheritance over flags)
 
 Avoid parameters that switch behavior via `if`/`else` or `match` — each variant
-becomes its own subclass, selected by `"type"` in the config:
+becomes its own registered subclass, selected by `"type"` in the config:
 
 ```python
 # ❌ one class, behavior flags, if-else in every method
-class Method:
-    def __init__(self, mode: str = "supervised", use_ema: bool = False): ...
+class Model:
+    def __init__(self, kind: str = "mlp", use_encoding: bool = False): ...
 
 # ✅ one base class per top-level concept, one subclass per variant
-class Method:                      # top-level abstraction (training strategy)
-    def run(self) -> None: ...
+class Model(Trackable): ...
 
 @register
-class Supervised(Method): ...
+class MLP(Model): ...
 
 @register
-class Distillation(Method): ...
+class ClosedForm(Model): ...
 ```
 
-Apply this structure at the very top of the project: define a base class per
-top-level concept the project actually has (e.g. `Method`, `Dataset`,
-`Integrator`) in its own flat directory, one registered subclass per variant,
-and let the config's `type` key pick the variant. New behavior = new subclass
-+ one config line, no new flags.
+Define a base class per top-level concept in its own flat directory, one
+registered subclass per variant, and let the config's `type` key pick. New
+behavior = new subclass + one config line, no new flags.
 
-## Top-level task object and hierarchical logging
+This applies to **procedures** as much as to models. A loop that checks what
+kind of object it was given (`if isinstance(model, ...)`, `if field has
+parameters ... else`) is two procedures in one; write each as its own
+`Method`, each assuming exactly what it needs. Shared steps (what happens at
+evaluation time) become plain functions or base-class methods both procedures
+call, not branches.
 
-### One object owns the task
+## Methods: one per way of fitting
 
-There must always be a **top-most object that performs the actual task** —
-training, direct fitting, rendering, evaluation, whatever the project does — and
-it is selected from the config like any other object. The entry point only
-builds it and calls it:
+There is always a **top-most object that performs the task** — a `Method`
+selected from the config. It *owns* the objects it works on
+(`Method(model, dataset)`, built with
+`build(Method, cfg.method, model=model, dataset=dataset)`) and exposes
+`fit(run) -> dict`: fit, tracking into `run`, return the final metrics. The
+entry point builds it and calls it; it does nothing else.
+
+`fit` is the base class's template. It logs the **static** members once, then
+hands over to the subclass's `_fit`. `evaluate` is shared by every method:
+predict on the truth's lattice, let the dataset judge, log the **changing**
+members.
 
 ```python
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
-def main(cfg: DictConfig) -> None:
-    run = cairn.Run(project="<project>", name=cfg.name)
-    run["config"] = OmegaConf.to_container(cfg, resolve=True)
-    build(Method, cfg.method).run(run)     # the task object does everything
+# methods/base.py
+from util.track import Trackable, sub
+
+class Method(Trackable):
+    def __init__(self, model: Model, dataset: Dataset):
+        self.model = model
+        self.dataset = dataset
+
+    def fit(self, run: cairn.Run) -> dict:
+        self.dataset.log("dataset", run)          # static members: once
+        return self._fit(run)
+
+    def _fit(self, run: cairn.Run) -> dict:
+        raise NotImplementedError
+
+    def evaluate(self, run: cairn.Run, it: int | None = None) -> dict:
+        pred = self.model(self.dataset.grid())
+        metrics = self.dataset.evaluate(pred, run, "eval", it)
+        self.log("", run, it)                      # changing members
+        return metrics
+
+    def log(self, name, run, it=None, **kw):
+        self.model.log(sub(name, "model"), run, it, **kw)
 ```
 
-The task object owns the loop (or the absence of one), the model, the data, the
-optimizer, and the logging. When a second kind of task appears — say the project
-starts with an optimizer-driven `Training` method and later adds a closed-form
-`DirectFit` — it becomes **another registered subclass of the same base**, and
-the config picks it:
-
 ```python
-class Method:
-    def run(self, run: cairn.Run) -> None: ...
-    def log(self, name: str, run: cairn.Run, it: int, **__) -> None: ...
-
+# methods/gradient_fit.py
 @register
-class Training(Method):            # iterates: step, log every N iterations
-    def run(self, run):
+class GradientFit(Method):
+    def __init__(self, model, dataset, loss: dict | Loss, lr: float = 1e-2,
+                 iterations: int = 1000, eval_every: int = 100):
+        super().__init__(model, dataset)
+        self.loss = build(Loss, loss)
+        ...
+
+    def _fit(self, run):
         for it in range(self.iterations):
-            self.step()
-            if it % self.log_every == 0:
-                self.log("train", run, it)
+            value = self.step()
+            run.track(value, name="train.loss", step=it)   # the method's own curve
+            if it % self.eval_every == 0:
+                self.evaluate(run, it)
+        return self.evaluate(run, self.iterations)
 
+    def log(self, name, run, it=None, **kw):
+        run.track(self.lr, name=sub(name, "lr"), step=it)
+        self.loss.log(sub(name, "loss"), run, it, **kw)
+        super().log(name, run, it, **kw)              # -> model.*
+
+# methods/estimate.py
 @register
-class DirectFit(Method):           # no loop: solve, log once
-    def run(self, run):
-        self.solve()
-        self.log("fit", run, 0)
+class Estimate(Method):                                # closed form: no loop
+    def _fit(self, run):
+        self.model.solve(self.dataset)
+        return self.evaluate(run)                      # once, it=None
 ```
 
 ```yaml
-method:
-  type: DirectFit       # or Training — nothing else in the code changes
+# configs/method/estimate.yaml
+type: Estimate           # or GradientFit — nothing else in the code changes
 ```
 
-❌ Never do this — it is exactly the failure mode this rule exists to prevent:
+❌ Never do this — it is exactly the failure this rule exists to prevent:
 
 ```python
 def main(cfg):
     method = build(Method, cfg.method)
-    if isinstance(method, Training):          # ❌ task-type branching
+    if isinstance(method, GradientFit):          # ❌ task-type branching
         for it in range(cfg.iterations):
             method.step()
-            run.track(method.model.loss, name="train.loss", step=it)
             run.track(method.model.render(), name="train.render", step=it)
-    elif cfg.method.type == "DirectFit":      # ❌ grows with every new method
+    elif cfg.method.type == "Estimate":          # ❌ grows with every new method
         method.solve()
         run.track(method.model.render(), name="fit.render", step=0)
 ```
 
-If the entry point, a shared helper, or a method body ever tests "are we
-training or fitting?", the missing abstraction is a `Method` subclass (or a
-sub-object built from config) — add it instead of the branch.
+If any code asks "are we training or fitting?", the missing abstraction is a
+`Method` subclass (or a sub-object built from config) — add it instead of the
+branch.
 
-### `log(name, run, it, **__)` on every component
+## Components log themselves
 
-Logging is **performed by the object that owns the state, not assembled from
-outside it**. Every class with something worth tracking (the task object, the
-model, a loss, a dataset, a renderer, …) implements:
+Copy [track.py](track.py) into `util/track.py`. Every component base class
+(`Method`, `Model`, `Dataset`, `Loss`, `Encoding`, …) derives from `Trackable`
+and implements
 
 ```python
-def log(self, name: str, run: cairn.Run, it: int, **__) -> None:
+def log(self, name: str, run: cairn.Run, it: int | None = None, **_) -> None:
 ```
 
-- `name` — the prefix this object logs under (`"train"`, `"train.model"`, …).
+- `name` — the prefix this object logs under (`""` at the top level). Each
+  component chooses only the **last segment** of its own names via
+  `sub(name, part)`; the prefix is always what it was given.
 - `run` — the `cairn.Run` to track into.
-- `it` — the step / iteration used as `step=` in `run.track`.
-- `**__` — swallows extra keyword arguments, so a caller can pass additional
-  context (`subset="val"`, `final=True`, …) down the tree without every class
-  having to declare or understand it.
+- `it` — the iteration used as `step=`; `None` for one-shot logging.
+- `**_` — extra context a caller may pass down the tree (`subset="val"`,
+  `final=True`, …) without every class having to declare or understand it.
 
-An object logs its own scalars/images/figures under `name`, then **delegates
-to its fields** with the field name appended:
+An object tracks its own diagnostics under `name`, then **delegates to its
+parts** with the part's name appended, and calls `super().log` so a base
+class's parts are still reached:
 
 ```python
 @register
-class Training(Method):
-    def log(self, name, run, it, **kw):
-        run.track(self.loss_value, name=f"{name}.loss", step=it)
-        self.model.log(f"{name}.model", run, it, **kw)
-        self.dataset.log(f"{name}.dataset", run, it, **kw)
-
-@register
-class ResNet(Model):
-    def log(self, name, run, it, **__):
-        run.track(self.render(), name=f"{name}.render", step=it)
-        run.track(cairn.Histogram(self.layer0.weight), name=f"{name}.w0", step=it)
+class MLP(Model):
+    def log(self, name, run, it=None, **kw):
+        run.track(self.rms(), name=sub(name, "rms"), step=it)
+        run.track(cairn.Histogram(self.layer0.weight), name=sub(name, "w0"), step=it)
+        self.encoding.log(sub(name, "encoding"), run, it, **kw)
+        super().log(name, run, it, **kw)
 ```
 
-This gives a stable, config-shaped metric namespace (`train.model.render`,
-`fit.model.render`, `train.dataset.sample`, …), keeps every `run.track` call
-next to the state it tracks, and means swapping a model or method in the
-config swaps its logging with it — no external code needs to know what a
-particular `Model` has to show. Components with nothing to log implement
-`log` as a no-op (or inherit a base no-op) so parents can call it
-unconditionally.
+Components with nothing to show inherit the no-op, so parents call `log` on
+every part unconditionally — no `hasattr` or `isinstance` checks.
+
+**When it is called.** The method calls `self.log("", run, it)` at every
+**evaluation** and nowhere else, so `log` covers the members that *change*
+while fitting. Static members (the dataset, the reference signal) are logged
+**once** by the base `Method.fit`, so no `log` needs a "first time" check.
+Per-step curves (`train.loss`) are the method's own and are tracked directly in
+its loop, between evaluations. A closed-form method evaluates once with
+`it=None`.
+
+**Names** mirror the object tree and nothing else: `model.encoding.rms`,
+`model.w0`, `dataset.image`, `loss.weight`, `lr`, `eval.psnr`. Renaming a
+member renames its whole subtree, two instances of a class log under different
+prefixes without collisions, and a new component brings its own diagnostics
+with it instead of edits to the loop.
+
+**What to log.** What you would want to *look at* to tell whether the component
+is doing its job: a few scalars (norms, counts, a fraction), a histogram of a
+table, an image of a dictionary, a spectrum, a point layout. Not the loss (the
+method's), not parameters as raw tensors, not anything cairn can derive from
+two things already tracked (an error image is the UI's diff of the
+reconstruction and the reference).
+
+**The judge: `evaluate`.** Metrics that compare a prediction to the truth
+belong to the thing that judges. The ground-truth base class implements
+
+```python
+def evaluate(self, pred, run: cairn.Run, name: str = "eval", it: int | None = None) -> dict:
+```
+
+which computes the metrics, tracks them and the views that make sense for its
+kind (`eval.psnr`, `eval.reconstruction`, `eval.spectrum`; a 6D signal would
+track slices), and returns the metrics so the method can report them as the
+run's final numbers.
 
 ## Experiment tracking (cairn-track)
 
 Run `cairn init` once (creates `./.cairn/`, git-ignored). Every experiment
-creates a `cairn.Run`, logs the composed hydra config, and tracks metrics and
-media during training; browse everything with `pixi run ui` (→
+creates a `cairn.Run`, attaches the composed config with `run.config(...)`, and
+tracks into it; browse everything with `pixi run ui` (→
 http://localhost:4301/).
 
 ```python
-import cairn
-from omegaconf import OmegaConf
-
-run = cairn.Run(project="<project>", name="<experiment>")
-run["config"] = OmegaConf.to_container(cfg, resolve=True)  # full run config
-
-run.track(loss, name="train.loss", step=step)                       # scalar
-run.track(loss, name="train.loss", step=step, context={"subset": "val"})
-run.track(pil_image, name="predictions.sample", step=step)          # image
-run.track(fig, name="training_curves", step=step)                   # mpl/plotly
-run.track(cairn.Histogram(weights, bins=64), name="w0", step=step)
+run.track(loss, name="train.loss", step=it)                        # scalar
+run.track(loss, name="train.loss", step=it, context={"subset": "val"})
+run.track(image_array, name="eval.reconstruction", step=it)        # image
+run.track(fig, name="model.spectrum", step=it)                     # mpl/plotly
+run.track(cairn.Histogram(weights, bins=64), name="model.w0", step=it)
 ```
 
-`run.track` also accepts `cairn.Tensor`, `cairn.Text`, `cairn.Audio`. The repo
-is resolved via `CAIRN_REPO` / `./.cairn`; use `repo="cairn://host:port"` for a
-shared server and `local_wal=True` on clusters (NFS/Slurm). Read runs back with
+`run.track` also accepts `cairn.Image` (with box/mask overlays),
+`cairn.Tensor`, `cairn.Text`, `cairn.Audio`. The repo is resolved via
+`CAIRN_REPO` / `./.cairn`; use `repo="cairn://host:port"` for a shared server
+and `local_wal=True` on clusters (NFS/Slurm). Read runs back with
 `cairn.Reader`.
 
 ## Reports (on demand)
@@ -372,9 +433,9 @@ shared server and `local_wal=True` on clusters (NFS/Slurm). Read runs back with
 Do **not** scaffold reports by default — tracked runs browsed via `cairn ui` are
 the primary view of results. When the user asks for a report, create a
 sub-folder per report under `reports/` (e.g. `reports/ablation/`) holding a
-script that reads the tracked runs from cairn (`cairn.Reader`) and emits a
-self-contained `report.html` next to itself — never hand-edited. Register a pixi
-task per report (`report-ablation = "python reports/ablation/report.py"`).
+script that reads the tracked runs (`cairn.Reader`) and emits a self-contained
+`report.html` next to itself — never hand-edited. Register a pixi task per
+report (`report-ablation = "python reports/ablation/report.py"`).
 
 ```python
 import cairn
@@ -388,27 +449,25 @@ report.save("reports/ablation/report.html")
 ```
 
 Useful components: `cp.Line`, `cp.Scatter`, `cp.Bar`, `cp.Histogram`,
-`cp.Heatmap`, `cp.Image`, `cp.Table`, `cp.Figure` (plotly passthrough),
-`cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
+`cp.Heatmap`, `cp.Image`, `cp.Compare`, `cp.Table`, `cp.Figure` (plotly
+passthrough), `cp.Grid`, `cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
 
 ## Reproducibility checklist
 
 - [ ] `pixi.lock` committed; `.pixi/` git-ignored
 - [ ] Configs in `configs/`, composed by hydra; per-run composed config saved
-      (hydra's `.hydra/config.yaml`) so any run can be re-created
+      (hydra's `.hydra/config.yaml`) and attached via `run.config(...)`
 - [ ] Objects built from config via the registry (`type` key), including nested
       sub-objects
 - [ ] Random seeds fixed in the config and recorded per run
-- [ ] A single top-level task object (`Method`/`Trainer`/…) selected via the
-      config's `type` key performs the task; no `if training / elif fitting`
-      branching anywhere
-- [ ] Every component with loggable state implements
-      `log(name, run, it, **__)` and delegates to its fields as
-      `log(f"{name}.<field>", …)`; `run.track` is never called on a component
-      from outside it
+- [ ] One registered `Method` per way of fitting, selected by config; no
+      procedure branches on the kind of task or object it was given
+- [ ] Every component base class is `Trackable`; components log themselves
+      with `log(name, run, it)` and delegate to their parts; `run.track` is
+      never called on a component's state from outside it
 - [ ] Every result an experiment produces is tracked into cairn (metrics,
-      figures, images), with the composed config logged via `run["config"]` —
-      no ad-hoc results directories
+      figures, images) — no ad-hoc results directories, nothing printed or
+      saved that cairn could show
 - [ ] Reports (if any) live in `reports/<name>/`, reference the tracked runs
       via `cairn.Reader`, and are produced only by their script, never edited
       by hand
