@@ -72,8 +72,8 @@ project/
 
 Only `configs/`, `util/`, `experiments/`, and `reports/` are fixed. Create one
 `<concept>` directory per concept the project actually has, named for it — an
-ML project might have `methods/`, `models/`, and `datasets/`; a rendering
-project `integrators/` and `scenes/`. Never copy example names from this skill
+ML project might have `methods/`, `models/`, `encodings/`, `losses/`, and
+`datasets/`; a rendering project `integrators/` and `scenes/`. Never copy example names from this skill
 into a project they don't fit, and never nest a package hierarchy.
 
 ## pixi setup
@@ -205,7 +205,10 @@ encoding:
 ```
 
 ```python
-from util.registry import register, build
+# models/mlp.py
+from encodings import Encoding
+from models.base import Model
+from util.registry import build, register
 
 @register
 class MLP(Model):
@@ -236,7 +239,9 @@ class ClosedForm(Model): ...
 
 Define a base class per top-level concept in its own flat directory, one
 registered subclass per variant, and let the config's `type` key pick. New
-behavior = new subclass + one config line, no new flags.
+behavior = new subclass + one config line, no new flags. Each concept's
+`__init__.py` exports the base class and imports every variant module, so
+`from models import Model` is enough for all `@register` decorators to run.
 
 This applies to **procedures** as much as to models. A loop that checks what
 kind of object it was given (`if isinstance(model, ...)`, `if field has
@@ -268,6 +273,10 @@ matters is where responsibilities sit, not the names:
 
 ```python
 # methods/base.py
+import cairn
+
+from datasets import Dataset
+from models import Model
 from util.track import Trackable, sub
 
 class Method(Trackable):
@@ -290,18 +299,23 @@ class Method(Trackable):
 
 ```python
 # methods/gradient_fit.py
+from losses import Loss
+from methods.base import Method
+from util.registry import build, register
+from util.track import sub
+
 @register
 class GradientFit(Method):
     def __init__(self, model, dataset, loss: dict | Loss, lr: float = 1e-2,
                  iterations: int = 1000, eval_every: int = 100):
         super().__init__(model, dataset)
-        self.loss = build(Loss, loss)
-        ...
+        self.loss = build(Loss, loss)                  # nested sub-object
+        self.lr, self.iterations, self.eval_every = lr, iterations, eval_every
 
     def fit(self, run):
         self.dataset.log("dataset", run)               # static members: once
         for it in range(self.iterations):
-            value = self.step()
+            value = self.step()                        # one optimizer step -> loss value
             run.track(value, name="train.loss", step=it)   # the method's own curve
             if it % self.eval_every == 0:
                 self.evaluate(run, it)
@@ -313,6 +327,9 @@ class GradientFit(Method):
         super().log(name, run, it, **kw)              # -> model.*
 
 # methods/estimate.py
+from methods.base import Method
+from util.registry import register
+
 @register
 class Estimate(Method):                                # closed form: no loop
     def fit(self, run):
@@ -322,22 +339,33 @@ class Estimate(Method):                                # closed form: no loop
 ```
 
 ```yaml
+# configs/method/gradient_fit.yaml
+type: GradientFit
+loss:
+  type: L2               # nested sub-object, built by GradientFit
+lr: 0.01
+iterations: 1000
+eval_every: 100
+
 # configs/method/estimate.yaml
-type: Estimate           # or GradientFit — nothing else in the code changes
+type: Estimate           # swap on the CLI: method=estimate — no code changes
 ```
 
 ❌ Never do this — it is exactly the failure this rule exists to prevent:
 
 ```python
 def main(cfg):
-    method = build(Method, cfg.method)
-    if isinstance(method, GradientFit):          # ❌ task-type branching
-        for it in range(cfg.iterations):
-            method.step()
-            run.track(method.model.render(), name="train.render", step=it)
-    elif cfg.method.type == "Estimate":          # ❌ grows with every new method
-        method.solve()
-        run.track(method.model.render(), name="fit.render", step=0)
+    with cairn.Run(project="<project>", name=cfg.name) as run:
+        dataset = build(Dataset, cfg.dataset)
+        model = build(Model, cfg.model)
+        method = build(Method, cfg.method, model=model, dataset=dataset)
+        if isinstance(method, GradientFit):          # ❌ task-type branching
+            for it in range(cfg.method.iterations):
+                method.step()
+                run.track(model(dataset.grid()), name="train.pred", step=it)
+        elif cfg.method.type == "Estimate":          # ❌ grows with every new method
+            model.solve(dataset)
+            run.track(model(dataset.grid()), name="fit.pred")
 ```
 
 If any code asks "are we training or fitting?", the missing abstraction is a
@@ -367,13 +395,20 @@ parts** with the part's name appended, and calls `super().log` so a base
 class's parts are still reached:
 
 ```python
+# models/mlp.py
 @register
 class MLP(Model):
     def log(self, name, run, it=None, **kw):
         run.track(self.rms(), name=sub(name, "rms"), step=it)
         run.track(cairn.Histogram(self.layer0.weight), name=sub(name, "w0"), step=it)
-        self.encoding.log(sub(name, "encoding"), run, it, **kw)
+        self.encoding.log(sub(name, "encoding"), run, it, **kw)   # -> model.encoding.*
         super().log(name, run, it, **kw)
+
+# encodings/fourier.py
+@register
+class Fourier(Encoding):
+    def log(self, name, run, it=None, **kw):
+        run.track(self.spectrum_figure(), name=sub(name, "spectrum"), step=it)
 ```
 
 Components with nothing to show inherit the no-op, so parents call `log` on
@@ -387,8 +422,9 @@ Per-step curves (`train.loss`) are the method's own and are tracked directly in
 its loop, between evaluations. A closed-form method evaluates once with
 `it=None`.
 
-**Names** mirror the object tree and nothing else: `model.encoding.rms`,
-`model.w0`, `dataset.image`, `loss.weight`, `lr`, `eval.psnr`. Renaming a
+**Names** mirror the object tree and nothing else: `model.rms`, `model.w0`,
+`model.encoding.spectrum`, `dataset.image`, `loss.weight`, `lr`, `eval.psnr`,
+and the method's own `train.loss`. Renaming a
 member renames its whole subtree, two instances of a class log under different
 prefixes without collisions, and a new component brings its own diagnostics
 with it instead of edits to the loop.
@@ -423,7 +459,7 @@ http://localhost:4301/).
 run.track(loss, name="train.loss", step=it)                        # scalar
 run.track(loss, name="train.loss", step=it, context={"subset": "val"})
 run.track(image_array, name="eval.reconstruction", step=it)        # image
-run.track(fig, name="model.spectrum", step=it)                     # mpl/plotly
+run.track(fig, name="model.encoding.spectrum", step=it)            # mpl/plotly
 run.track(cairn.Histogram(weights, bins=64), name="model.w0", step=it)
 ```
 
