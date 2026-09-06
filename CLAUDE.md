@@ -85,8 +85,8 @@ setup.sh / bootstrap.sh / update.sh
   and binds the real `$HOME` read-only — install-mechanism-agnostic, no
   special-casing.
 - **Shared research skill**: Codex/Pi owns the canonical
-  `common/.agents/skills/research-project-init/`; the Claude entry at
-  `common/.claude/skills/research-project-init/` is a symlink to it so its
+  `common/.agents/skills/research-project/`; the Claude entry at
+  `common/.claude/skills/research-project/` is a symlink to it so its
   workflow and bundled `registry.py` remain single-source.
 
 ## sshr (special case)
