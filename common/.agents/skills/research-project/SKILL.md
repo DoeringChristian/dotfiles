@@ -101,10 +101,12 @@ hydra-core = "*"         # config management (brings omegaconf)
 # neither is on PyPI — install both from git; [media] → matplotlib/plotly handlers
 cairn-plot = { git = "https://github.com/doeringchristian/cairn-plot" }
 cairn-track = { git = "https://github.com/doeringchristian/cairn", extras = ["media"] }
+black = "*"              # formatter; run after every edit
 
 [tasks]
 experiment = "python experiments/run.py"
 ui = "cairn ui"          # browse tracked runs at http://localhost:4301/
+format = "black ."
 all = { depends-on = ["experiment"] }
 ```
 
@@ -123,6 +125,14 @@ eval "$(pixi shell-hook)"
 ```
 
 Then `direnv allow`.
+
+## Formatting (black)
+
+`black` is a project dependency (`pixi add --pypi black`) with a `format`
+task. **Run `pixi run format` after writing or editing any Python file**,
+before reporting the change as done — never hand-format, and never leave a
+file in a state black would rewrite. Keep black's defaults; do not add a
+`[tool.black]` section unless the project already has one.
 
 ## Configs (hydra)
 
@@ -496,6 +506,7 @@ passthrough), `cp.Grid`, `cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
 ## Reproducibility checklist
 
 - [ ] `pixi.lock` committed; `.pixi/` git-ignored
+- [ ] `black` in the dependencies; `pixi run format` run after every edit
 - [ ] Configs in `configs/`, composed by hydra; per-run composed config saved
       (hydra's `.hydra/config.yaml`) and attached via `run.config(...)`
 - [ ] Objects built from config via the registry (`type` key), including nested
