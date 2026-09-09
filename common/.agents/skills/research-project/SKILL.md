@@ -297,10 +297,10 @@ class Method(Trackable):
     def fit(self, run: cairn.Run) -> dict:
         raise NotImplementedError
 
-    def evaluate(self, run: cairn.Run, it: int | None = None) -> dict:
+    def evaluate(self, run: cairn.Run, it: int | None = None, **kw) -> dict:
         pred = self.model(self.dataset.grid())
-        metrics = self.dataset.evaluate(pred, run, "eval", it)
-        self.log("", run, it)                      # changing members
+        metrics = self.dataset.evaluate(pred, run, "eval", it, **kw)
+        self.log("", run, it, **kw)                # changing members
         return metrics
 
     def log(self, name, run, it=None, **kw):
@@ -329,7 +329,7 @@ class GradientFit(Method):
             run.track(value, name="train.loss", step=it)   # the method's own curve
             if it % self.eval_every == 0:
                 self.evaluate(run, it)
-        return self.evaluate(run, self.iterations)
+        return self.evaluate(run, self.iterations, final=True)   # full-size media
 
     def log(self, name, run, it=None, **kw):
         run.track(self.lr, name=sub(name, "lr"), step=it)
@@ -345,7 +345,7 @@ class Estimate(Method):                                # closed form: no loop
     def fit(self, run):
         self.dataset.log("dataset", run)
         self.model.solve(self.dataset)
-        return self.evaluate(run)                      # once, it=None
+        return self.evaluate(run, final=True)          # once, it=None
 ```
 
 ```yaml
@@ -408,11 +408,13 @@ class's parts are still reached:
 # models/mlp.py
 @register
 class MLP(Model):
-    def log(self, name, run, it=None, **kw):
+    def log(self, name, run, it=None, final=False, **kw):
         run.track(self.rms(), name=sub(name, "rms"), step=it)
         run.track(cairn.Histogram(self.layer0.weight), name=sub(name, "w0"), step=it)
-        self.encoding.log(sub(name, "encoding"), run, it, **kw)   # -> model.encoding.*
-        super().log(name, run, it, **kw)
+        pred = self.render(scale=1 if final else 1 / 4)     # small while fitting
+        run.track(pred, name=sub(name, "pred"), step=it)
+        self.encoding.log(sub(name, "encoding"), run, it, final=final, **kw)
+        super().log(name, run, it, final=final, **kw)
 
 # encodings/fourier.py
 @register
@@ -433,7 +435,7 @@ its loop, between evaluations. A closed-form method evaluates once with
 `it=None`.
 
 **Names** mirror the object tree and nothing else: `model.rms`, `model.w0`,
-`model.encoding.spectrum`, `dataset.image`, `loss.weight`, `lr`, `eval.psnr`,
+`model.pred`, `model.encoding.spectrum`, `dataset.image`, `loss.weight`, `lr`, `eval.psnr`,
 and the method's own `train.loss`. Renaming a
 member renames its whole subtree, two instances of a class log under different
 prefixes without collisions, and a new component brings its own diagnostics
@@ -446,11 +448,20 @@ method's), not parameters as raw tensors, not anything cairn can derive from
 two things already tracked (an error image is the UI's diff of the
 reconstruction and the reference).
 
+**Keep intermediate media small.** Every tracked image, volume, or point set
+travels over the network to the cairn repo and is stored per step, so
+full-size media (a 4K reconstruction, a whole dataset, a dense volume) is
+logged **only at the end** — the final evaluation, marked by `final=True`
+passed down through `evaluate` and `log`. In between, log a crop or a
+downsampled version (a quarter-resolution render, a single slice, a subset of
+points), enough to see whether the fit is going the right way. The reference
+data itself is static and is logged once, at full size, at the start.
+
 **The judge: `evaluate`.** Metrics that compare a prediction to the truth
 belong to the thing that judges. The ground-truth base class implements
 
 ```python
-def evaluate(self, pred, run: cairn.Run, name: str = "eval", it: int | None = None) -> dict:
+def evaluate(self, pred, run: cairn.Run, name: str = "eval", it: int | None = None, **kw) -> dict:
 ```
 
 which computes the metrics, tracks them and the views that make sense for its
