@@ -5,27 +5,7 @@ window to the same host in the same working directory. Otherwise falls
 back to launching a local window with cwd=current.
 """
 
-import os
-import shutil
 from urllib.parse import unquote, urlparse
-
-# kitty inherits the desktop session's PATH, which need not match the shell's:
-# on Linux it often lacks the Homebrew prefix while still carrying an older
-# sshr (e.g. a leftover nix profile), so a bare "sshr" would start the wrong
-# binary. Resolve the Homebrew one first, then fall back to PATH.
-_BREW_BINS = (
-    "/opt/homebrew/bin",
-    "/home/linuxbrew/.linuxbrew/bin",
-    os.path.expanduser("~/.homebrew/bin"),
-)
-
-
-def sshr_exe():
-    for d in _BREW_BINS:
-        exe = os.path.join(d, "sshr")
-        if os.access(exe, os.X_OK):
-            return exe
-    return shutil.which("sshr") or "sshr"
 
 
 def main(args):
@@ -56,7 +36,7 @@ def handle_result(args, answer, target_window_id, boss):
             # '?' survive; decode it back before handing it to --remote-cwd.
             remote_cwd = unquote(urlparse(url).path)
 
-        cmd = [sshr_exe()]
+        cmd = ["sshr"]
         if remote_cwd:
             cmd.extend(["--remote-cwd", remote_cwd])
         cmd.append(sshr_host)
