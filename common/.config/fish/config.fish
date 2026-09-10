@@ -15,6 +15,11 @@ for b in ~/.homebrew/bin /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linux
         break
     end
 end
+# Cargo binaries come first, ahead of the brew prefix: a local `cargo install`
+# of a tool that is normally a brew formula (e.g. `cargo install --path .` while
+# debugging sshr) then transparently overrides the brew copy, and uninstalling it
+# restores the brew one. Nothing is installed here by default.
+fish_add_path -gp ~/.cargo/bin
 # pixi itself is a brew formula now; this appends ~/.pixi/bin so any `pixi global`
 # tools are on PATH without shadowing the brew tools above.
 fish_add_path -ga ~/.pixi/bin
