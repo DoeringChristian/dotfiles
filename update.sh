@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # update.sh — bring the whole toolset to the newest version.
-#   brew formulae/casks: brew upgrade.  --HEAD formulae (neovim, sshr, passage):
+#   brew formulae/casks: brew upgrade.  --HEAD formulae (neovim, resh, passage):
 #   refreshed from git via brew upgrade --fetch-HEAD.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
@@ -39,8 +39,8 @@ echo "==> brew update && upgrade"
 brew update && brew upgrade
 # --greedy so version:latest casks (claude-code@latest) re-fetch; casks work on Linux too.
 brew upgrade --cask --greedy
-echo "==> rebuild --HEAD formulae (neovim, sshr, passage) from latest git"
-brew upgrade --fetch-HEAD "$TAP/neovim" "$TAP/sshr" "$TAP/passage" 2>/dev/null || true
+echo "==> rebuild --HEAD formulae (neovim, resh, passage) from latest git"
+brew upgrade --fetch-HEAD "$TAP/neovim" "$TAP/resh" "$TAP/passage" 2>/dev/null || true
 # brew bundle's npm entry only installs-if-missing, so bump npm globals. Invoke
 # npm through Homebrew's Node explicitly to avoid an old distro Node on PATH.
 echo "==> npm globals -> latest"

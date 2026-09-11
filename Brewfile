@@ -3,7 +3,7 @@
 # support) setup.sh installs those from official builds instead.
 #
 # Some tools come from the in-repo tap (Formula/*.rb), which setup.sh registers
-# before `brew bundle`: neovim, sshr, passage, and Linux zathura formulae.
+# before `brew bundle`: neovim, resh, passage, and Linux zathura formulae.
 #
 # Add a tool = add a line. Keep everything at latest with `./update.sh`.
 
@@ -77,7 +77,7 @@ cask "codex"
 # --- from source, via the in-repo tap (setup.sh registers Formula/*.rb) ---
 # HEAD-only formulae (no stable release) -> args: ["HEAD"] so brew bundle builds
 # from git main instead of erroring on a missing stable. Neovim is listed above.
-brew "doeringc/local/sshr", args: ["HEAD"]      # Rust SSH wrapper
+brew "doeringc/local/resh", args: ["HEAD"]      # Rust SSH wrapper
 brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 
 # --- GUI apps + claude CLI (brew casks — these ship Linux variations, so

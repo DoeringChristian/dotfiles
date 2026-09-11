@@ -5,7 +5,7 @@ Cross-platform (macOS & Linux) dotfiles, managed with two tools:
 - **[GNU Stow](https://www.gnu.org/software/stow/)** — symlinks config files from
   this repo into `~`.
 - **[Homebrew](https://brew.sh)** — installs **every** tool from a single
-  [`Brewfile`](Brewfile). Three source builds (`neovim`, `sshr`, `passage`) come
+  [`Brewfile`](Brewfile). Three source builds (`neovim`, `resh`, `passage`) come
   from an in-repo tap ([`Formula/`](Formula)); GUI apps are casks on macOS and official
   builds on Linux.
 
@@ -60,7 +60,7 @@ just use the base. `update.sh` upgrades whatever's installed, so it needs no pro
 |---|---|
 | CLI tools + runtimes | Homebrew, one line each in [`Brewfile`](Brewfile) |
 | neovim (nightly) | in-repo formula based on core, with a consistent glibc sysroot on Linux |
-| From-source tools (`neovim`, `sshr`, `passage`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
+| From-source tools (`neovim`, `resh`, `passage`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
 | GUI apps (kitty, tev) + the `claude` CLI | brew **casks** on macOS; **official builds** on Linux (`setup.sh`) |
 | Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
 | Fonts | `common/.local/share/fonts/` (LFS); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
@@ -75,7 +75,7 @@ bump it with `brew upgrade --cask`.
 
 ```
 Brewfile            # THE tool list (source of truth)
-Formula/            # in-repo brew tap: neovim.rb, sshr.rb, passage.rb
+Formula/            # in-repo brew tap: neovim.rb, resh.rb, passage.rb
 common/             # portable config (stowed on all platforms)
 darwin/             # macOS-only config (stowed on macOS), incl. LaunchAgents
 stow/               # stow global ignore rules

@@ -37,7 +37,7 @@ Each line is a tool. Notable entries:
 - `brew "doeringc/local/neovim", args: ["HEAD"]` — nightly-equivalent; the local formula prevents mixed host/Homebrew glibc headers on Linux.
 - `brew "tree-sitter-cli"` — the CLI (the `tree-sitter` formula is only the library).
 - `brew "python@3.13"` — provides `python3`; brew doesn't link a bare `python` on macOS.
-- `brew "doeringc/local/neovim"`, `…/sshr`, `…/passage`, and Linux `…/zathura*` — the in-repo tap formulae.
+- `brew "doeringc/local/neovim"`, `…/resh`, `…/passage`, and Linux `…/zathura*` — the in-repo tap formulae.
 - `cask "kitty"/"tev"/"claude-code" if OS.mac?` — macOS GUI apps + the `claude` CLI.
   On **Linux** casks don't exist, so `setup.sh` installs these from official builds.
 
@@ -59,7 +59,7 @@ helpers, so a bare `./sync.sh` reuses the saved profile. Precedence: `--type` ar
 
 ```
 Brewfile          # the tool list
-Formula/          # in-repo brew tap (neovim.rb, sshr.rb, passage.rb, zathura*.rb)
+Formula/          # in-repo brew tap (neovim.rb, resh.rb, passage.rb, zathura*.rb)
 common/           # portable stow package (both platforms)
 darwin/           # macOS-only stow package (config overrides + LaunchAgents)
 stow/             # .stow-global-ignore
@@ -89,14 +89,14 @@ setup.sh / bootstrap.sh / update.sh
   `common/.claude/skills/research-project/` is a symlink to it so its
   workflow and bundled `registry.py` remain single-source.
 
-## sshr (special case)
+## resh (special case)
 
-`sshr` (SSH wrapper) is the `doeringc/local/sshr` tap formula (`--HEAD`, git main).
-The formula also installs its `share/sshr/{shpool,kitty}` data next to the binary
+`resh` (SSH wrapper) is the `doeringc/local/resh` tap formula (`--HEAD`, git main).
+The formula also installs its `share/resh/{shpool,kitty}` data next to the binary
 (shpool = prebuilt remote binaries it scp's to hosts). Its **kitty kittens** are
-also vendored at `common/.config/sshr/kitty/` (stow-linked) and referenced from
-`kitty.conf`. Local state: Linux `~/.local/share/sshr`; macOS
-`~/Library/Application Support/sshr` (the `dirs` crate) — so `~/.local/share/sshr`
+also vendored at `common/.config/resh/kitty/` (stow-linked) and referenced from
+`kitty.conf`. Local state: Linux `~/.local/share/resh`; macOS
+`~/Library/Application Support/resh` (the `dirs` crate) — so `~/.local/share/resh`
 legitimately won't exist on a Mac.
 
 ## Conventions
