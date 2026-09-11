@@ -75,9 +75,9 @@ cask "claude-code@latest"
 cask "codex"
 
 # --- from source, via the in-repo tap (setup.sh registers Formula/*.rb) ---
-# HEAD-only formulae (no stable release) -> args: ["HEAD"] so brew bundle builds
-# from git main instead of erroring on a missing stable. Neovim is listed above.
-brew "doeringc/local/resh", args: ["HEAD"]      # Rust SSH wrapper
+# HEAD-only formulae (no stable release, or intentionally tracking development)
+# use args: ["HEAD"] to build from git main. Neovim is listed above.
+brew "doeringc/local/resh", args: ["HEAD"]      # Rust SSH wrapper (development)
 brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 
 # --- GUI apps + claude CLI (brew casks — these ship Linux variations, so

@@ -3,7 +3,7 @@ class Resh < Formula
   homepage "https://github.com/DoeringChristian/resh"
   head "https://github.com/DoeringChristian/resh.git", branch: "main"
   license "MIT"
-  # no tagged release -> head-only; install with:  brew install --HEAD resh
+  # Development install: track git main rather than stable releases.
   depends_on "rust" => :build
 
   def install

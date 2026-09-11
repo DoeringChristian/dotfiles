@@ -1,6 +1,6 @@
 """Kitty kitten: context-aware window launch.
 
-When the active window is an resh remote session, launches a new resh
+When the active window is a resh remote session, launches a new resh
 window to the same host in the same working directory. Otherwise falls
 back to launching a local window with cwd=current.
 """
