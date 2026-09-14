@@ -76,8 +76,19 @@ project/
 
 Only `configs/`, `util/`, `experiments/`, and `reports/` are fixed. Create one
 `<concept>` directory per concept the project actually has, named for it — an
-ML project might have `methods/`, `models/`, `encodings/`, `losses/`, and
-`datasets/`; a rendering project `integrators/` and `scenes/`. Never copy example names from this skill
+ML project might have `methods/`, `models/`, `encoders/`, `losses/`, and
+`datasets/`; a rendering project `integrators/` and `scenes/`.
+
+**Check the name is free before you use it.** The project root is the import
+root (see `PYTHONPATH` below), so a top-level directory shadows any stdlib
+module of the same name. `encodings/` is the trap worth naming: CPython imports
+`encodings` while starting up, so that one directory kills the interpreter
+before it runs a line of your code. `types/`, `io/`, `copy/`, `queue/`,
+`logging/`, `platform/` and `test/` are all plausible concept names and all
+taken. Run `python -c "import <name>"` first; if it succeeds, pick another
+name.
+
+Never copy example names from this skill
 into a project they don't fit, and never nest a package hierarchy.
 
 ## pixi setup
@@ -185,6 +196,10 @@ if __name__ == "__main__":
     main()
 ```
 
+Open every group config with a one-line comment saying which regime that
+variant is for and why you would pick it. A config group is a menu, and the
+`type` alone does not say when to order it.
+
 Use one config group per top-level concept (`configs/method/`,
 `configs/model/`, `configs/dataset/`) so variants are selected on the CLI
 (`python experiments/run.py method=estimate`) and swept (`-m model=a,b`):
@@ -202,7 +217,11 @@ seed: 0
 
 When a variant of one concept requires a particular variant of another (a
 closed-form model needs the closed-form procedure), let its config select that
-too, instead of a check in code. A `# @package _global_` group config can
+too, instead of a check in code. `# @package <path>` also gives a *sub-object*
+its own group: `# @package target.scene` at the top of `configs/scene/*.yaml`
+makes the scene CLI-selectable with `scene=cornell_box` while it is still built
+as part of the target, so the entry point never has to know the target has a
+scene. A `# @package _global_` group config can
 carry an override of another group, provided the overridden group appears
 earlier in the primary defaults list:
 
@@ -215,6 +234,28 @@ model:
   type: ClosedForm
   order: 3
 ```
+
+### A registry config is replaced whole, never merged
+
+A `type` and its sibling keys are one unit: the siblings only mean anything to
+the class `type` names. Hydra's defaults list **merges** mappings, so inheriting
+a group config and overriding a nested object silently keeps the old object's
+keys:
+
+```yaml
+# configs/flow/fourier.yaml — ❌ merges, does not replace
+defaults:
+  - mean_velocity        # its encoder is {type: HashGrid, levels: 8}
+encoder:
+  type: Fourier
+  bands: 6
+# composes to {type: Fourier, levels: 8, bands: 6} -> Fourier(levels=8) TypeError
+```
+
+Write each variant's config out in full instead of inheriting a sibling variant,
+or put the nested object in its own config group and select it. The failure is
+a `TypeError` from a constructor that never heard of `levels`, far from the
+config that caused it.
 
 ## Building objects from config (registry + `type` key)
 
@@ -297,6 +338,18 @@ registered subclass per variant, and let the config's `type` key pick. New
 behavior = new subclass + one config line, no new flags. Each concept's
 `__init__.py` exports the base class and imports every variant module, so
 `from models import Model` is enough for all `@register` decorators to run.
+
+**A hierarchy may be deeper than two.** "One subclass per variant" is about
+the *variants*, not a ban on an intermediate: where several variants share real
+machinery, an unregistered abstract class between the concept base and the
+registered leaves is right. Only the leaves carry `@register`, so only the
+leaves are selectable.
+
+**A shared step with one implementation stays a function.** Wrapping it in a
+base class and a registry entry before a second implementation exists is
+ceremony around a single call site. Promote it to a concept when the second
+implementation arrives, which is also when the config gains something to
+choose between.
 
 This applies to **procedures** as much as to models. A loop that checks what
 kind of object it was given (`if isinstance(model, ...)`, `if field has
@@ -536,6 +589,20 @@ kind (`eval.psnr`, `eval.reconstruction`, `eval.spectrum`; a 6D signal would
 track slices), and returns the metrics so the method can report them as the
 run's final numbers.
 
+**Judge on a fixed domain.** Whatever the method predicts on — a grid, a
+lattice, a held-out split — has to be built once and reused for the life of the
+run, from its own seed. If it is redrawn per call, the method predicts on one
+draw and the judge scores against another, and the metric moves for reasons
+that have nothing to do with the fit.
+
+**Report the headroom, not just the score.** A number that can look excellent
+because the instance was easy is a number that lies. Alongside what the method
+achieved, track what was there to achieve — the best any method could do on
+this instance, and the fraction of it collected. Track the diagnostics that say
+whether the result is *valid at all*, separately from how good it is: the share
+of the domain where the prediction is degenerate, where a density is unbounded
+or a Jacobian folds. A method can score well on the part that is still valid.
+
 ## Experiment tracking (cairn-track)
 
 Run `cairn init` once (creates `./.cairn/`, git-ignored). Every experiment
@@ -552,6 +619,19 @@ run.track(cairn.Histogram(weights, bins=64), name="model.w0", step=it)
 run.track(method, "", step=it)          # a component: walks the whole tree
 ```
 
+**A fitted object that something downstream loads is an artifact, not a
+result.** Weights a renderer will consume, a solved table, a trained guide:
+record them with `run.log_artifact(value, name)` so they stay attached to the
+run that produced them, rather than in a directory beside it. "Nothing saved that cairn
+could show" is about results; an artifact is not a view, it is an input to the
+next thing.
+
+**Record the environment facts the config does not fix.** Anything resolved at
+startup that changes the numbers — the device, the backend or variant actually
+selected, the precision, the library version — goes into `run.config(...)`
+alongside the composed config. The seed is in the config; the GPU is not, and
+without it two runs that disagree cannot be told apart.
+
 `step` is required on every call. `run.track` also accepts `cairn.Image` (with box/mask overlays),
 `cairn.Tensor`, `cairn.Text`, `cairn.Audio`. The repo is resolved via
 `CAIRN_REPO` / `./.cairn`; use `repo="cairn://host:port"` for a shared server
@@ -559,6 +639,12 @@ and `local_wal=True` on clusters (NFS/Slurm). Read runs back with
 `cairn.Reader`.
 
 ## Reports (on demand)
+
+A **paper figure** is the one thing `cairn ui` cannot give you: a sized,
+LaTeX-typeset PDF. It belongs in the same place and under the same rule — a
+script under `reports/<name>/` that reads the runs back and writes the file,
+never a figure edited by hand or saved from a notebook. The
+`matplotlib-publication-plot` skill covers the typesetting.
 
 Do **not** scaffold reports by default — tracked runs browsed via `cairn ui` are
 the primary view of results. When the user asks for a report, create a
@@ -582,6 +668,16 @@ Useful components: `cp.Line`, `cp.Scatter`, `cp.Bar`, `cp.Histogram`,
 `cp.Heatmap`, `cp.Image`, `cp.Compare`, `cp.Table`, `cp.Figure` (plotly
 passthrough), `cp.Grid`, `cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
 
+## Writing it down
+
+Open every module with a docstring that says **why the design is what it is**,
+in the project's own scientific terms, not what the API does. The reader who
+needs it is you in three months, looking at a choice that will read as a bug
+without its reason: why points are stored in ambient coordinates rather than a
+chart, why the head starts small, why a quadrature and not an estimator. Justify
+numerical constants and cite where they come from. This is the difference
+between a codebase that can be picked up and one that has to be re-derived.
+
 ## Reproducibility checklist
 
 - [ ] `pixi.lock` committed; `.pixi/` git-ignored
@@ -603,4 +699,10 @@ passthrough), `cp.Grid`, `cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
 - [ ] Reports (if any) live in `reports/<name>/`, reference the tracked runs
       via `cairn.Reader`, and are produced only by their script, never edited
       by hand
+- [ ] Concept directory names checked against the stdlib (`python -c "import
+      <name>"` fails for each)
+- [ ] Environment facts resolved at startup (device, backend, precision)
+      attached with `run.config(...)`; fitted objects saved with
+      `run.log_artifact`, not into a results directory
+- [ ] Every group config opens with a line saying which regime it is for
 - [ ] A fresh clone reproduces everything with `pixi install && pixi run all`
