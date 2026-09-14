@@ -5,13 +5,15 @@ description:
   pixi (dependencies mainly from PyPI), with a flat layout, hydra-managed
   configs, a registry/build ("type" key) pattern for constructing objects from
   config, one registered Method per way of fitting (no procedure branches on
-  the kind of object it was given), components that log themselves with
-  log(name, run, it), experiments tracked with cairn-track, and on-demand
+  the kind of object it was given), components that record themselves through
+  cairn's __cairn_track__(self, scope) protocol, experiments tracked with
+  cairn-track, and on-demand
   cairn-plot reports. Use when starting a new research project, setting up
   pixi/pixi.toml, adding a method, model, or component, adding experiment,
   tracking, logging, or report scaffolding, or when the user mentions
+  __cairn_track__, cairn.Scope,
   cairn-track, cairn-plot, experiment tracking, "reproducible report", hydra
-  configs, the registry/build pattern, component logging, or pixi project
+  configs, the registry/build pattern, component tracking, or pixi project
   setup.
 ---
 
@@ -43,12 +45,12 @@ scratch with a single command.
    training, a closed-form estimate, rendering, evaluation — is an object
    selected from the config. No entry point, helper, or method body ever
    branches on what kind of task or object it was given.
-7. **Components log themselves.** A component that has something worth seeing
-   defines `log(name, run, it)`: it tracks its own diagnostics under its own
-   prefix and delegates to its parts with `log_part(part, sub(name, part), …)`
-   ([track.py](track.py)). `log` is a convention, not an interface — there is
-   no base class to inherit and a component with nothing to show simply omits
-   it. Logging is never assembled from outside.
+7. **Components record themselves.** A component that has something worth
+   seeing implements cairn's `__cairn_track__(self, scope)` and calls
+   `scope.track(value, name)`; `run.track(method, "", step=it)` then walks the
+   whole tree. Nothing is inherited and nothing is required — a component with
+   nothing to show simply omits the method. Tracking is never assembled from
+   outside.
 8. **Graphics use plotly or cairn-plot; images always use cairn-plot.**
    cairn-plot's image viewer supports arbitrary client-side comparisons
    (side-by-side / wipe / blend, pixel-diff kernels incl. FLIP and SSIM, synced
@@ -65,7 +67,7 @@ project/
 ├── .gitignore         # ignore .pixi/, .cairn/, outputs/
 ├── .cairn/            # cairn-track repo — all results live here (git-ignored)
 ├── configs/           # hydra configs (config.yaml + config groups)
-├── util/              # registry.py, track.py, shared helpers
+├── util/              # registry.py + shared helpers
 ├── <concept>/         # one flat dir per project concept: base class + one
 ├── <concept>/         #   subclass per variant — named for THIS project
 ├── experiments/       # entry points; every run tracks into cairn
@@ -259,9 +261,9 @@ of task knowledge. The `Method` owns both objects, so it does that wiring
 itself at the start of the task:
 
 ```python
-def prepare(self, run):                      # called first by every fit()
+def prepare(self, run, step):                       # called first by every fit()
     self.model.reset(self.dataset.bounds())
-    log_part(self.dataset, "dataset", run)   # static members: once
+    run.track(self.dataset, "dataset", step=step)   # static members: once
 ```
 
 **Capabilities a method requires** of the object it fits — a differentiable
@@ -330,7 +332,6 @@ import cairn
 
 from datasets import Dataset
 from models import Model
-from util.track import log_part, sub
 
 class Method:
     def __init__(self, model: Model, dataset: Dataset):
@@ -340,14 +341,25 @@ class Method:
     def fit(self, run: cairn.Run) -> dict:
         raise NotImplementedError
 
-    def evaluate(self, run: cairn.Run, it: int | None = None, **kw) -> dict:
-        pred = self.model(self.dataset.grid())
-        metrics = self.dataset.evaluate(pred, run, "eval", it, **kw)
-        self.log("", run, it, **kw)                # changing members
+    def prepare(self, run: cairn.Run, step: int) -> None:
+        """Wire the parts together, then record what will not change again."""
+        self.model.reset(self.dataset.bounds())
+        run.track(self.dataset, "dataset", step=step)
+
+    def finish(self, run: cairn.Run, step: int) -> dict:
+        """Last evaluation, plus the artifacts too expensive to repeat."""
+        metrics = self.evaluate(run, step)
+        run.track(self.model.render(scale=1), name="final.render", step=step)
         return metrics
 
-    def log(self, name, run, it=None, **kw):
-        log_part(self.model, sub(name, "model"), run, it, **kw)
+    def evaluate(self, run: cairn.Run, step: int) -> dict:
+        pred = self.model(self.dataset.grid())
+        metrics = self.dataset.evaluate(pred, run, "eval", step)
+        run.track(self, "", step=step)          # walks the changing members
+        return metrics
+
+    def __cairn_track__(self, scope):
+        scope.track(self.model, "model")
 ```
 
 ```python
@@ -355,7 +367,6 @@ class Method:
 from losses import Loss
 from methods.base import Method
 from util.registry import build, register
-from util.track import log_part, sub
 
 @register
 class GradientFit(Method):
@@ -366,17 +377,17 @@ class GradientFit(Method):
         self.lr, self.iterations, self.eval_every = lr, iterations, eval_every
 
     def fit(self, run):
-        log_part(self.dataset, "dataset", run)         # static members: once
+        self.prepare(run, step=0)                      # static members: once
         for it in range(self.iterations):
             value = self.step()                        # one optimizer step -> loss value
             run.track(value, name="train.loss", step=it)   # the method's own curve
             if it % self.eval_every == 0:
                 self.evaluate(run, it)
-        return self.evaluate(run, self.iterations, final=True)   # full-size media
+        return self.finish(run, self.iterations)       # last eval + full-size media
 
-    def log(self, name, run, it=None, **kw):
-        log_part(self.loss, sub(name, "loss"), run, it, **kw)
-        super().log(name, run, it, **kw)         # -> model.* (Method defines log)
+    def __cairn_track__(self, scope):
+        scope.track(self.loss, "loss")
+        super().__cairn_track__(scope)                 # -> model.*
 
 # methods/estimate.py
 from methods.base import Method
@@ -385,9 +396,9 @@ from util.registry import register
 @register
 class Estimate(Method):                                # closed form: no loop
     def fit(self, run):
-        self.dataset.log("dataset", run)
+        self.prepare(run, step=0)
         self.model.solve(self.dataset)
-        return self.evaluate(run, final=True)          # once, it=None
+        return self.finish(run, step=0)                # evaluated once, at step 0
 ```
 
 ```yaml
@@ -424,101 +435,100 @@ If any code asks "are we training or fitting?", the missing abstraction is a
 `Method` subclass (or a sub-object built from config) — add it instead of the
 branch.
 
-## Components log themselves
+## Components record themselves
 
-Copy [track.py](track.py) into `util/track.py`. It holds two small helpers,
-`sub` and `log_part`, and **no base class**: a component that has something
-worth seeing just defines
+Nothing is copied into the project for this: `__cairn_track__` is cairn's own
+protocol. A component that has something worth seeing implements
 
 ```python
-def log(self, name: str, run: cairn.Run, it: int | None = None, **_) -> None:
+def __cairn_track__(self, scope) -> None:
 ```
 
-Nothing inherits from anything to get this, and nothing is required to define
-it. Components are free to use whatever class hierarchy their concept actually
-needs.
+and records through the `scope` it is handed. Nothing is inherited and nothing
+is required, so components keep whatever class hierarchy their concept needs. A
+`scope` is a `cairn.Run` with a name prefix, a `step` and a `context` already
+bound to it, and it has one operation:
 
-- `name` — the prefix this object logs under (`""` at the top level). Each
-  component chooses only the **last segment** of its own names via
-  `sub(name, part)`; the prefix is always what it was given.
-- `run` — the `cairn.Run` to track into.
-- `it` — the iteration used as `step=`; `None` for one-shot logging.
-- `**_` — extra context a caller may pass down the tree (`subset="val"`,
-  `final=True`, …) without every class having to declare or understand it.
+- `scope.track(value, name)` — record `value` under `name` joined onto the
+  prefix. If `value` implements `__cairn_track__` it is handed a child scope and
+  records itself instead, so one call covers scalars, media and sub-components
+  alike. `None` is a silent skip, so an optional member needs no guard.
+- `scope.scope(name)` returns that child scope directly, for the rare case you
+  want it without tracking anything.
+- `scope.run`, `scope.step` and `scope.name` are there for an escape hatch.
 
-An object tracks its own diagnostics under `name`, then **delegates to its
-parts** with `log_part`, which calls the part's `log` if it has one and does
-nothing otherwise. Parents therefore delegate to every member they own without
-`hasattr` or `isinstance` checks, and without caring whether that member is a
-rich component, a plain float, or `None`. Call `super().log(...)` **only when
-the base class actually defines one** -- there is no inherited no-op to fall
-back on, so `super().log` against a base without it is an `AttributeError`:
+`Run` is itself the root scope, so walking a tree needs no new API:
+
+```python
+run.track(method, "", step=it)      # records method.*, model.*, model.encoding.*
+```
+
+Use `run.scope(step=it)` only where recursion cannot reach — handing a bound
+scope to a plain function that is not a component, as in
+`evaluate(model, run.scope(step=it))`.
 
 ```python
 # models/mlp.py
-from util.track import log_part, sub
-
 @register
 class MLP(Model):
-    def log(self, name, run, it=None, final=False, **kw):
-        run.track(self.rms(), name=sub(name, "rms"), step=it)
-        run.track(cairn.Histogram(self.layer0.weight), name=sub(name, "w0"), step=it)
-        pred = self.render(scale=1 if final else 1 / 4)     # small while fitting
-        run.track(pred, name=sub(name, "pred"), step=it)
-        log_part(self.encoding, sub(name, "encoding"), run, it, final=final, **kw)
-        # no super().log here: the Model base defines none
+    def __cairn_track__(self, scope):
+        scope.track(self.rms(), "rms")
+        scope.track(cairn.Histogram(self.layer0.weight), "w0")
+        scope.track(self.render(scale=1 / 4), "pred")   # cheap; full size at the end
+        scope.track(self.encoding, "encoding")          # recurses
+        super().__cairn_track__(scope)                  # only if Model defines one
 
 # encodings/fourier.py
 @register
 class Fourier(Encoding):
-    def log(self, name, run, it=None, **kw):
-        run.track(self.spectrum_figure(), name=sub(name, "spectrum"), step=it)
+    def __cairn_track__(self, scope):
+        scope.track(self.spectrum_figure(), "spectrum")
 ```
 
-`log_parts({"model": self.model, "loss": self.loss}, name, run, it, **kw)` does
-several members at once when a component owns many.
+Components with nothing to show implement nothing. `scope.track` on them
+records the object as a plain value, so pass a component only where you mean
+its diagnostics.
 
-Components with nothing to show define no `log` at all — there is no no-op to
-inherit and no empty override to write.
+**The step is always bound and always real.** `run.track` requires `step`, and
+every scope beneath inherits the one named at the root. There is no
+auto-increment and no `None`: a member recorded on only some iterations would
+otherwise keep its own count and claim iterations that were not its own. A
+closed-form method that evaluates once still names a step, `step=0`.
 
-**When it is called.** The method calls `self.log("", run, it)` at every
-**evaluation** and nowhere else, so `log` covers the members that *change*
-while fitting. Static members (the dataset, the reference signal) are logged
-**once**, at the start of the task, so no `log` needs a "first time" check.
-Per-step curves (`train.loss`) are the method's own and are tracked directly in
-its loop, between evaluations. A closed-form method evaluates once with
-`it=None`.
+**When it is called.** The method walks itself at every **evaluation** and
+nowhere else, so the walk covers the members that *change* while fitting.
+Static members are recorded **once**, in `prepare`, so no component needs a
+"first time" check. Per-step curves such as `train.loss` are the method's own
+and are tracked directly in its loop, between evaluations.
 
 **Names** mirror the object tree and nothing else: `model.rms`, `model.w0`,
 `model.pred`, `model.encoding.spectrum`, `dataset.image`, `eval.psnr`, and the
-method's own `train.loss`. Renaming a
-member renames its whole subtree, two instances of a class log under different
-prefixes without collisions, and a new component brings its own diagnostics
-with it instead of edits to the loop.
+method's own `train.loss`. Renaming a member renames its whole subtree, two
+instances of a class record under different prefixes without collisions, and a
+new component brings its own diagnostics with it instead of edits to the loop.
 
-**What to log.** What you would want to *look at* to tell whether the component
-is doing its job: a few scalars (norms, counts, a fraction), a histogram of a
-table, an image of a dictionary, a spectrum, a point layout. Not the loss (the
-method's), not parameters as raw tensors, not anything cairn can derive from
-two things already tracked (an error image is the UI's diff of the
+**What to record.** What you would want to *look at* to tell whether the
+component is doing its job: a few scalars (norms, counts, a fraction), a
+histogram of a table, an image of a dictionary, a spectrum, a point layout. Not
+the loss (the method's), not parameters as raw tensors, not anything cairn can
+derive from two things already tracked (an error image is the UI's diff of the
 reconstruction and the reference), and not constructor constants such as a
 learning rate or a loss weight — the composed config is already attached to the
 run, so re-emitting them per step just makes flat lines.
 
-**Keep intermediate media small.** Every tracked image, volume, or point set
-travels over the network to the cairn repo and is stored per step, so
-full-size media (a 4K reconstruction, a whole dataset, a dense volume) is
-logged **only at the end** — the final evaluation, marked by `final=True`
-passed down through `evaluate` and `log`. In between, log a crop or a
-downsampled version (a quarter-resolution render, a single slice, a subset of
-points), enough to see whether the fit is going the right way. The reference
-data itself is static and is logged once, at full size, at the start.
+**Keep what repeats cheap.** Every tracked image, volume or point set travels
+to the cairn repo on every evaluation, so a component's `__cairn_track__`
+records a *fixed, cheap* view: a quarter-resolution render, one slice, a subset
+of points. The expensive full-size artifact is recorded once, by the method, in
+`finish` — a component cannot know it is the last iteration, and cairn has no
+flag that tells it. The reference data is static and is recorded once, at full
+size, in `prepare`.
 
 **The judge: `evaluate`.** Metrics that compare a prediction to the truth
 belong to the thing that judges. The ground-truth base class implements
 
 ```python
-def evaluate(self, pred, run: cairn.Run, name: str = "eval", it: int | None = None, **kw) -> dict:
+def evaluate(self, pred, run: cairn.Run, name: str = "eval", step: int = 0) -> dict:
 ```
 
 which computes the metrics, tracks them and the views that make sense for its
@@ -539,9 +549,10 @@ run.track(loss, name="train.loss", step=it, context={"subset": "val"})
 run.track(image_array, name="eval.reconstruction", step=it)        # image
 run.track(fig, name="model.encoding.spectrum", step=it)            # mpl/plotly
 run.track(cairn.Histogram(weights, bins=64), name="model.w0", step=it)
+run.track(method, "", step=it)          # a component: walks the whole tree
 ```
 
-`run.track` also accepts `cairn.Image` (with box/mask overlays),
+`step` is required on every call. `run.track` also accepts `cairn.Image` (with box/mask overlays),
 `cairn.Tensor`, `cairn.Text`, `cairn.Audio`. The repo is resolved via
 `CAIRN_REPO` / `./.cairn`; use `repo="cairn://host:port"` for a shared server
 and `local_wal=True` on clusters (NFS/Slurm). Read runs back with
@@ -582,10 +593,10 @@ passthrough), `cp.Grid`, `cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
 - [ ] Random seeds fixed in the config and recorded per run
 - [ ] One registered `Method` per way of fitting, selected by config; no
       procedure branches on the kind of task or object it was given
-- [ ] Components that have something worth seeing define `log(name, run, it)`
-      and delegate to their parts with `log_part`; no base class is imposed to
-      get this, and `run.track` is never called on a component's state from
-      outside it
+- [ ] Components that have something worth seeing implement
+      `__cairn_track__(self, scope)` and record through the scope
+      they are handed; no base class is imposed to get this, and nothing
+      outside a component decides what that component records
 - [ ] Every result an experiment produces is tracked into cairn (metrics,
       figures, images) — no ad-hoc results directories, nothing printed or
       saved that cairn could show
