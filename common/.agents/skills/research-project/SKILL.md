@@ -43,10 +43,12 @@ scratch with a single command.
    training, a closed-form estimate, rendering, evaluation — is an object
    selected from the config. No entry point, helper, or method body ever
    branches on what kind of task or object it was given.
-7. **Components log themselves.** Every component implements
-   `log(name, run, it)`: it tracks what is worth seeing about itself under its
-   own prefix and delegates to its parts under `sub(name, part)`
-   ([track.py](track.py)). Logging is never assembled from outside.
+7. **Components log themselves.** A component that has something worth seeing
+   defines `log(name, run, it)`: it tracks its own diagnostics under its own
+   prefix and delegates to its parts with `log_part(part, sub(name, part), …)`
+   ([track.py](track.py)). `log` is a convention, not an interface — there is
+   no base class to inherit and a component with nothing to show simply omits
+   it. Logging is never assembled from outside.
 8. **Graphics use plotly or cairn-plot; images always use cairn-plot.**
    cairn-plot's image viewer supports arbitrary client-side comparisons
    (side-by-side / wipe / blend, pixel-diff kernels incl. FLIP and SSIM, synced
@@ -103,11 +105,26 @@ cairn-plot = { git = "https://github.com/doeringchristian/cairn-plot" }
 cairn-track = { git = "https://github.com/doeringchristian/cairn", extras = ["media"] }
 black = "*"              # formatter; run after every edit
 
+[activation.env]
+# The layout is flat, so the project root is the import root: `from methods
+# import Method` has to resolve while the entry point lives in experiments/.
+# Running a script only puts *that script's* directory on sys.path, so without
+# this every import of a sibling concept fails in a fresh checkout.
+PYTHONPATH = "."
+
 [tasks]
 experiment = "python experiments/run.py"
 ui = "cairn ui"          # browse tracked runs at http://localhost:4301/
 format = "black ."
 all = { depends-on = ["experiment"] }
+```
+
+Then resolve the environment and create the cairn repo, in this order — both
+are assumed by everything below:
+
+```bash
+pixi install          # writes pixi.lock; commit it
+pixi run cairn init   # creates ./.cairn/ (git-ignored)
 ```
 
 - Add PyPI packages with `pixi add --pypi <pkg>`; conda packages with
@@ -203,7 +220,10 @@ Copy [registry.py](registry.py) into `util/registry.py`. Decorate a class with
 `@register`; `build(Base, cfg)` looks up `cfg["type"]` in the global registry,
 passes the remaining keys as constructor kwargs (explicit kwargs to `build`
 override the config), type-checks the result, and passes an existing instance
-through unchanged. Nested objects are configured the same way at every level:
+through unchanged. The registry is keyed on the bare class name in one global
+namespace and refuses a duplicate, so two concepts cannot both register a
+`Uniform`; give one of them a qualified name. Nested objects are configured the
+same way at every level:
 
 ```yaml
 # configs/model/mlp.yaml
@@ -227,6 +247,29 @@ class MLP(Model):
         self.width = width
 ```
 
+**Injecting what a child cannot configure.** Keyword arguments passed to
+`build` beat the config, which is how a parent hands its children a shared
+object no config file could name — `build(Source, source, manifold=self.manifold)`.
+Express an optional sub-object's default in the config's own vocabulary rather
+than as a bare class: `build(Encoding, encoding or {"type": "Fourier"})`.
+
+**Wiring that needs a value from another concept** — a bounding box, a vocab
+size, an input dimension — does not belong in the entry point, which stays free
+of task knowledge. The `Method` owns both objects, so it does that wiring
+itself at the start of the task:
+
+```python
+def prepare(self, run):                      # called first by every fit()
+    self.model.reset(self.dataset.bounds())
+    log_part(self.dataset, "dataset", run)   # static members: once
+```
+
+**Capabilities a method requires** of the object it fits — a differentiable
+representation exposing `parameters`, a closed-form one exposing `solve` —
+belong on that concept's base class raising `NotImplementedError`, so an
+incompatible pairing fails where the capability is declared instead of deep
+inside a loop. The config is what pairs them; no code branches on the pairing.
+
 ## Class organization (inheritance over flags)
 
 Avoid parameters that switch behavior via `if`/`else` or `match` — each variant
@@ -238,7 +281,7 @@ class Model:
     def __init__(self, kind: str = "mlp", use_encoding: bool = False): ...
 
 # ✅ one base class per top-level concept, one subclass per variant
-class Model(Trackable): ...
+class Model: ...
 
 @register
 class MLP(Model): ...
@@ -287,9 +330,9 @@ import cairn
 
 from datasets import Dataset
 from models import Model
-from util.track import Trackable, sub
+from util.track import log_part, sub
 
-class Method(Trackable):
+class Method:
     def __init__(self, model: Model, dataset: Dataset):
         self.model = model
         self.dataset = dataset
@@ -304,7 +347,7 @@ class Method(Trackable):
         return metrics
 
     def log(self, name, run, it=None, **kw):
-        self.model.log(sub(name, "model"), run, it, **kw)
+        log_part(self.model, sub(name, "model"), run, it, **kw)
 ```
 
 ```python
@@ -312,7 +355,7 @@ class Method(Trackable):
 from losses import Loss
 from methods.base import Method
 from util.registry import build, register
-from util.track import sub
+from util.track import log_part, sub
 
 @register
 class GradientFit(Method):
@@ -323,7 +366,7 @@ class GradientFit(Method):
         self.lr, self.iterations, self.eval_every = lr, iterations, eval_every
 
     def fit(self, run):
-        self.dataset.log("dataset", run)               # static members: once
+        log_part(self.dataset, "dataset", run)         # static members: once
         for it in range(self.iterations):
             value = self.step()                        # one optimizer step -> loss value
             run.track(value, name="train.loss", step=it)   # the method's own curve
@@ -332,9 +375,8 @@ class GradientFit(Method):
         return self.evaluate(run, self.iterations, final=True)   # full-size media
 
     def log(self, name, run, it=None, **kw):
-        run.track(self.lr, name=sub(name, "lr"), step=it)
-        self.loss.log(sub(name, "loss"), run, it, **kw)
-        super().log(name, run, it, **kw)              # -> model.*
+        log_part(self.loss, sub(name, "loss"), run, it, **kw)
+        super().log(name, run, it, **kw)         # -> model.* (Method defines log)
 
 # methods/estimate.py
 from methods.base import Method
@@ -384,13 +426,17 @@ branch.
 
 ## Components log themselves
 
-Copy [track.py](track.py) into `util/track.py`. Every component base class
-(`Method`, `Model`, `Dataset`, `Loss`, `Encoding`, …) derives from `Trackable`
-and implements
+Copy [track.py](track.py) into `util/track.py`. It holds two small helpers,
+`sub` and `log_part`, and **no base class**: a component that has something
+worth seeing just defines
 
 ```python
 def log(self, name: str, run: cairn.Run, it: int | None = None, **_) -> None:
 ```
+
+Nothing inherits from anything to get this, and nothing is required to define
+it. Components are free to use whatever class hierarchy their concept actually
+needs.
 
 - `name` — the prefix this object logs under (`""` at the top level). Each
   component chooses only the **last segment** of its own names via
@@ -401,11 +447,17 @@ def log(self, name: str, run: cairn.Run, it: int | None = None, **_) -> None:
   `final=True`, …) without every class having to declare or understand it.
 
 An object tracks its own diagnostics under `name`, then **delegates to its
-parts** with the part's name appended, and calls `super().log` so a base
-class's parts are still reached:
+parts** with `log_part`, which calls the part's `log` if it has one and does
+nothing otherwise. Parents therefore delegate to every member they own without
+`hasattr` or `isinstance` checks, and without caring whether that member is a
+rich component, a plain float, or `None`. Call `super().log(...)` **only when
+the base class actually defines one** -- there is no inherited no-op to fall
+back on, so `super().log` against a base without it is an `AttributeError`:
 
 ```python
 # models/mlp.py
+from util.track import log_part, sub
+
 @register
 class MLP(Model):
     def log(self, name, run, it=None, final=False, **kw):
@@ -413,8 +465,8 @@ class MLP(Model):
         run.track(cairn.Histogram(self.layer0.weight), name=sub(name, "w0"), step=it)
         pred = self.render(scale=1 if final else 1 / 4)     # small while fitting
         run.track(pred, name=sub(name, "pred"), step=it)
-        self.encoding.log(sub(name, "encoding"), run, it, final=final, **kw)
-        super().log(name, run, it, final=final, **kw)
+        log_part(self.encoding, sub(name, "encoding"), run, it, final=final, **kw)
+        # no super().log here: the Model base defines none
 
 # encodings/fourier.py
 @register
@@ -423,8 +475,11 @@ class Fourier(Encoding):
         run.track(self.spectrum_figure(), name=sub(name, "spectrum"), step=it)
 ```
 
-Components with nothing to show inherit the no-op, so parents call `log` on
-every part unconditionally — no `hasattr` or `isinstance` checks.
+`log_parts({"model": self.model, "loss": self.loss}, name, run, it, **kw)` does
+several members at once when a component owns many.
+
+Components with nothing to show define no `log` at all — there is no no-op to
+inherit and no empty override to write.
 
 **When it is called.** The method calls `self.log("", run, it)` at every
 **evaluation** and nowhere else, so `log` covers the members that *change*
@@ -435,8 +490,8 @@ its loop, between evaluations. A closed-form method evaluates once with
 `it=None`.
 
 **Names** mirror the object tree and nothing else: `model.rms`, `model.w0`,
-`model.pred`, `model.encoding.spectrum`, `dataset.image`, `loss.weight`, `lr`, `eval.psnr`,
-and the method's own `train.loss`. Renaming a
+`model.pred`, `model.encoding.spectrum`, `dataset.image`, `eval.psnr`, and the
+method's own `train.loss`. Renaming a
 member renames its whole subtree, two instances of a class log under different
 prefixes without collisions, and a new component brings its own diagnostics
 with it instead of edits to the loop.
@@ -446,7 +501,9 @@ is doing its job: a few scalars (norms, counts, a fraction), a histogram of a
 table, an image of a dictionary, a spectrum, a point layout. Not the loss (the
 method's), not parameters as raw tensors, not anything cairn can derive from
 two things already tracked (an error image is the UI's diff of the
-reconstruction and the reference).
+reconstruction and the reference), and not constructor constants such as a
+learning rate or a loss weight — the composed config is already attached to the
+run, so re-emitting them per step just makes flat lines.
 
 **Keep intermediate media small.** Every tracked image, volume, or point set
 travels over the network to the cairn repo and is stored per step, so
@@ -525,9 +582,10 @@ passthrough), `cp.Grid`, `cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
 - [ ] Random seeds fixed in the config and recorded per run
 - [ ] One registered `Method` per way of fitting, selected by config; no
       procedure branches on the kind of task or object it was given
-- [ ] Every component base class is `Trackable`; components log themselves
-      with `log(name, run, it)` and delegate to their parts; `run.track` is
-      never called on a component's state from outside it
+- [ ] Components that have something worth seeing define `log(name, run, it)`
+      and delegate to their parts with `log_part`; no base class is imposed to
+      get this, and `run.track` is never called on a component's state from
+      outside it
 - [ ] Every result an experiment produces is tracked into cairn (metrics,
       figures, images) — no ad-hoc results directories, nothing printed or
       saved that cairn could show
