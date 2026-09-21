@@ -563,12 +563,10 @@ new component brings its own diagnostics with it instead of edits to the loop.
 **What to record.** What you would want to *look at* to tell whether the
 component is doing its job: a few scalars (norms, counts, a fraction), a
 histogram of a table, an image of a dictionary, a spectrum, a point layout. Not
-the loss (the method's), not parameters as raw tensors, not anything cairn can
-derive from two things already tracked (a plain difference image is the UI's
-diff of the reconstruction and the reference — but see the metric maps below),
-and not constructor constants such as a
-learning rate or a loss weight — the composed config is already attached to the
-run, so re-emitting them per step just makes flat lines.
+the loss (the method's), not parameters as raw tensors, and not constructor
+constants such as a learning rate or a loss weight — the composed config is
+already attached to the run, so re-emitting them per step just makes flat
+lines.
 
 **Keep what repeats cheap.** Every tracked image, volume or point set travels
 to the cairn repo on every evaluation, so a component's `__cairn_track__`
