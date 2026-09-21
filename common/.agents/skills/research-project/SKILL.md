@@ -564,8 +564,9 @@ new component brings its own diagnostics with it instead of edits to the loop.
 component is doing its job: a few scalars (norms, counts, a fraction), a
 histogram of a table, an image of a dictionary, a spectrum, a point layout. Not
 the loss (the method's), not parameters as raw tensors, not anything cairn can
-derive from two things already tracked (an error image is the UI's diff of the
-reconstruction and the reference), and not constructor constants such as a
+derive from two things already tracked (a plain difference image is the UI's
+diff of the reconstruction and the reference — but see the metric maps below),
+and not constructor constants such as a
 learning rate or a loss weight — the composed config is already attached to the
 run, so re-emitting them per step just makes flat lines.
 
@@ -594,6 +595,16 @@ lattice, a held-out split — has to be built once and reused for the life of th
 run, from its own seed. If it is redrawn per call, the method predicts on one
 draw and the judge scores against another, and the metric moves for reasons
 that have nothing to do with the fit.
+
+**Keep the map behind the metric.** Most image metrics — FLIP, SSIM, absolute
+or relative error — are a per-pixel map reduced to one number. The map was
+computed to get the number, so record both: the scalar says how much worse, the
+map says *where*, and it costs nothing that has not already been spent. Record
+it as a single-channel image so the image card renders it through a colormap,
+and use magma, which is what cairn-plot's own FLIP comparison uses. The viewer
+can compute some of these itself from two tracked images, but that is a second
+implementation which can disagree with the number you reported; the map you
+reduced cannot.
 
 **Report the headroom, not just the score.** A number that can look excellent
 because the instance was easy is a number that lies. Alongside what the method
