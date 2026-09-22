@@ -113,9 +113,16 @@ python = "3.12.*"        # pin the interpreter via conda-forge
 numpy = "*"
 plotly = "*"
 hydra-core = "*"         # config management (brings omegaconf)
-# neither is on PyPI — install both from git; [media] → matplotlib/plotly handlers
+# None of the three are published, so each is pinned to its own git repo.
+# cairn-track's extras: [ui] is what `cairn ui` and `cairn server --ui` need —
+# the base install ships no browser assets and says so if the extra is missing.
+# [ui] implies [plot], which is what `import cairn.plot` needs for reports.
+# [media] adds the matplotlib/plotly/imageio/soundfile handlers.
+# On a compute node that only ever logs metrics, drop [ui] and both git lines
+# below it.
+cairn-track = { git = "https://github.com/doeringchristian/cairn", extras = ["ui", "media"] }
 cairn-plot = { git = "https://github.com/doeringchristian/cairn-plot" }
-cairn-track = { git = "https://github.com/doeringchristian/cairn", extras = ["media"] }
+cairn-ui = { git = "https://github.com/DoeringChristian/cairn-ui" }
 black = "*"              # formatter; run after every edit
 
 [activation.env]
@@ -127,7 +134,7 @@ PYTHONPATH = "."
 
 [tasks]
 experiment = "python experiments/run.py"
-ui = "cairn ui"          # browse tracked runs at http://localhost:4301/
+ui = "cairn ui"          # browse tracked runs at http://localhost:4301/ (needs [ui])
 format = "black ."
 all = { depends-on = ["experiment"] }
 ```
