@@ -51,11 +51,12 @@ scratch with a single command.
    whole tree. Nothing is inherited and nothing is required — a component with
    nothing to show simply omits the method. Tracking is never assembled from
    outside.
-8. **Graphics use plotly or cairn-plot; images always use cairn-plot.**
-   cairn-plot's image viewer supports arbitrary client-side comparisons
-   (side-by-side / wipe / blend, pixel-diff kernels incl. FLIP and SSIM, synced
-   viewports) and true-float HDR with tone-mapping. Never put an image in a
-   plotly trace.
+8. **An image is recorded ready to look at.** The viewer decodes no EXR and
+   computes no error metric: whatever the eye should see — tone mapping, the
+   colormap, the error map itself — is applied during evaluation, and what is
+   recorded is a plain displayable image. Reports are the other half: they
+   embed cairn-plot, so `cp.Image` / `cp.Compare` still give comparisons and
+   true-float HDR there. Never put an image in a plotly trace.
 
 ## Project layout
 
@@ -117,10 +118,12 @@ hydra-core = "*"         # config management (brings omegaconf)
 # exact commits, so nothing else needs declaring here.
 #   [ui]    what `cairn ui` and `cairn server --ui` need — the base install
 #           ships no browser assets and says so if the extra is missing.
-#           Implies [plot], which is what `import cairn.plot` needs for reports.
+#   [plot]  `import cairn.plot`, which the reports use. Listed explicitly
+#           rather than relied on through [ui]: the viewer does not need a
+#           renderer, so [ui] is not a promise of [plot].
 #   [media] the matplotlib/plotly/imageio/soundfile handlers.
 # A compute node that only ever logs metrics can drop [ui].
-cairn-track = { git = "https://github.com/doeringchristian/cairn", extras = ["ui", "media"] }
+cairn-track = { git = "https://github.com/doeringchristian/cairn", extras = ["ui", "plot", "media"] }
 black = "*"              # formatter; run after every edit
 
 [activation.env]
@@ -602,12 +605,18 @@ that have nothing to do with the fit.
 **Keep the map behind the metric.** Most image metrics — FLIP, SSIM, absolute
 or relative error — are a per-pixel map reduced to one number. The map was
 computed to get the number, so record both: the scalar says how much worse, the
-map says *where*, and it costs nothing that has not already been spent. Record
-it as a single-channel image so the image card renders it through a colormap,
-and use magma, which is what cairn-plot's own FLIP comparison uses. The viewer
-can compute some of these itself from two tracked images, but that is a second
-implementation which can disagree with the number you reported; the map you
-reduced cannot.
+map says *where*, and it costs nothing that has not already been spent.
+
+**Apply the colormap yourself.** The viewer will not do it for you, so normalise
+the map, run it through magma, and record the result as an RGB image. Record the
+range you normalised by as scalars next to it, or the picture cannot be compared
+between steps or between runs.
+
+**Tone-map before recording.** A float or HDR buffer is not displayable and the
+viewer cannot decode one. Tone-map it during evaluation and record the display
+image. When the float data itself matters — a reference someone will re-measure
+against — keep it with `run.log_artifact`, which stores the file rather than a
+view of it.
 
 **Report the headroom, not just the score.** A number that can look excellent
 because the instance was easy is a number that lies. Alongside what the method
