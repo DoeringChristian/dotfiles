@@ -50,10 +50,11 @@ scratch with a single command.
    represent them as different `Experiment` implementations rather than
    branching inside the entry point.
 7. **Components record themselves.** A component that has something worth
-   seeing implements cairn's `__cairn_track__(self, scope)` and calls
-   `scope.track(value, name)`; tracking a component then walks its object tree.
-   Nothing is inherited and nothing is required — a component with nothing to
-   show simply omits the method. Tracking is never assembled from outside.
+   recording implements cairn's `__cairn_track__(self, scope)` and uses the
+   scope to record its metrics, inputs, and claimed results; tracking a
+   component then walks its object tree. Nothing is inherited and nothing is
+   required — a component with nothing to record simply omits the method.
+   Tracking is never assembled from outside.
 8. **Validation must test the actual claim.** Validation conditions must be
    capable of supporting or rejecting the experiment's intended claim. A
    cheaper proxy may be used for debugging or smoke testing, but it must be
@@ -352,13 +353,16 @@ def __cairn_track__(self, scope) -> None:
 
 and records through the `scope` it is handed. Nothing is inherited and nothing
 is required, so components keep whatever class hierarchy their concept needs. A
-`scope` is a `cairn.Run` with a name prefix, a `step` and a `context` already
-bound to it, and it has one operation:
+`scope` is a `cairn.Run` with a name prefix and `step` already bound to it:
 
 - `scope.track(value, name)` — record `value` under `name` joined onto the
   prefix. If `value` implements `__cairn_track__` it is handed a child scope and
   records itself instead, so one call covers scalars, media and sub-components
   alike. `None` is a silent skip, so an optional member needs no guard.
+  `summary=` and `x=` apply only to scalar leaves, never to a component.
+- `scope.config(...)` — record this component's inputs under its prefix.
+- `scope.summary(...)` — record results explicitly claimed by this component
+  under its prefix.
 - `scope.scope(name)` returns that child scope directly, for the rare case you
   want it without tracking anything.
 - `scope.run`, `scope.step` and `scope.name` are there for an escape hatch.
@@ -406,15 +410,36 @@ experiment's claim.
 ## Experiment tracking (cairn-track)
 
 Run `cairn init` once (creates `./.cairn/`, git-ignored). Every experiment
-creates a `cairn.Run`, attaches the composed config with `run.config(...)`, and
-tracks into it; browse everything with `pixi run ui` (→
+is executed inside a `cairn.Run`, attaches the composed config with
+`run.config(...)`, and tracks into it; browse everything with `pixi run ui` (→
 http://localhost:4301/).
 
 ```python
 run.track(value, name="diagnostic", step=step)
-run.track(value, name="diagnostic", step=step, context={"subset": "validation"})
+run.track(
+    value,
+    name="val.diagnostic",
+    step=step,
+    summary="min",
+    x="epoch",
+)
 run.track(component, name="component", step=step)  # walks its tracked subtree
+run.summary(final_result=value)
 ```
+
+A split or other grouping is a `.`-joined name prefix; there is no `context=`.
+For a scalar series, `summary="min"|"max"|"mean"|"last"` selects the value
+shown as that metric's final value; without a rule, the last point is used.
+`"min"` also marks lower values as better in comparisons. `x=` names the full
+scalar-series name to use as the x-axis and is never scope-prefixed. Rules may
+be repeated on every call and merge per field. Components set them on their own
+scalar leaves, for example `scope.track(err, "err", summary="min")`.
+
+Use `run.summary(...)` or `scope.summary(...)` for a result explicitly claimed
+by the experiment rather than derived from a sequence. An explicit summary key
+overrides the final value of a metric with the same name. Use `run.config(...)`
+or `scope.config(...)` for inputs and resolved properties; nested mappings are
+flattened to dotted names.
 
 **A reusable output that something downstream loads is an artifact, not a
 result view.** Record it with `run.log_artifact(value, name)` so it stays
@@ -426,11 +451,13 @@ selected, the precision, the library version — goes into `run.config(...)`
 alongside the composed config. The seed is in the config; the GPU is not, and
 without it two runs that disagree cannot be told apart.
 
-`step` is required on every call. `run.track` also accepts `cairn.Image` (with box/mask overlays),
-`cairn.Tensor`, `cairn.Text`, `cairn.Audio`. The repo is resolved via
-`CAIRN_REPO` / `./.cairn`; use `repo="cairn://host:port"` for a shared server
-and `local_wal=True` on clusters (NFS/Slurm). Read runs back with
-`cairn.Reader`.
+`step` is required on every public `track` call. Native values use registered
+handlers; explicit `cairn.*` wrappers force a representation when needed. A
+non-empty list or tuple of `cairn.Image` values is recorded as one gallery
+point. The repo is resolved from explicit `repo=`, `cairn.configure`,
+`CAIRN_REPO`, the cairn config file, then `./.cairn/`. Use
+`repo="cairn://host:port"` for a shared server and `local_wal=True` for
+concurrent writers on a shared filesystem. Read runs back with `cairn.Reader`.
 
 ## Reports (on demand)
 
@@ -456,9 +483,8 @@ report.add(cp.Line({r.name: r.sequence("metric").values for r in runs}))
 report.save("reports/comparison/report.html")
 ```
 
-Useful components: `cp.Line`, `cp.Scatter`, `cp.Bar`, `cp.Histogram`,
-`cp.Heatmap`, `cp.Image`, `cp.Compare`, `cp.Table`, `cp.Figure` (plotly
-passthrough), `cp.Grid`, `cp.PointCloud`, `cp.Mesh`, `cp.Volume`.
+Choose cairn-plot components according to the result being presented; do not
+treat the report example as a required layout or a catalog of the API.
 
 ## Documentation and handoff
 
@@ -488,10 +514,13 @@ the code and config.
 - [ ] Random seeds fixed in the config and recorded per run
 - [ ] A registered `Experiment` is selected by config; the entry point only
       builds and invokes it, with no experiment-specific wiring or branching
-- [ ] Components that have something worth seeing implement
+- [ ] Components that have something worth recording implement
       `__cairn_track__(self, scope)` and record through the scope
       they are handed; no base class is imposed to get this, and nothing
       outside a component decides what that component records
+- [ ] Scalar-series rules use `summary=` and `x=` on `track`; inputs use
+      `config`, explicitly claimed results use `summary`, and groupings are
+      dotted name prefixes rather than contexts
 - [ ] Every result an experiment produces is tracked into cairn — no ad-hoc
       results directories, nothing printed or saved that cairn could show
 - [ ] Reports (if any) live in `reports/<name>/`, reference the tracked runs
