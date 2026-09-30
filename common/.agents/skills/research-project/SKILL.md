@@ -3,8 +3,8 @@ name: research-project
 description:
   Initialize, extend, or develop a reproducible research project managed with
   pixi (dependencies mainly from PyPI), with a flat layout, hydra-managed
-  configs, a registry/build ("type" key) pattern for constructing objects from
-  config, a registered Experiment as the highest-level executable object,
+  configs, Hydra `_target_` object construction, a config-selected Experiment
+  as the highest-level executable object,
   components that record themselves through
   cairn's __cairn_track__(self, scope) protocol, experiments tracked with
   cairn-track, and on-demand
@@ -13,7 +13,7 @@ description:
   tracking, logging, or report scaffolding, or when the user mentions
   __cairn_track__, cairn.Scope,
   cairn-track, cairn-plot, experiment tracking, "reproducible report", hydra
-  configs, the registry/build pattern, component tracking, or pixi project
+  configs, `_target_`, component tracking, or pixi project
   setup.
 ---
 
@@ -37,12 +37,11 @@ scratch with a single command.
    top-level directory, named for what this project actually contains.
 4. **Hydra manages configs.** All run configuration lives in `configs/`; the
    composed config and seed of every run are saved with it.
-5. **Objects are built from config via a global registry.** Classes are
-   registered with `@register` and instantiated from a config's `"type"` key
-   with `build(Base, cfg)`, including nested sub-objects
-   ([registry.py](registry.py)).
-6. **The experiment is a registered class.** The highest-level executable
-   behavior is represented by a registered `Experiment` selected from config.
+5. **Hydra constructs the object graph.** Configurable objects name their
+   callable with `_target_` and are built with `hydra.utils.instantiate`.
+   Nested targets are instantiated recursively; do not add a parallel registry.
+6. **The experiment is a config-selected class.** The highest-level executable
+   behavior is represented by an `Experiment` selected through `_target_`.
    Each experiment defines its own object graph, dependencies, and execution
    lifecycle; this skill imposes no fixed concepts or stages beneath it. The
    entry point only composes the config, builds the selected experiment, and
@@ -79,14 +78,13 @@ project/
 ├── .gitignore         # ignore .pixi/, .cairn/, outputs/
 ├── .cairn/            # cairn-track repo — all results live here (git-ignored)
 ├── configs/           # hydra configs (config.yaml + config groups)
-├── util/              # registry.py + shared helpers
 ├── <concept>/         # one flat dir per project concept: base class + one
 ├── <concept>/         #   subclass per variant — named for THIS project
-├── experiments/       # Experiment base, registered variants, and run.py
+├── experiments/       # Experiment base, executable variants, and run.py
 └── reports/           # on-demand cairn-plot reports, one sub-folder each
 ```
 
-Only `configs/`, `util/`, `experiments/`, and `reports/` are fixed. Create one
+Only `configs/`, `experiments/`, and `reports/` are fixed. Create one
 `<concept>` directory per concept the project actually has. Do not introduce a
 concept merely because it appeared in another project or in an example.
 
@@ -193,18 +191,28 @@ code.
 # experiments/run.py
 import cairn
 import hydra
+from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
 from experiments import Experiment
-from util.registry import build
+
 
 # config_path is relative to this file — entry points live in experiments/
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
-    with cairn.Run(project="<project>", name=cfg.name) as run:
+    with cairn.Run(
+        project=cfg.tracking.project,
+        name=cfg.tracking.name,
+        group=cfg.tracking.group,
+        job_type=cfg.tracking.job_type,
+        parent_run_id=cfg.tracking.parent_run_id,
+    ) as run:
         run.config(OmegaConf.to_container(cfg, resolve=True))
-        experiment = build(Experiment, cfg.experiment)
+        experiment = instantiate(cfg.experiment)
+        if not isinstance(experiment, Experiment):
+            raise TypeError("Configured experiment must implement Experiment")
         experiment.run(run)
+
 
 if __name__ == "__main__":
     main()
@@ -212,7 +220,7 @@ if __name__ == "__main__":
 
 Open every group config with a one-line comment saying which regime that
 variant is for and why you would pick it. A config group is a menu, and the
-`type` alone does not say when to order it.
+target path alone does not say when to order it.
 
 Use one config group per top-level concept so variants are selected on the CLI
 and can be swept without code changes. The root config selects the experiment;
@@ -223,8 +231,13 @@ that experiment's config contains the object graph it needs:
 defaults:
   - experiment: primary
   - _self_
-name: ${experiment.type}
 seed: 0
+tracking:
+  project: <project>
+  name: null
+  group: null
+  job_type: null
+  parent_run_id: null
 ```
 
 When one variant requires particular subordinate variants, express that
@@ -233,21 +246,32 @@ place a separately selectable group under the owning experiment's config. A
 `# @package _global_` group may override another group provided the overridden
 group appears earlier in the root defaults list.
 
-### A registry config is replaced whole, never merged
-
-A `type` and its sibling keys are one unit: the siblings only mean anything to
-the class `type` names. Hydra's defaults list **merges** mappings, so inheriting
-a group config and overriding a nested object silently keeps the old object's
-keys:
+An experiment group config names its implementation and contains the object
+graph that implementation needs. Nested targets are built automatically:
 
 ```yaml
-# ❌ merges the old and new registry configs instead of replacing the object
-defaults:
-  - existing_variant    # component has {type: Existing, old_option: 8}
+# configs/experiment/primary.yaml
+# Use this variant when <project-specific reason>.
+_target_: experiments.primary.PrimaryExperiment
 component:
-  type: Replacement
+  _target_: components.primary.PrimaryComponent
+```
+
+### A target config is replaced whole, never merged
+
+An `_target_` and its sibling keys are one unit: those arguments only mean
+anything to that target. Hydra's defaults list **merges** mappings, so
+inheriting a group config and overriding a nested target can silently retain
+the previous target's arguments:
+
+```yaml
+# ❌ merges the old and new target configs instead of replacing the object
+defaults:
+  - existing_variant
+component:
+  _target_: package.Replacement
   new_option: 6
-# composes to {type: Replacement, old_option: 8, new_option: 6}
+# old_option from package.Existing may survive the merge
 ```
 
 Write each variant's config out in full instead of inheriting a sibling variant,
@@ -255,48 +279,48 @@ or put the nested object in its own config group and select it. Otherwise the
 failure appears later as a constructor receiving options that belonged to the
 replaced type.
 
-## Building objects from config (registry + `type` key)
+## Building objects from config (`_target_`)
 
-Copy [registry.py](registry.py) into `util/registry.py`. Decorate a class with
-`@register`; `build(Base, cfg)` looks up `cfg["type"]` in the global registry,
-passes the remaining keys as constructor kwargs (explicit kwargs to `build`
-override the config), type-checks the result, and passes an existing instance
-through unchanged. The registry is keyed on the bare class name in one global
-namespace and refuses a duplicate, so two concepts cannot both register a
-`Uniform`; give one of them a qualified name. Nested objects use the same
-mechanism at every level: the owning object accepts a config or existing
-instance and calls `build` for that child's base class.
+`hydra.utils.instantiate(cfg)` locates the fully qualified callable in
+`cfg._target_`, passes its sibling keys as arguments, and recursively
+instantiates nested target configs by default. There is no decorator, global
+registry, or import-for-registration step.
 
-Keyword arguments passed directly to `build` override config values. Use this
-only for runtime objects a config cannot name, such as a resource shared by a
-parent and child. Express configurable defaults in the config's own vocabulary
-rather than hiding them in entry-point wiring.
+Keyword arguments passed directly to `instantiate` override config values.
+Use them only for runtime objects a config cannot name, such as a resource
+shared by a parent and child. Keep configurable defaults in config rather than
+hiding them in entry-point wiring. Hydra passes OmegaConf containers by
+default; choose `_convert_` deliberately only when a target requires ordinary
+Python containers. Use `_recursive_: false` only when a target intentionally
+owns construction of its nested configs.
 
-The registered `Experiment` owns all experiment-specific construction and
-wiring. The entry point must not know which subordinate concepts exist. Put a
-required capability on the relevant base class so an incompatible composition
-fails at the declared interface rather than deep inside execution.
+The configured `Experiment` owns all experiment-specific construction and
+wiring. The entry point must not know which subordinate concepts exist. Check
+the `Experiment` boundary after instantiation, and put other required
+capabilities on their relevant interfaces so incompatible compositions fail at
+the declared boundary rather than deep inside execution. `_target_` executes a
+configured callable, so treat configs as trusted code or apply Hydra's target
+authorization facilities when they are not trusted.
 
 ## Class organization (inheritance over flags)
 
 Avoid parameters that select materially different behavior with `if`/`else` or
-`match`. Give each real variant its own registered subclass selected by
-`"type"` in config.
+`match`. Give each real variant its own class selected by `_target_` in config.
 
 Define a base class per top-level concept in its own flat directory, one
-registered subclass per variant, and let the config's `type` key pick. New
-behavior = new subclass + one config line, no new flags. Each concept's
-`__init__.py` exports the base class and imports every variant module so one
-import is enough for all `@register` decorators to run.
+concrete subclass per variant, and let the config's `_target_` pick. New
+behavior means a new implementation and config selection, not another behavior
+flag. Fully qualified targets are imported directly by Hydra; `__init__.py`
+does not need registration side effects.
 
 **A hierarchy may be deeper than two.** "One subclass per variant" is about
 the *variants*, not a ban on an intermediate: where several variants share real
-machinery, an unregistered abstract class between the concept base and the
-registered leaves is right. Only the leaves carry `@register`, so only the
-leaves are selectable.
+machinery, an abstract class between the concept base and the concrete leaves
+is right. Point `_target_` only at implementations intended to
+be constructed.
 
 **A shared step with one implementation stays a function.** Wrapping it in a
-base class and a registry entry before a second implementation exists is
+base class and configurable target before a second implementation exists is
 ceremony around a single call site. Promote it to a concept when the second
 implementation arrives, which is also when the config gains something to
 choose between.
@@ -321,11 +345,35 @@ class Experiment:
         raise NotImplementedError
 ```
 
-Each registered subclass defines its own constructor, object graph, lifecycle,
-tracking cadence, and result semantics. It may expose internal phases when
-those phases fit the project, but this skill does not prescribe them. The
-subclass records its results into the supplied run. The entry point neither
-interprets its config nor inspects its type.
+Each concrete implementation defines its own constructor, object graph,
+lifecycle, tracking cadence, and result semantics. It may expose internal
+phases when those phases fit the project, but this skill does not prescribe
+them. The subclass records its results into the supplied run. The entry point
+neither interprets its config nor inspects its type.
+
+### Experiments, runs, and groups
+
+Keep three levels distinct:
+
+- An `Experiment` is one config-selected executable strategy.
+- A cairn `Run` is one execution of that strategy.
+- A cairn `group` joins runs that belong to one larger scientific experiment;
+  `job_type` identifies each run's role within that group.
+
+Do not impose training and evaluation as universal lifecycle stages. When
+validation is part of an ongoing procedure, keep it in that run and distinguish
+its measurements with dotted names. When evaluation is independently
+executable or consumes a produced artifact, give it its own `Experiment`
+target and cairn run, reuse the same `group`, and assign an appropriate
+`job_type`. Record a reusable output as a versioned artifact with
+`run.log_artifact(..., artifact_type=...)` and consume it with
+`run.use_artifact(...)`; grouping organizes related runs but does not replace
+artifact lineage. Use `parent_run_id` as additional execution lineage when it
+is meaningful.
+
+The group and job type are explicit run config, not inferred from class names.
+This supports separate scheduling and rerunning of a downstream job without
+forcing every project into a fixed sequence of stages.
 
 ## Scientific validity
 
@@ -442,8 +490,9 @@ or `scope.config(...)` for inputs and resolved properties; nested mappings are
 flattened to dotted names.
 
 **A reusable output that something downstream loads is an artifact, not a
-result view.** Record it with `run.log_artifact(value, name)` so it stays
-attached to the run that produced it rather than in a directory beside it.
+result view.** Record it with
+`run.log_artifact(value, name, artifact_type=...)` and load it downstream with
+`run.use_artifact(...)` so cairn records both production and consumption.
 
 **Record the environment facts the config does not fix.** Anything resolved at
 startup that changes the numbers — the device, the backend or variant actually
@@ -509,11 +558,11 @@ the code and config.
 - [ ] `black` in the dependencies; `pixi run format` run after every edit
 - [ ] Configs in `configs/`, composed by hydra; per-run composed config saved
       (hydra's `.hydra/config.yaml`) and attached via `run.config(...)`
-- [ ] Objects built from config via the registry (`type` key), including nested
-      sub-objects
+- [ ] Configurable objects use Hydra `_target_` and `instantiate`, including
+      nested objects; no parallel project registry exists
 - [ ] Random seeds fixed in the config and recorded per run
-- [ ] A registered `Experiment` is selected by config; the entry point only
-      builds and invokes it, with no experiment-specific wiring or branching
+- [ ] A config-selected `Experiment` is instantiated and checked at the entry
+      point, which contains no experiment-specific wiring or branching
 - [ ] Components that have something worth recording implement
       `__cairn_track__(self, scope)` and record through the scope
       they are handed; no base class is imposed to get this, and nothing
@@ -530,7 +579,11 @@ the code and config.
       <name>"` fails for each)
 - [ ] Environment facts resolved at startup and capable of changing results are
       attached with `run.config(...)`; reusable outputs are stored with
-      `run.log_artifact`, not in a results directory
+      versioned `run.log_artifact(..., artifact_type=...)`, not in a results
+      directory, and consumers call `run.use_artifact(...)`
+- [ ] Independently executable related jobs use separate runs with the same
+      cairn `group`, explicit `job_type`, and artifact lineage; measurements
+      internal to one procedure stay in that run under dotted names
 - [ ] Validation conditions can support the intended claim; smoke tests and
       proxies are labeled and are not presented as evidence
 - [ ] Approximations that could change scientific meaning are explicit in
