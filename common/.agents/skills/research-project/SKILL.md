@@ -36,7 +36,7 @@ scratch with a single command.
 3. **Flat layout.** No `src/<pkg>/` nesting: each kind of thing gets its own
    top-level directory, named for what this project actually contains.
 4. **Hydra manages configs.** All run configuration lives in `configs/`; the
-   composed config and seed of every run are saved with it.
+   composed config and seed of every run are attached to cairn.
 5. **Hydra constructs the object graph.** Configurable objects name their
    callable with `_target_` and are built with `hydra.utils.instantiate`.
    Nested targets are instantiated recursively; do not add a parallel registry.
@@ -75,7 +75,7 @@ project/
 ├── pixi.toml          # workspace, tasks, dependencies
 ├── pixi.lock          # committed — reproducibility
 ├── .envrc             # direnv: auto-activate the pixi env
-├── .gitignore         # ignore .pixi/, .cairn/, outputs/
+├── .gitignore         # ignore .pixi/ and .cairn/
 ├── .cairn/            # cairn-track repo — all results live here (git-ignored)
 ├── configs/           # hydra configs (config.yaml + config groups)
 ├── <concept>/         # one flat dir per project concept: base class + one
@@ -183,9 +183,9 @@ file in a state black would rewrite. Keep black's defaults; do not add a
 ## Configs (hydra)
 
 All configuration lives in `configs/`, composed by hydra. Entry points are
-decorated with `@hydra.main`; hydra saves the fully composed config of every run
-under its output dir (`.hydra/config.yaml`). Put the seed in the config, not in
-code.
+decorated with `@hydra.main`; the entry point attaches the fully composed config
+to cairn. Put the seed in config, not in code. Cairn owns run records, so Hydra
+must not create a parallel output tree, config snapshot, or log file.
 
 ```python
 # experiments/run.py
@@ -230,6 +230,7 @@ that experiment's config contains the object graph it needs:
 # configs/config.yaml
 defaults:
   - experiment: primary
+  - override hydra/job_logging: stdout
   - _self_
 seed: 0
 tracking:
@@ -238,7 +239,24 @@ tracking:
   group: null
   job_type: null
   parent_run_id: null
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  output_subdir: null
+  job:
+    chdir: false
 ```
+
+`hydra.run.dir: .` prevents a single run from creating `outputs/...`;
+`hydra.sweep.dir` and `subdir` do the same for multiruns;
+`hydra.output_subdir: null` disables `.hydra/`; and the `stdout` job logger
+keeps Python logging on the console without creating a log file. Keep
+`hydra.job.chdir: false` so relative paths remain rooted at the project. Do not
+remove these settings in favor of Hydra's output directories: the composed
+config is already recorded with the cairn run.
 
 When one variant requires particular subordinate variants, express that
 composition in its config instead of checking it in code. Hydra packages can
@@ -375,6 +393,25 @@ The group and job type are explicit run config, not inferred from class names.
 This supports separate scheduling and rerunning of a downstream job without
 forcing every project into a fixed sequence of stages.
 
+### Time to first interpretable result
+
+Schedule work so that a representative end-to-end result becomes inspectable
+before committing the full experimental budget. When a separate diagnostic job
+consumes an experiment's artifact, start it as soon as a usable artifact exists;
+do not finish every producer before diagnosing any of them. For several
+configurations, complete one representative producer–diagnostic path first,
+then expand concurrency once its outputs are interpretable.
+
+The producing run must also expose enough representative diagnostics early and
+periodically for a user to recognize failure and interrupt it. Include visual
+diagnostics when they materially aid judgment. Comprehensive or expensive
+analysis may remain in the grouped diagnostic run, but the producing run must
+not remain opaque until that later pass completes.
+
+Monitoring diagnostics may be cheaper than final evaluation, but they must be
+capable of exposing the failures they are intended to detect. Label a proxy as
+a monitoring aid and never present it as final evidence.
+
 ## Scientific validity
 
 Remain self-sufficient on choices that preserve the experiment's claim.
@@ -389,6 +426,34 @@ evaluation that may alter the claim is not an implementation detail: represent
 it explicitly in config, track it, and disclose it. When its validity is
 uncertain, test the uncertainty or report the limitation instead of assuming it
 away.
+
+### Turn perceptual observations into measurable diagnostics
+
+When the user identifies a meaningful effect that the current evaluation or
+the agent's own inspection does not reliably reveal, treat that as an
+evaluation blind spot. Preserve the original outputs, and develop an
+additional analytical visualization that isolates, localizes, or amplifies the
+effect without changing what is being judged. Also seek a quantitative measure
+that responds to the same phenomenon and can be tracked across runs. Prefer an
+established measure when its assumptions and known sensitivities fit the
+effect. Adapt or devise a more specific measure only when no suitable standard
+measure is available or when the available measures fail to capture the
+reported observation.
+
+Check a measure's applicability in proportion to the uncertainty. A standard,
+well-validated measure need not be recalibrated without reason. When its
+relationship to the reported effect is unclear, or observed judgments disagree
+with it, test whether it distinguishes relevant cases without responding mainly
+to irrelevant variation. If that cannot be established from existing evidence,
+propose a small calibration phase: present deliberately chosen cases and ask
+focused rating, ranking, or comparison questions, then use those responses to
+select or fit the diagnostic. Keep the calibration burden proportionate and
+explain what uncertainty each question resolves.
+
+Continue tracking the source output, the analytical visualization, and the
+calibrated measure as separate values. Do not replace visual review with a
+metric until calibration supports that interpretation, and report where the
+measure still disagrees with or fails to cover the user's judgment.
 
 ## Components record themselves
 
@@ -444,10 +509,33 @@ orchestration.
 instances of one class receive different prefixes, and a new component brings
 its diagnostics with it instead of requiring edits to orchestration code.
 
+**Treat tracked keys as a compatibility contract.** Cairn workspaces describe
+views in terms of keys, so equivalent results must use the same fully qualified
+key across runs, experiment variants, and related projects. Before introducing
+a key, inspect the names already used for the same result and preserve them
+when their semantics still apply. Keep the value's meaning, representation,
+units, and axis conventions compatible as well: sharing a spelling is not
+enough if a card or comparison would interpret the values differently. Put the
+method, variant, and other run-specific identity in config or run metadata, not
+in the result key, so one workspace can compare runs directly.
+
+Do not force genuinely different quantities into an established key merely to
+reuse a view. Give a changed semantic contract a distinct name. Treat renaming
+or repurposing an established key as a compatibility change and call it out in
+the handoff, because it may invalidate saved workspaces and comparisons.
+
 **What to record.** What you would want to *look at* to tell whether the
 component is doing its job. Do not re-emit constructor values already present
 in the composed config, and do not record raw internal state when a meaningful
 diagnostic would communicate more clearly.
+
+**Preserve comparison operands.** Track references, predictions, and other
+comparison inputs as separate named values at corresponding steps. Do not bake
+them into a side-by-side, split-screen, wipe, or other presentation-only image
+or video; retaining the operands lets the user choose Cairn's comparison view
+in the UI. Compute and track scientifically meaningful derived views, such as
+error maps, as their own named values. If a composite is itself part of the
+result, track it in addition to—not instead of—its original operands.
 
 **Keep repeated tracking proportionate.** Choose a cadence and representation
 whose cost does not distort the experiment. Preserve full-fidelity results or
@@ -556,8 +644,11 @@ the code and config.
 
 - [ ] `pixi.lock` committed; `.pixi/` git-ignored
 - [ ] `black` in the dependencies; `pixi run format` run after every edit
-- [ ] Configs in `configs/`, composed by hydra; per-run composed config saved
-      (hydra's `.hydra/config.yaml`) and attached via `run.config(...)`
+- [ ] Configs in `configs/`, composed by hydra, and attached via
+      `run.config(...)`
+- [ ] Hydra output is disabled (`run.dir`, `sweep.dir`, and `sweep.subdir` are
+      `.`, `output_subdir` is `null`, job logging is stdout-only, and `chdir` is
+      false); no `outputs/`, `multirun/`, `.hydra/`, or Hydra log file is made
 - [ ] Configurable objects use Hydra `_target_` and `instantiate`, including
       nested objects; no parallel project registry exists
 - [ ] Random seeds fixed in the config and recorded per run
@@ -570,6 +661,10 @@ the code and config.
 - [ ] Scalar-series rules use `summary=` and `x=` on `track`; inputs use
       `config`, explicitly claimed results use `summary`, and groupings are
       dotted name prefixes rather than contexts
+- [ ] Equivalent results retain the same fully qualified key and compatible
+      semantics across runs, variants, and related projects; method identity
+      stays in config or run metadata, while genuinely different quantities
+      receive different keys
 - [ ] Every result an experiment produces is tracked into cairn — no ad-hoc
       results directories, nothing printed or saved that cairn could show
 - [ ] Reports (if any) live in `reports/<name>/`, reference the tracked runs
@@ -584,8 +679,18 @@ the code and config.
 - [ ] Independently executable related jobs use separate runs with the same
       cairn `group`, explicit `job_type`, and artifact lineage; measurements
       internal to one procedure stay in that run under dotted names
+- [ ] A representative end-to-end result is produced early; downstream
+      diagnostics start when their first usable input exists, and producing
+      runs expose enough periodic diagnostics to support early interruption
+- [ ] Comparison operands are tracked separately; derived diagnostics such as
+      error maps have their own names, and presentation-only composites do not
+      replace the original values
 - [ ] Validation conditions can support the intended claim; smoke tests and
       proxies are labeled and are not presented as evidence
+- [ ] User-reported effects that ordinary inspection or metrics miss have a
+      separately tracked analytical visualization and a suitable measure;
+      established measures are preferred when applicable, and calibration is
+      used when their perceptual meaning cannot otherwise be established
 - [ ] Approximations that could change scientific meaning are explicit in
       config, recorded with the run, and disclosed in the handoff
 - [ ] Compared runs differ only in the intended factors, or unavoidable
