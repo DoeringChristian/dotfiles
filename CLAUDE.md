@@ -83,11 +83,12 @@ setup.sh / bootstrap.sh / update.sh
   (Seatbelt on macOS / Bubblewrap on Linux). `codexbox` is shorthand for
   `claudebox --agent codex`. The launcher resolves the selected agent from `PATH`
   and binds the real `$HOME` read-only — install-mechanism-agnostic, no
-  special-casing. Writable locations (agent state, `~/.cache`) are listed once in
-  the built-in `DEFAULT_CONFIG` inside the script, replaced wholesale by
-  `~/.config/claudebox/config` if present (same format as a project `.claudebox`;
-  `[mounts.<agent>]` sections are agent-specific); every path is
-  symlink-resolved so bwrap can mount it.
+  special-casing. Everything is readable except denied paths; writes are limited
+  to the project and configured mounts. The defaults (agent state, `~/.cache`,
+  denied credentials) are the built-in `DEFAULT_CONFIG` in the script;
+  `common/.config/claudebox/config` adds this machine's extras (the age key). A
+  project `.claudebox` only applies after `claudebox --trust`. All paths are
+  symlink-resolved so bwrap can mount them. Keep it bash-3.2 compatible.
 - **Shared research skill**: Codex/Pi owns the canonical
   `common/.agents/skills/research-project/`; the Claude entry at
   `common/.claude/skills/research-project/` is a symlink to it so its

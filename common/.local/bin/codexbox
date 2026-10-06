@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec claudebox --agent codex "$@"
+exec "$(dirname "$0")/claudebox" --agent codex "$@"

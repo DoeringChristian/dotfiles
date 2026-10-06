@@ -1,70 +1,169 @@
 #!/usr/bin/env bash
+# claudebox — run Claude Code or Codex with their permission prompts disabled,
+# inside an OS sandbox: Seatbelt (sandbox-exec) on macOS, Bubblewrap on Linux.
+#
+# Sandbox model:
+#   - the whole filesystem is readable, except denied paths (credentials, the
+#     ssh agent, container sockets, the project's .env files, …);
+#   - writes are confined to the project directory and the configured mounts
+#     (the agent's own state, ~/.cache, temp dirs);
+#   - the network is open.
+#
+# It contains an agent's mistakes; it is not a hard security boundary. Known
+# gaps: data readable inside the sandbox can be sent over the network; on macOS
+# Keychain items stay reachable (Claude needs them for OAuth), and the agent can
+# ask other processes to act for it (e.g. `open`, `osascript`, launchd); on Linux, abstract unix sockets (e.g. X11) stay
+# reachable, and TIOCSTI terminal injection is possible on kernels < 6.2.
+#
+# Requirements: bash ≥ 3.2; macOS: sandbox-exec (built in); Linux: bwrap.
+# See `claudebox --help` for the config files.
 set -euo pipefail
 
 OS="$(uname -s)"
 
 usage() {
-    echo "Usage: claudebox [OPTIONS] [PROJECT_DIR] [-- AGENT_ARGS...]"
-    echo ""
-    if [[ "$OS" == "Darwin" ]]; then
-        echo "Run Claude Code or Codex without internal permissions inside a Seatbelt sandbox."
-    else
-        echo "Run Claude Code or Codex without internal permissions inside a Bubblewrap sandbox."
-    fi
-    echo ""
-    echo "Arguments:"
-    echo "  PROJECT_DIR          Project directory (default: current directory)"
-    echo ""
-    echo "Options:"
-    echo "  --agent NAME         Agent to launch: claude (default) or codex"
-    echo "  --bash               Launch a bash shell inside the sandbox"
-    if [[ "$OS" != "Darwin" ]]; then
-        echo "  --bind PATH          Bind extra directory read-write (repeatable)"
-        echo "  --ro-bind PATH       Bind extra directory read-only (repeatable)"
-        echo "  --share-pid          Share host PID namespace (shows all processes)"
-    fi
-    echo "  --ssh                Bind ~/.ssh read-only (off by default)"
-    echo "  --block-env FILES    Comma-separated .env files to block (default: .env,.env.local,.env.production)"
-    echo "  --no-block-env       Don't block any .env files"
-    echo "  -h, --help           Show this help"
-    echo ""
-    echo "Anything after -- is passed directly to the selected agent."
-    echo ""
-    echo "Examples:"
-    echo "  claudebox ~/projects/myapp"
-    echo "  claudebox ~/projects/myapp -- 'Review the code'"
-    echo "  claudebox --ssh ~/projects/myapp"
-    echo "  claudebox --agent codex ~/projects/myapp"
-    echo "  codexbox ~/projects/myapp  # shorthand for --agent codex"
-    echo "  claudebox  # uses current directory"
+    cat <<'EOF'
+Usage: claudebox [OPTIONS] [PROJECT_DIR] [-- AGENT_ARGS...]
+
+Run Claude Code or Codex without internal permissions inside a sandbox
+(Seatbelt on macOS, Bubblewrap on Linux). The project directory is writable;
+the rest of the filesystem is read-only, and credentials are hidden.
+
+Arguments:
+  PROJECT_DIR          Project directory (default: current directory)
+
+Options:
+  --agent NAME         Agent to launch: claude (default) or codex
+  --bash               Launch a bash shell inside the sandbox
+  --bind PATH          Make an extra path writable (repeatable)
+  --ro-bind PATH       Mount an extra path read-only (repeatable; Linux only,
+                       on macOS everything not denied is already readable)
+  --ssh                Expose ~/.ssh read-only and the ssh agent (off by default)
+  --share-pid          Share the host PID namespace (Linux only)
+  --block-env FILES    Comma-separated .env files in the project to hide
+                       (default: .env,.env.local,.env.production)
+  --no-block-env       Don't hide any .env files
+  --trust              Trust the project's .claudebox (after reviewing it)
+  --print-config       Print the built-in default config and exit
+  -h, --help           Show this help
+
+Anything after -- is passed directly to the selected agent.
+
+Config files (INI-style; `#` starts a comment line):
+  ~/.config/claudebox/config   User config, added to the built-in defaults
+                               (`defaults = false` under [options] drops them).
+  <project>/.claudebox         Project config (nearest one upward). It can widen
+                               the sandbox, so it is only used once trusted with
+                               --trust, and must be re-trusted after any change.
+
+  [mounts]                     bind = PATH (writable), ro-bind = PATH (read-only)
+  [mounts.claude], [mounts.codex]   …only for that agent
+  [deny]                       path = PATH (hidden: neither readable nor writable)
+  [deny.claude], [deny.codex]  …only for that agent
+  [options]                    ssh = true, share-pid = true, block-env = FILES,
+                               defaults = false (user config only)
+
+  Paths may start with ~ or $HOME; relative paths are relative to the config
+  file. Paths that don't exist are skipped; symlinks are resolved. Command-line
+  options take precedence over the config files.
+
+Examples:
+  claudebox ~/projects/myapp
+  claudebox ~/projects/myapp -- 'Review the code'
+  claudebox --ssh ~/projects/myapp
+  claudebox --agent codex ~/projects/myapp
+  codexbox ~/projects/myapp  # shorthand for --agent codex
+  claudebox  # uses current directory
+EOF
 }
 
-BIND_SSH=false
-SHARE_PID=false
+# Built-in defaults (see --help for the format). ~/.config/claudebox/config adds
+# to these unless it sets `defaults = false`.
+DEFAULT_CONFIG='
+[mounts]
+bind = ~/.cache
+
+# The agent'"'"'s own state, so sessions and config persist.
+[mounts.claude]
+bind = ~/.claude
+bind = ~/.claude.json
+
+[mounts.codex]
+bind = ~/.codex
+
+# Credentials and escape hatches, hidden from the agent. ~/.ssh (and the ssh
+# agent) are re-exposed read-only by --ssh / `ssh = true`.
+[deny]
+path = ~/.ssh
+path = ~/.gnupg
+path = ~/.aws
+path = ~/.azure
+path = ~/.config/gcloud
+path = ~/.kube
+path = ~/.docker
+path = ~/.netrc
+path = ~/.git-credentials
+path = ~/.config/gh
+path = ~/.password-store
+path = ~/.passage
+# Linux: the user session (D-Bus, systemd --user, keyring/ssh agent, …) and
+# container daemons, which could run commands outside the sandbox.
+path = /run/user
+path = /run/docker.sock
+path = /run/podman
+'
+
 AGENT=claude
-BLOCK_ENV=".env,.env.local,.env.production"
 PROJECT_DIR=""
 SHELL_MODE=""
+TRUST=false
+# Options: set by config files, then overridden by command-line flags.
+SSH=false
+SHARE_PID=false
+BLOCK_ENV=".env,.env.local,.env.production"
+USE_DEFAULTS=true
+CLI_SSH=""
+CLI_SHARE_PID=""
+CLI_BLOCK_ENV=""
+CLI_BLOCK_ENV_SET=false
+# Sandbox locations, as physical paths. Each is collected once and used by both
+# backends.
 WRITE_PATHS=()
 RO_PATHS=()
+DENY_PATHS=()
 AGENT_ARGS=()
 
-# Physical path (symlinks resolved). Every sandbox location is stored this way:
-# the home is exposed read-only, so a symlink in it (e.g. ~/.cache -> /media/…)
-# points at a target that isn't mounted, and bwrap can't mount over it ("Can't
-# mkdir/bind mount …: No such file or directory"); Seatbelt also matches real paths.
+# Sets PHYS to the physical path of $1 (all symlinks resolved). Every sandbox
+# location is stored this way: a symlink in the read-only home (e.g. ~/.cache ->
+# /data/…) would make bwrap mount over the symlink rather than its target, and
+# Seatbelt matches real paths. Portable (no realpath on macOS < 13).
 physical() {
-    if [[ ! -e "$1" ]]; then
-        echo "Error: $1 does not exist" >&2
+    local p="$1" target
+    if [[ ! -e "$p" ]]; then
+        echo "Error: $p does not exist" >&2
         exit 1
     fi
-    realpath "$1"
+    while [[ -L "$p" ]]; do
+        target="$(readlink "$p")"
+        [[ "$target" == /* ]] || target="$(dirname "$p")/$target"
+        p="$target"
+    done
+    if [[ -d "$p" ]]; then
+        PHYS="$(cd -P "$p" && pwd -P)"
+    else
+        PHYS="$(cd -P "$(dirname "$p")" && pwd -P)"
+        PHYS="${PHYS%/}/$(basename "$p")"
+    fi
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
     -h | --help)
         usage
+        exit 0
+        ;;
+    --print-config)
+        printf '%s' "$DEFAULT_CONFIG"
         exit 0
         ;;
     --bash)
@@ -76,27 +175,35 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
     --share-pid)
-        SHARE_PID=true
+        CLI_SHARE_PID=true
         shift
         ;;
     --bind)
-        WRITE_PATHS+=("$(physical "$2")")
+        physical "$2"
+        WRITE_PATHS+=("$PHYS")
         shift 2
         ;;
     --ro-bind)
-        RO_PATHS+=("$(physical "$2")")
+        physical "$2"
+        RO_PATHS+=("$PHYS")
         shift 2
         ;;
     --ssh)
-        BIND_SSH=true
+        CLI_SSH=true
         shift
         ;;
     --block-env)
-        BLOCK_ENV="$2"
+        CLI_BLOCK_ENV="$2"
+        CLI_BLOCK_ENV_SET=true
         shift 2
         ;;
     --no-block-env)
-        BLOCK_ENV=""
+        CLI_BLOCK_ENV=""
+        CLI_BLOCK_ENV_SET=true
+        shift
+        ;;
+    --trust)
+        TRUST=true
         shift
         ;;
     --)
@@ -124,8 +231,8 @@ case "$AGENT" in
         ;;
 esac
 
-PROJECT_DIR="$(physical "${PROJECT_DIR:-$(pwd)}")"
-
+physical "${PROJECT_DIR:-$(pwd)}"
+PROJECT_DIR="$PHYS"
 if [[ ! -d "$PROJECT_DIR" ]]; then
     echo "Error: $PROJECT_DIR is not a directory" >&2
     exit 1
@@ -154,82 +261,130 @@ expand_path() {
     echo "$p"
 }
 
-# Parse a claudebox config from stdin; relative paths resolve against $1.
-# [mounts] applies to every agent, [mounts.<agent>] only to that agent; mounts
-# whose path doesn't exist are skipped.
+trim() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    echo "$s"
+}
+
+# Parse a claudebox config from stdin; relative paths resolve against $1, $2
+# names the config in warnings.
 parse_config() {
-    local config_dir="$1" current_section="" line key value local_path
-
+    local config_dir="$1" config_name="$2" section="" line key value path
     while IFS= read -r line || [[ -n "$line" ]]; do
-        # Strip comments and whitespace
-        line="${line%%#*}"
-        line="${line%%;;*}"
-        line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-        [[ -z "$line" ]] && continue
+        line="$(trim "$line")"
+        [[ -z "$line" || "$line" == \#* || "$line" == \;* ]] && continue
 
-        # Section header
         if [[ "$line" =~ ^\[(.+)\]$ ]]; then
-            current_section="${BASH_REMATCH[1]}"
+            section="$(trim "${BASH_REMATCH[1]}")"
             continue
         fi
-
-        # Key = value pairs
-        if [[ "$line" =~ ^([^=]+)=(.+)$ ]]; then
-            key="$(echo "${BASH_REMATCH[1]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-            value="$(echo "${BASH_REMATCH[2]}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-        else
+        if [[ ! "$line" =~ ^([^=]+)=(.*)$ ]]; then
+            echo "Warning: $config_name: ignoring '$line'" >&2
             continue
         fi
+        key="$(trim "${BASH_REMATCH[1]}")"
+        value="$(trim "${BASH_REMATCH[2]}")"
 
-        case "$current_section" in
-            mounts | "mounts.$AGENT")
-                local_path="$(expand_path "$value" "$config_dir")"
-                [[ -e "$local_path" ]] || continue
-                local_path="$(physical "$local_path")"
-                case "$key" in
-                    bind)    WRITE_PATHS+=("$local_path") ;;
-                    ro-bind) RO_PATHS+=("$local_path") ;;
+        case "$section" in
+            mounts | mounts.* | deny | deny.*)
+                # Sections for another agent are skipped
+                [[ "$section" == *.* && "${section#*.}" != "$AGENT" ]] && continue
+                path="$(expand_path "$value" "$config_dir")"
+                [[ -e "$path" ]] || continue
+                physical "$path"
+                case "$section/$key" in
+                    mounts*/bind)    WRITE_PATHS+=("$PHYS") ;;
+                    mounts*/ro-bind) RO_PATHS+=("$PHYS") ;;
+                    deny*/path)      DENY_PATHS+=("$PHYS") ;;
+                    *) echo "Warning: $config_name: unknown key '$key' in [$section]" >&2 ;;
                 esac
                 ;;
             options)
                 case "$key" in
-                    ssh)       [[ "$value" == "true" ]] && BIND_SSH=true ;;
-                    share-pid) [[ "$value" == "true" ]] && SHARE_PID=true ;;
+                    ssh)       SSH="$value" ;;
+                    share-pid) SHARE_PID="$value" ;;
                     block-env) BLOCK_ENV="$value" ;;
+                    defaults)  USE_DEFAULTS="$value" ;;
+                    *) echo "Warning: $config_name: unknown option '$key'" >&2 ;;
                 esac
+                ;;
+            *)
+                echo "Warning: $config_name: unknown section [$section]" >&2
                 ;;
         esac
     done
 }
 
-# Built-in defaults, used unless ~/.config/claudebox/config exists (which then
-# replaces them entirely). Everything is readable; only these locations, the
-# project dir, and the project's .claudebox / --bind extras are writable.
-DEFAULT_CONFIG='
-[mounts]
-bind = ~/.cache
+sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum; else shasum -a 256; fi
+}
 
-# The agent'"'"'s own state, so sessions and config persist.
-[mounts.claude]
-bind = ~/.claude
-bind = ~/.claude.json
-
-[mounts.codex]
-bind = ~/.codex
-'
-
-# The writable locations are collected once, for both backends: the user (or
-# built-in) config, then the project dir, then the project's .claudebox.
+# User config, then the built-in defaults (unless disabled), then the project
+# dir and its trusted .claudebox.
 USER_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/claudebox/config"
 if [[ -f "$USER_CONFIG" ]]; then
-    parse_config "$(dirname "$USER_CONFIG")" <"$USER_CONFIG"
-else
-    parse_config "$HOME" <<<"$DEFAULT_CONFIG"
+    parse_config "$(dirname "$USER_CONFIG")" "$USER_CONFIG" <"$USER_CONFIG"
+fi
+if [[ "$USE_DEFAULTS" == true ]]; then
+    parse_config "$HOME" "built-in config" <<<"$DEFAULT_CONFIG"
 fi
 WRITE_PATHS+=("$PROJECT_DIR")
+
+# A project .claudebox comes with the repo, so it is only applied once trusted:
+# its path and content hash are recorded outside the sandbox's writable paths.
+TRUST_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/claudebox/trusted"
 CONFIG_FILE="$(find_config "$PROJECT_DIR")"
 if [[ -n "$CONFIG_FILE" ]]; then
-    parse_config "$(cd "$(dirname "$CONFIG_FILE")" && pwd)" <"$CONFIG_FILE"
+    config_id="$({ echo "$CONFIG_FILE"; cat "$CONFIG_FILE"; } | sha256 | cut -d' ' -f1)"
+    if [[ "$TRUST" == true ]]; then
+        mkdir -p "$(dirname "$TRUST_FILE")"
+        echo "$config_id $CONFIG_FILE" >>"$TRUST_FILE"
+    elif ! grep -qs "^$config_id " "$TRUST_FILE"; then
+        echo "Error: $CONFIG_FILE is not trusted (new or changed since trusted)." >&2
+        echo "It can widen the sandbox. Review it, then run: claudebox --trust" >&2
+        exit 1
+    fi
+    parse_config "$(cd "$(dirname "$CONFIG_FILE")" && pwd)" "$CONFIG_FILE" <"$CONFIG_FILE"
+elif [[ "$TRUST" == true ]]; then
+    echo "Error: --trust: no .claudebox found above $PROJECT_DIR" >&2
+    exit 1
+fi
+
+# Command-line options win over config files
+[[ -n "$CLI_SSH" ]] && SSH="$CLI_SSH"
+[[ -n "$CLI_SHARE_PID" ]] && SHARE_PID="$CLI_SHARE_PID"
+[[ "$CLI_BLOCK_ENV_SET" == true ]] && BLOCK_ENV="$CLI_BLOCK_ENV"
+
+# The project's .env files are denied like any other secret
+if [[ -n "$BLOCK_ENV" ]]; then
+    IFS=',' read -ra ENV_FILES <<<"$BLOCK_ENV"
+    for env_file in ${ENV_FILES[@]+"${ENV_FILES[@]}"}; do
+        env_file="$(trim "$env_file")"
+        [[ -n "$env_file" && -e "$PROJECT_DIR/$env_file" ]] || continue
+        physical "$PROJECT_DIR/$env_file"
+        DENY_PATHS+=("$PHYS")
+    done
+fi
+
+# SSH: without --ssh, hide ~/.ssh (via [deny]) and the ssh agent. With it, keep
+# both; ~/.ssh is then readable like the rest of the home.
+SSH_DIR=""
+if [[ -e "$HOME/.ssh" ]]; then
+    physical "$HOME/.ssh"
+    SSH_DIR="$PHYS"
+fi
+if [[ "$SSH" == true ]]; then
+    kept=()
+    for deny_path in ${DENY_PATHS[@]+"${DENY_PATHS[@]}"}; do
+        [[ "$deny_path" == "$SSH_DIR" ]] || kept+=("$deny_path")
+    done
+    DENY_PATHS=(${kept[@]+"${kept[@]}"})
+elif [[ -n "${SSH_AUTH_SOCK:-}" && -S "$SSH_AUTH_SOCK" ]]; then
+    physical "$SSH_AUTH_SOCK"
+    DENY_PATHS+=("$PHYS")
+    unset SSH_AUTH_SOCK
 fi
 
 if [[ -n "$SHELL_MODE" ]]; then
@@ -257,7 +412,13 @@ fi
 
 # ── macOS: Seatbelt sandbox ──────────────────────────────────────────────────
 if [[ "$OS" == "Darwin" ]]; then
-    # Build the seatbelt profile dynamically
+    # Quote a path as an SBPL string literal
+    sb() {
+        local s="${1//\\/\\\\}"
+        printf '"%s"' "${s//\"/\\\"}"
+    }
+
+    # Build the seatbelt profile dynamically. Later rules take precedence.
     PROFILE='(version 1)
 (allow default)
 
@@ -272,66 +433,46 @@ if [[ "$OS" == "Darwin" ]]; then
 ;; Allow writes to temp directories
 (allow file-write* (subpath "/private/tmp"))
 (allow file-write* (subpath "/private/var/folders"))
-(allow file-write* (subpath "/tmp"))
-(allow file-write* (subpath "'"${TMPDIR:-/tmp}"'"))
-
-;; Allow writes to nix store (for nix operations)
-(allow file-write* (subpath "/nix"))
+(allow file-write* (subpath '"$(sb "${TMPDIR:-/tmp}")"'))
 
 ;; Allow writes to Keychain and security services (for OAuth token refresh)
-(allow file-write* (subpath "'"$HOME/Library/Keychains"'"))
+(allow file-write* (subpath '"$(sb "$HOME/Library/Keychains")"'))
 (allow file-write* (regex #"^/private/var/folders/.*/com\.apple\.security\."))
-(allow file-write* (subpath "'"$HOME/Library/Preferences"'"))
+(allow file-write* (subpath '"$(sb "$HOME/Library/Preferences")"'))
 
 ;; Allow writes to Claude app data and cache (for token storage and refresh)
-(allow file-write* (subpath "'"$HOME/Library/Application Support/Claude"'"))
-(allow file-write* (subpath "'"$HOME/Library/Caches/claude-cli-nodejs"'"))
+(allow file-write* (subpath '"$(sb "$HOME/Library/Application Support/Claude")"'))
+(allow file-write* (subpath '"$(sb "$HOME/Library/Caches/claude-cli-nodejs")"'))
 '
 
-    # Writable locations (agent state, cache, project, extras). Reads are allowed
-    # globally, so RO_PATHS need no rule.
+    # Writable locations. Reads are allowed globally, so RO_PATHS need no rule.
     for write_path in "${WRITE_PATHS[@]}"; do
-        PROFILE+='(allow file-write* (subpath "'"$write_path"'"))
-'
+        PROFILE+="(allow file-write* (subpath $(sb "$write_path")))
+"
     done
 
-    # Block .env files
-    if [[ -n "$BLOCK_ENV" ]]; then
-        IFS=',' read -ra ENV_FILES <<<"$BLOCK_ENV"
-        for env_file in "${ENV_FILES[@]}"; do
-            env_path="$PROJECT_DIR/$env_file"
-            if [[ -f "$env_path" ]]; then
-                PROFILE+='(deny file-read* (literal "'"$env_path"'"))
-'
-            fi
-        done
-    fi
+    # Hidden locations, last so they win; sockets are denied as connections.
+    for deny_path in ${DENY_PATHS[@]+"${DENY_PATHS[@]}"}; do
+        PROFILE+="(deny file-read* file-write* (subpath $(sb "$deny_path")))
+(deny network-outbound (remote unix-socket (subpath $(sb "$deny_path"))))
+"
+    done
 
     cd "$PROJECT_DIR"
-    exec sandbox-exec -p "$PROFILE" "$ENTRY_BIN" "${ENTRY_ARGS[@]}"
+    exec sandbox-exec -p "$PROFILE" "$ENTRY_BIN" ${ENTRY_ARGS[@]+"${ENTRY_ARGS[@]}"}
 fi
 
 # ── Linux: Bubblewrap sandbox ────────────────────────────────────────────────
 
-# Build bwrap arguments — order matters: base mounts first, then overlays on top
+# The whole filesystem read-only (like the macOS profile: reads allowed, writes
+# denied), then fresh /dev, /proc, /tmp. Later mounts overlay earlier ones.
 BWRAP_ARGS=(
-    # Sandbox essentials (must come first so later binds overlay correctly)
-    --tmpfs /tmp
-    --proc /proc
+    --ro-bind / /
     --dev-bind /dev /dev
+    --proc /proc
+    --tmpfs /tmp
     --share-net
     --die-with-parent
-
-    # System (read-only)
-    --ro-bind /usr /usr
-    --ro-bind /bin /bin
-    --ro-bind /etc/resolv.conf /etc/resolv.conf
-    --ro-bind /etc/hosts /etc/hosts
-    --ro-bind /etc/ssl /etc/ssl
-    --ro-bind /etc/passwd /etc/passwd
-    --ro-bind /etc/group /etc/group
-    --ro-bind /sys /sys
-    --ro-bind /run /run
 )
 
 # PID namespace isolation (default: isolated, share-pid disables it)
@@ -339,47 +480,32 @@ if [[ "$SHARE_PID" != true ]]; then
     BWRAP_ARGS+=(--unshare-pid)
 fi
 
-# /lib and /lib64 may not exist on all systems
-[[ -e /lib ]] && BWRAP_ARGS+=(--ro-bind /lib /lib)
-[[ -e /lib64 ]] && BWRAP_ARGS+=(--ro-bind /lib64 /lib64)
-[[ -e /sbin ]] && BWRAP_ARGS+=(--ro-bind /sbin /sbin)
-
-# Nix store (read-only) - needed for nix-installed claude and tools
-[[ -e /nix ]] && BWRAP_ARGS+=(--ro-bind /nix /nix)
-
-# Expose the real home READ-ONLY. This makes claude — however it's installed
-# (a version-manager shim, a native binary, a plain PATH entry, …) — resolve and
-# run exactly as it does in your shell, WITHOUT this script knowing or naming any
-# install mechanism. Writable bits (the project dir + claude's own state) are
-# overlaid below; secrets are masked. Mirrors the macOS profile: reads allowed,
-# only writes denied.
-BWRAP_ARGS+=(--ro-bind "$HOME" "$HOME")
-
-# Mask ~/.ssh by default with an empty tmpfs; --ssh re-exposes it (read-only, via
-# the ro-bound home above — nothing extra needed).
-if [[ "$BIND_SSH" != true ]] && [[ -d "$HOME/.ssh" ]]; then
-    BWRAP_ARGS+=(--tmpfs "$HOME/.ssh")
-fi
-
-# Writable locations (agent state, cache, project, extras) overlaid on the
-# read-only home, then extra read-only mounts.
 for write_path in "${WRITE_PATHS[@]}"; do
     BWRAP_ARGS+=(--bind "$write_path" "$write_path")
 done
-for ro_path in "${RO_PATHS[@]+"${RO_PATHS[@]}"}"; do
+for ro_path in ${RO_PATHS[@]+"${RO_PATHS[@]}"}; do
     BWRAP_ARGS+=(--ro-bind "$ro_path" "$ro_path")
+done
+# Hidden locations, last so they cover the mounts above: an empty tmpfs over a
+# directory, /dev/null over anything else.
+for deny_path in ${DENY_PATHS[@]+"${DENY_PATHS[@]}"}; do
+    if [[ -d "$deny_path" ]]; then
+        BWRAP_ARGS+=(--tmpfs "$deny_path")
+    else
+        BWRAP_ARGS+=(--ro-bind /dev/null "$deny_path")
+    fi
 done
 BWRAP_ARGS+=(--chdir "$PROJECT_DIR")
 
-# Block .env files by overlaying with /dev/null
-if [[ -n "$BLOCK_ENV" ]]; then
-    IFS=',' read -ra ENV_FILES <<<"$BLOCK_ENV"
-    for env_file in "${ENV_FILES[@]}"; do
-        env_path="$PROJECT_DIR/$env_file"
-        if [[ -f "$env_path" ]]; then
-            BWRAP_ARGS+=(--ro-bind /dev/null "$env_path")
-        fi
-    done
+if ! command -v bwrap >/dev/null 2>&1; then
+    echo "Error: bwrap (Bubblewrap) not found in PATH" >&2
+    exit 1
+fi
+if ! bwrap_err="$(bwrap --ro-bind / / true 2>&1)"; then
+    echo "Error: bwrap cannot create a sandbox: $bwrap_err" >&2
+    echo "On Ubuntu ≥ 23.10, AppArmor restricts unprivileged user namespaces; see" >&2
+    echo "https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces" >&2
+    exit 1
 fi
 
-exec bwrap "${BWRAP_ARGS[@]}" "$ENTRY_BIN" "${ENTRY_ARGS[@]}"
+exec bwrap "${BWRAP_ARGS[@]}" "$ENTRY_BIN" ${ENTRY_ARGS[@]+"${ENTRY_ARGS[@]}"}
