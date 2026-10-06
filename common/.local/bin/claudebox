@@ -45,9 +45,21 @@ AGENT=claude
 BLOCK_ENV=".env,.env.local,.env.production"
 PROJECT_DIR=""
 SHELL_MODE=""
-EXTRA_BINDS=()
-EXTRA_WRITE_PATHS=()
+WRITE_PATHS=()
+RO_PATHS=()
 AGENT_ARGS=()
+
+# Physical path (symlinks resolved). Every sandbox location is stored this way:
+# the home is exposed read-only, so a symlink in it (e.g. ~/.cache -> /media/…)
+# points at a target that isn't mounted, and bwrap can't mount over it ("Can't
+# mkdir/bind mount …: No such file or directory"); Seatbelt also matches real paths.
+physical() {
+    if [[ ! -e "$1" ]]; then
+        echo "Error: $1 does not exist" >&2
+        exit 1
+    fi
+    realpath "$1"
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -68,14 +80,11 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --bind)
-        resolved="$(cd "$2" && pwd -P)"
-        EXTRA_BINDS+=("--bind" "$resolved" "$resolved")
-        EXTRA_WRITE_PATHS+=("$resolved")
+        WRITE_PATHS+=("$(physical "$2")")
         shift 2
         ;;
     --ro-bind)
-        resolved="$(cd "$2" && pwd -P)"
-        EXTRA_BINDS+=("--ro-bind" "$resolved" "$resolved")
+        RO_PATHS+=("$(physical "$2")")
         shift 2
         ;;
     --ssh)
@@ -115,11 +124,7 @@ case "$AGENT" in
         ;;
 esac
 
-PROJECT_DIR="${PROJECT_DIR:-$(pwd)}"
-# Physical path (resolve symlinks): the project dir is bind-mounted into the
-# sandbox, and a symlinked path (e.g. ~/workspace -> elsewhere) makes bwrap unable
-# to create the mountpoint ("Can't mkdir …: No such file or directory").
-PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd -P)"
+PROJECT_DIR="$(physical "${PROJECT_DIR:-$(pwd)}")"
 
 if [[ ! -d "$PROJECT_DIR" ]]; then
     echo "Error: $PROJECT_DIR is not a directory" >&2
@@ -138,10 +143,22 @@ find_config() {
     done
 }
 
-CONFIG_FILE="$(find_config "$PROJECT_DIR")"
-if [[ -n "$CONFIG_FILE" ]]; then
-    CONFIG_DIR="$(cd "$(dirname "$CONFIG_FILE")" && pwd)"
-    current_section=""
+# Expand ~ and $HOME, resolve relative paths against the config file's directory
+expand_path() {
+    local p="$1" config_dir="$2"
+    p="${p/#\~/$HOME}"
+    p="${p/\$HOME/$HOME}"
+    if [[ "$p" != /* ]]; then
+        p="$config_dir/$p"
+    fi
+    echo "$p"
+}
+
+# Parse a claudebox config from stdin; relative paths resolve against $1.
+# [mounts] applies to every agent, [mounts.<agent>] only to that agent; mounts
+# whose path doesn't exist are skipped.
+parse_config() {
+    local config_dir="$1" current_section="" line key value local_path
 
     while IFS= read -r line || [[ -n "$line" ]]; do
         # Strip comments and whitespace
@@ -164,29 +181,14 @@ if [[ -n "$CONFIG_FILE" ]]; then
             continue
         fi
 
-        # Expand ~ and $HOME, resolve relative paths against CONFIG_DIR
-        expand_path() {
-            local p="$1"
-            p="${p/#\~/$HOME}"
-            p="${p/\$HOME/$HOME}"
-            # Resolve relative paths against config file directory
-            if [[ "$p" != /* ]]; then
-                p="$CONFIG_DIR/$p"
-            fi
-            echo "$p"
-        }
-
         case "$current_section" in
-            mounts)
-                local_path="$(expand_path "$value")"
+            mounts | "mounts.$AGENT")
+                local_path="$(expand_path "$value" "$config_dir")"
                 [[ -e "$local_path" ]] || continue
-                local_path="$(cd "$local_path" && pwd -P)"
+                local_path="$(physical "$local_path")"
                 case "$key" in
-                    bind)
-                        EXTRA_BINDS+=("--bind" "$local_path" "$local_path")
-                        EXTRA_WRITE_PATHS+=("$local_path")
-                        ;;
-                    ro-bind) EXTRA_BINDS+=("--ro-bind" "$local_path" "$local_path") ;;
+                    bind)    WRITE_PATHS+=("$local_path") ;;
+                    ro-bind) RO_PATHS+=("$local_path") ;;
                 esac
                 ;;
             options)
@@ -197,7 +199,37 @@ if [[ -n "$CONFIG_FILE" ]]; then
                 esac
                 ;;
         esac
-    done < "$CONFIG_FILE"
+    done
+}
+
+# Built-in defaults, used unless ~/.config/claudebox/config exists (which then
+# replaces them entirely). Everything is readable; only these locations, the
+# project dir, and the project's .claudebox / --bind extras are writable.
+DEFAULT_CONFIG='
+[mounts]
+bind = ~/.cache
+
+# The agent'"'"'s own state, so sessions and config persist.
+[mounts.claude]
+bind = ~/.claude
+bind = ~/.claude.json
+
+[mounts.codex]
+bind = ~/.codex
+'
+
+# The writable locations are collected once, for both backends: the user (or
+# built-in) config, then the project dir, then the project's .claudebox.
+USER_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/claudebox/config"
+if [[ -f "$USER_CONFIG" ]]; then
+    parse_config "$(dirname "$USER_CONFIG")" <"$USER_CONFIG"
+else
+    parse_config "$HOME" <<<"$DEFAULT_CONFIG"
+fi
+WRITE_PATHS+=("$PROJECT_DIR")
+CONFIG_FILE="$(find_config "$PROJECT_DIR")"
+if [[ -n "$CONFIG_FILE" ]]; then
+    parse_config "$(cd "$(dirname "$CONFIG_FILE")" && pwd)" <"$CONFIG_FILE"
 fi
 
 if [[ -n "$SHELL_MODE" ]]; then
@@ -237,9 +269,6 @@ if [[ "$OS" == "Darwin" ]]; then
 (allow file-write* (vnode-type CHARACTER-DEVICE))
 (allow file-write* (vnode-type SOCKET))
 
-;; Allow writes to project directory
-(allow file-write* (subpath "'"$PROJECT_DIR"'"))
-
 ;; Allow writes to temp directories
 (allow file-write* (subpath "/private/tmp"))
 (allow file-write* (subpath "/private/var/folders"))
@@ -259,20 +288,10 @@ if [[ "$OS" == "Darwin" ]]; then
 (allow file-write* (subpath "'"$HOME/Library/Caches/claude-cli-nodejs"'"))
 '
 
-    if [[ "$AGENT" == "claude" ]]; then
-        PROFILE+=';; Allow writes to Claude config
-(allow file-write* (subpath "'"$HOME/.claude"'"))
-(allow file-write* (literal "'"$HOME/.claude.json"'"))
-'
-    elif [[ "$AGENT" == "codex" ]]; then
-        PROFILE+=';; Allow writes to Codex config and session state
-(allow file-write* (subpath "'"$HOME/.codex"'"))
-'
-    fi
-
-    # Extra write paths from --bind or .claudebox config
-    for extra_path in "${EXTRA_WRITE_PATHS[@]+"${EXTRA_WRITE_PATHS[@]}"}"; do
-        PROFILE+='(allow file-write* (subpath "'"$extra_path"'"))
+    # Writable locations (agent state, cache, project, extras). Reads are allowed
+    # globally, so RO_PATHS need no rule.
+    for write_path in "${WRITE_PATHS[@]}"; do
+        PROFILE+='(allow file-write* (subpath "'"$write_path"'"))
 '
     done
 
@@ -342,26 +361,15 @@ if [[ "$BIND_SSH" != true ]] && [[ -d "$HOME/.ssh" ]]; then
     BWRAP_ARGS+=(--tmpfs "$HOME/.ssh")
 fi
 
-# The selected agent's read-write state, overlaid on the read-only home so
-# sessions and config persist.
-if [[ "$AGENT" == "claude" ]]; then
-    [[ -d "$HOME/.claude" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude" "$HOME/.claude")
-    [[ -f "$HOME/.claude.json" ]] && BWRAP_ARGS+=(--bind "$HOME/.claude.json" "$HOME/.claude.json")
-elif [[ "$AGENT" == "codex" ]]; then
-    [[ -d "$HOME/.codex" ]] && BWRAP_ARGS+=(--bind "$HOME/.codex" "$HOME/.codex")
-fi
-[[ -d "$HOME/.cache" ]] && BWRAP_ARGS+=(--bind "$HOME/.cache" "$HOME/.cache")
-
-# Project directory (read-write)
-BWRAP_ARGS+=(
-    --bind "$PROJECT_DIR" "$PROJECT_DIR"
-    --chdir "$PROJECT_DIR"
-)
-
-# Extra user-specified bind mounts
-if [[ ${#EXTRA_BINDS[@]} -gt 0 ]]; then
-    BWRAP_ARGS+=("${EXTRA_BINDS[@]}")
-fi
+# Writable locations (agent state, cache, project, extras) overlaid on the
+# read-only home, then extra read-only mounts.
+for write_path in "${WRITE_PATHS[@]}"; do
+    BWRAP_ARGS+=(--bind "$write_path" "$write_path")
+done
+for ro_path in "${RO_PATHS[@]+"${RO_PATHS[@]}"}"; do
+    BWRAP_ARGS+=(--ro-bind "$ro_path" "$ro_path")
+done
+BWRAP_ARGS+=(--chdir "$PROJECT_DIR")
 
 # Block .env files by overlaying with /dev/null
 if [[ -n "$BLOCK_ENV" ]]; then
