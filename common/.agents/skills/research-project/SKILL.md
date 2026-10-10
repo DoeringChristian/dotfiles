@@ -105,7 +105,7 @@ MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
 
 [tasks]
 experiment = "python experiments/run.py"
-mlflow-ui = "mlflow server --backend-store-uri sqlite:///mlflow.db"
+mlflow-ui = "mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --allowed-hosts '<remote-host>:5000,localhost:*' --cors-allowed-origins 'http://<remote-host>:5000,http://localhost:*'"
 format = "black ."
 all = { depends-on = ["experiment"] }
 ```
@@ -117,6 +117,30 @@ shared SQL-backed tracking server. Local artifact storage may remain under
 and caches. For shared work, point `MLFLOW_TRACKING_URI` at the managed or
 self-hosted tracking server and configure its database and artifact store there;
 do not encode credentials in the repository.
+
+Always provide an exact command that hosts the MLflow server and UI for remote
+access. Prefer a pixi task so it uses the locked environment, and replace
+`<remote-host>` with the machine's actual DNS name or reachable IP address.
+State both the task invocation and the remote URL it serves. With the setup
+above, provide:
+
+```bash
+pixi run mlflow-ui
+```
+
+This listens on all interfaces and is reached at
+`http://<remote-host>:5000`. If the project does not define that task, provide
+the complete equivalent `pixi run mlflow server ...` command with its actual
+host, port, backend store, allowed hosts, CORS origins, and any required
+artifact-store options. Never leave `<remote-host>` or another placeholder in
+the delivered project or handoff.
+
+Binding to `0.0.0.0` provides reachability, not access control. Allow only the
+actual hostname or address clients use; do not use `*` for allowed hosts or CORS
+in a remotely reachable deployment. For access beyond a trusted private
+network, put MLflow behind the project's VPN or an HTTPS reverse proxy with
+authentication. Configure the advertised tracking URI as the reachable HTTPS
+or HTTP URL rather than a local database URI on remote clients.
 
 Add every runnable operation as a pixi task. Add packages with `pixi add --pypi
 <package>` unless they specifically need conda-forge. Run `pixi install`, commit
@@ -424,6 +448,10 @@ design changes.
 The handoff states what changed or was learned, what validation supports it,
 and what could still limit the conclusion. Distinguish smoke tests and proxies
 from evidence. Disclose approximations and tracking-key compatibility changes.
+Always include the exact MLflow hosting command and the URL it serves, even when
+the command was already added as a pixi task or the server is currently running.
+The command must listen on a remotely reachable interface and use concrete
+allowed-host and CORS values for the advertised URL.
 
 ## Reproducibility checklist
 
@@ -461,5 +489,7 @@ from evidence. Disclose approximations and tracking-key compatibility changes.
 - [ ] Compared runs differ only in intended factors, or unavoidable differences
       are tracked and accounted for.
 - [ ] Every config group begins with a comment describing its intended regime.
+- [ ] The handoff includes an exact, project-correct, remotely accessible MLflow
+      hosting command and URL, with concrete allowed-host and CORS values.
 - [ ] A fresh clone can reproduce the tracked experiment with documented pixi
       commands.
