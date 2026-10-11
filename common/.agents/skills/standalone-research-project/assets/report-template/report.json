@@ -1,0 +1,23 @@
+{
+  "project": "Lattice reconstruction study",
+  "subtitle": "Running feasibility report · template example",
+  "updated": "Example data",
+  "status": "Feasibility in progress",
+  "source_runs": ["outputs/feasibility-method/2026-10-11_09-30-00"],
+  "summary": [
+    {"label": "Primary residual", "value": "0.071", "detail": "↓ 42% from reference"},
+    {"label": "Stable cases", "value": "18 / 20", "detail": "Two edge cases unresolved"},
+    {"label": "Current verdict", "value": "Promising", "detail": "Not yet tuned"}
+  ],
+  "findings": [
+    {"id": "finding-local-fit", "state": "supported", "title": "Local fitting improves edge alignment", "body": "The method lowers the boundary residual on representative cases. The high-frequency failure remains visible in two samples.", "source": "feasibility-method · diagnostics/residual"},
+    {"id": "finding-flicker", "state": "tentative", "title": "Temporal stability needs calibration", "body": "The spectral diagnostic detects the reported flicker, but its perceptual threshold is not calibrated yet.", "source": "feasibility-method · diagnostics/temporal-spectrum"}
+  ],
+  "figures": [
+    {"id": "fig-residual", "src": "media/residual.svg", "title": "Residual across iterations", "caption": "Optimization improves quickly, then plateaus. Click to inspect and use ←/→ to switch."},
+    {"id": "fig-spectrum", "src": "media/spectrum.svg", "title": "Temporal spectrum", "caption": "A narrow high-frequency band remains in the proposed method."},
+    {"id": "fig-grid", "src": "media/grid.svg", "title": "Representative image grid", "caption": "Input, method output, reference, and amplified residual use a stable panel order."},
+    {"id": "fig-interactive", "type": "plotly", "src": "media/interactive.plotly.json", "title": "Interactive optimization trace", "caption": "Hover, zoom, pan, select, or open full-screen while retaining the same figure comment anchor."}
+  ],
+  "next": ["Calibrate the temporal score with pairwise judgments", "Test the two unresolved edge cases", "Do not begin tuning until the feasibility review is confirmed"]
+}

@@ -57,11 +57,19 @@ project/
 │       └── latest -> <timestamp>/
 └── reports/
     ├── build.py                # reads runs and builds the report
-    ├── serve.py                # serves report and persists comments
+    ├── serve_reports.py        # hosts the catalog and every report
+    ├── serve.py                # legacy single-report preview
+    ├── report.md               # authored narrative and executable snippets
     ├── generated/              # generated report, git-ignored
     └── knowledge/
         ├── comments.jsonl      # append-only user feedback
         └── findings.yaml       # reviewed cumulative knowledge
+    └── <report-slug>/          # optional additional self-contained report
+        ├── build.py
+        ├── report.json
+        ├── report.md
+        ├── generated/
+        └── knowledge/
 ```
 
 Use a flat import layout rather than `src/<package>/`. Create concept directories
@@ -90,6 +98,10 @@ python = "3.12.*"
 numpy = "*"
 matplotlib = "*"
 hydra-core = "*"
+markdown-it-py = "*"
+mdit-py-plugins = "*"
+latex2mathml = "*"
+plotly = "*"
 black = "*"
 
 [activation.env]
@@ -98,9 +110,9 @@ PYTHONPATH = "."
 [tasks]
 experiment = "python experiments/run.py"
 report-build = "python reports/build.py"
-report-serve = "python reports/serve.py --host 127.0.0.1 --port 8000"
-report-host = "python reports/serve.py --host 0.0.0.0 --port 8000"
-format = "black ."
+report-serve = "python reports/serve_reports.py --host 127.0.0.1 --port 8000"
+report-host = "python reports/serve_reports.py --host 0.0.0.0 --port 8000"
+format = "black --extend-exclude '/([.]pixi|outputs)/|/reports/(?:[^/]+/)?generated/' ."
 ```
 
 Add the smallest suitable web dependency only when implementing the report
@@ -110,6 +122,16 @@ generated version is absent or stale, or clearly instruct the user to run
 `pixi run report-build` first. Commit `pixi.lock`; ignore `.pixi/`, caches,
 `reports/generated/`, and the appropriate `outputs/` data. Do not add MLflow,
 Cairn, W&B, TensorBoard-as-a-tracker, or a custom run database.
+
+Black normally honors `.gitignore` during recursive discovery, but `.pixi` is
+not a built-in Black exclusion and an absent or overridden ignore rule can make
+`black .` traverse the managed environment. Keep `.pixi/`, `outputs/`, the main
+`reports/generated/`, and generated directories of additional reports in the
+root `.gitignore`. Also retain the explicit `--extend-exclude` in the pixi task;
+use `extend-exclude`, not `exclude`, so Black's defaults and `.gitignore`
+behavior remain active. Formatter, linter, type-checker, and test discovery
+configuration must all exclude environment directories and generated research
+artifacts rather than scanning or modifying them.
 
 ## Hydra configuration and run identity
 
@@ -272,6 +294,187 @@ contradictory evidence, limitations, unresolved issues, and proposed next
 experiments. Update conclusions when evidence changes while preserving enough
 decision history to explain the current understanding.
 
+### Keep the report editorially coherent
+
+The report is the primary communication surface between the user and agent, not
+an append-only activity log. Optimize it for a reader who needs to understand
+the current method, evidence, and decisions quickly. Keep the main narrative
+concise, use progressive disclosure for supporting detail, and remove
+repetition, stale explanations, superseded conclusions, and figures that no
+longer help answer an active question. Preserve provenance and decision history
+in the manifest, run outputs, findings, and comment log rather than forcing all
+history into the visible narrative.
+
+When the user requests an edit, clarification, new comparison, or additional
+evidence, first decide what that request means for the report's information
+architecture. Integrate a local clarification where its concept is already
+introduced; revise or replace the existing explanation instead of appending a
+near-duplicate. If the request changes the method, interpretation, or research
+question fundamentally, reconsider the section order, framing, summaries,
+figures, and possibly the report boundary before editing. Split into another
+report only when it serves a distinct audience or research question, not merely
+because the current report became long.
+
+After substantive updates, read the report as a whole. Check that its summary
+matches its evidence, terminology is consistent, each section has a clear role,
+and the most important open questions remain prominent. Condense or restructure
+when additions obscure the argument. Do not respond to comments by mechanically
+adding paragraphs at their location when the clearer resolution belongs
+elsewhere in the report.
+
+### Use callouts for synchronization
+
+Use a callout when the user could otherwise miss information that materially
+affects shared understanding or the next decision: an unresolved assumption, a
+surprising limitation, contradictory evidence, a risk of misinterpretation, a
+decision gate, or a focused question that needs the user's judgment. Callouts
+are attention signals, not general formatting. Keep each one short and
+actionable, give it a specific title, and state why it matters or what response
+is needed. Remove or rewrite it after the issue is resolved; do not accumulate
+stale callouts or use them for ordinary findings already clear in the text.
+
+The canonical Markdown renderer supports admonition blocks. Prefer `question`
+for requested user input, `decision` for a pending or confirmed choice,
+`warning` or `risk` for consequential limitations, and `important` for context
+the reader must not overlook:
+
+```markdown
+!!! question "Which reference behavior is authoritative?"
+    The two candidate baselines use different boundary handling. Confirm the
+    intended behavior before feasibility results are interpreted.
+```
+
+Callouts remain selectable and commentable, retain their Markdown source-line
+anchors, and use the shared report style. Do not hide essential evidence only
+inside a collapsible callout.
+
+### Use the canonical report template
+
+Start every standalone report from
+[`assets/report-template`](assets/report-template), installed with:
+
+```bash
+python <skill-directory>/scripts/scaffold_report.py <project-root>
+```
+
+The scaffold includes the builder, comment-capable server, shared HTML/CSS/JS,
+knowledge files, sample data, and three example diagnostic figures. Run
+`reports/build.py` immediately after scaffolding: the sample report is both a
+working smoke test and a visual reference for the required behavior. Replace
+its example content with project evidence; do not redesign the report for each
+project or fork its interaction model without a user requirement.
+
+### Host multiple reports together
+
+When a project has more than one report, keep the original report at
+`reports/` and place each additional self-contained report at
+`reports/<report-slug>/`. Create an additional report from the same canonical
+template with:
+
+```bash
+python <skill-directory>/scripts/scaffold_report.py <project-root> --report <report-slug>
+```
+
+Use short, stable lowercase slugs. `serve_reports.py` discovers the main report
+and direct child reports, builds all of them on startup, and exposes one catalog
+at `/`. Individual reports live at `/reports/main/` and
+`/reports/<report-slug>/`; their comment APIs and knowledge files remain
+isolated. The catalog is defined by `template/reports-index.html`,
+`reports-index.css`, and `reports-index.js`. It must derive cards from each
+report's `report.json`, escape text through DOM APIs, use the shared visual
+language, and show title, subtitle, status, and update information. Do not make
+users remember separate ports or URLs for reports in the same project.
+
+Treat the template's design tokens, typography, spacing, navigation, status
+badges, finding cards, metric cards, figure cards, lightbox, floating comment
+composer, and responsive breakpoints as the shared report style. Extend them
+through the existing variables and components. Do not introduce one-off inline
+styles or a second visual system in generated sections. Scope component
+selectors to the report's own classes (for example `.figure-card .figure-copy`,
+`button.icon`), never bare descendant tags or generic class names. Embedded
+libraries such as Plotly use their own `div`s and `svg.icon` elements, and
+leaking rules distort them.
+
+Populate `reports/report.json` through deterministic report-building code. Its
+top-level content comprises project metadata, summary metrics, findings,
+figures, next experiments, and source runs. Each finding and figure needs a
+stable ID so links and comments survive rebuilds. Escape all textual content by
+creating DOM text nodes; never interpolate untrusted content as HTML.
+
+Every displayed image or Matplotlib figure must be a clickable figure card and
+participate in one ordered lightbox gallery. When enlarged, users must be able
+to move to the previous or next figure with visible controls and the left/right
+arrow keys, close with Escape, and zoom with visible controls, `+`/`-`, or the
+mouse wheel. Wheel and keyboard zoom are anchored at the hovered point, so the
+pixel under the cursor stays fixed; the visible zoom buttons zoom about the view
+center. A zoomed image must support mouse and touch panning so users can
+inspect every region, and resetting or changing figures resets both zoom and
+pan. Disable the browser's native image drag (`draggable="false"` and
+preventing `dragstart`); otherwise it cancels the pointer stream mid-pan. Card previews must show the complete image using `object-fit: contain` or
+an equivalent intrinsic-aspect-ratio layout; never crop analytical content to
+normalize card shapes, and keep captions in a separate region. Preserve
+meaningful alt text, captions, keyboard focus, stable
+ordering, and full-resolution sources. Test these behaviors at desktop and
+mobile widths whenever the template or generated markup changes.
+
+Support Plotly figures as first-class interactive diagnostics. Write each
+figure as a Plotly JSON artifact containing `data`, `layout`, and optional
+`config`, then reference it from `report.json` with `type: "plotly"`, a stable
+ID, and its artifact path. Bundle the installed Plotly.js runtime into the
+generated report at build time; never depend on a CDN. Render Plotly cards
+interactively with hover only: hide the mode bar and disable scroll zoom in the
+card preview so controls never cover the figure and page scrolling is not
+captured. Provide an icon-only full-screen control. In the lightbox,
+retain Plotly's native hover, zoom, pan, selection, reset, and image-export
+tools, while keeping the report's previous/next navigation and icon-only
+commenting. Static images and Plotly figures share one ordered gallery.
+
+### Executable Markdown
+
+Support LaTeX-style mathematics directly in the Markdown narrative. Use
+`$...$` for inline mathematics and `$$...$$` on separate lines for display
+equations. Parse math with `mdit-py-plugins` and convert it during the build to
+semantic MathML with `latex2mathml`; do not require a third-party CDN at report
+viewing time. Preserve equation source-line anchors, allow equation labels, and
+make wide display equations horizontally scrollable without clipping the page.
+Post-process the MathML so delimiters outside `\left`/`\right` are
+`stretchy="false"`. `latex2mathml` emits `\lVert`, `\lvert` and similar as bare
+`<mo>` elements, which browsers stretch as fences, so the two sides of a norm
+render at different heights. Wrap each formula with its LaTeX source in
+`data-latex`. A selection inside a formula then quotes `$<latex>$` (rendered
+MathML text is unusable as a quote), anchors to the equation's source line, and
+highlights the whole formula.
+Treat unsupported LaTeX as a build error so broken notation is never silently
+published. Use ordinary fenced code when dollar signs are intended literally.
+
+Write the narrative in `reports/report.md`. Ordinary fenced code is display-only.
+Execute a block only when its fence is explicitly marked `python exec`; add
+`hide` to execute without displaying its source:
+
+````markdown
+```python exec hide
+from pathlib import Path
+import matplotlib.pyplot as plt
+
+values = load_values(PROJECT_ROOT / "outputs" / "method" / "latest")
+plt.plot(values)
+```
+````
+
+Executable blocks share one namespace in document order, capture stdout, and
+embed newly created Matplotlib figures directly in the generated HTML. The
+builder exposes `REPORT_ROOT` and `PROJECT_ROOT`; blocks must load experimental
+values from Hydra output files rather than paste copies into Markdown. A block
+exception must fail the entire build. Keep execution opt-in: never execute an
+unmarked fence or code derived from a report comment.
+
+The canonical builder is intentionally local and trusted; executable Markdown
+has the report author's permissions. Do not build untrusted Markdown. For slow
+reports, add content-addressed caching keyed by the source block, dependencies,
+and input-file digests. For potentially unbounded or third-party code, execute
+through a subprocess with a declared timeout and resource policy rather than
+weakening failure behavior.
+
 ### Reproducible evidence
 
 The report builder discovers valid Hydra run directories and reads their
@@ -289,13 +492,71 @@ the report irreproducible.
 
 ### Persistent contextual comments
 
-Serve the report through a small project-owned web application. The user must
-be able to comment on a report section, finding, figure, table, run, or data
-point. Store comments server-side in `reports/knowledge/comments.jsonl`, not only
-in browser local storage. Each append-only record should include a stable ID,
-timestamp, author label when available, target type and stable target ID,
-comment text, and optional reply-to ID. Preserve comments across report rebuilds
-by keeping target IDs stable and show clearly when their target is obsolete.
+Serve the report through a small project-owned web application. All report
+content must be commentable by selecting its text, including the overview,
+metrics, findings, tables, figure captions, run references, narrative, and next
+steps. Since image pixels cannot be selected, place a small icon-only speech
+bubble on every image card and in the lightbox; it creates a comment anchored
+to the stable figure ID or Markdown source line. Do not add text-labeled or
+section-level `Comment` buttons. Give every generated content
+region a stable target; the builder additionally attaches source-line metadata
+to rendered Markdown blocks. Selection comments record both the target and
+selected quote, plus the source line when available. Consumers locate the quote
+first because line numbers drift after edits.
+
+Keep comment entry deliberately lightweight. Selecting report text reveals only
+a small speech-bubble icon beside the selection, never a text-labeled button;
+clicking that icon or an existing comment bubble opens a small floating textarea
+beside that context, not a modal dialog. Show only a short
+context label or quote and the textarea. Do not ask for an author, title,
+category, or other metadata, and do not require a Save button. Autosave after a
+short typing debounce, show a subtle saving/saved state, and dismiss on Escape
+or an outside click without interrupting report navigation.
+
+In hosted mode, store comments server-side in
+`reports/knowledge/comments.jsonl`. Show each current comment where it applies:
+softly highlight the quoted text with a small inline speech bubble at its end,
+or highlight the target region when there is no quote. Clicking the highlight
+or bubble reopens the comment for editing. Each figure holds a single comment:
+its speech-bubble icon (on the card and in the lightbox) switches to a filled
+state, the card gets a subtle highlight, and every entry point reopens that
+comment instead of creating another bubble. If a quote can no longer be found,
+show a visibly stale bubble on the nearest surviving target.
+Each append-only record includes a stable ID, timestamp, stable target, Markdown
+source line when applicable, selected quote, comment text, and optional reply-to
+ID. Autosaved edits append revisions under the same ID; the API and report fold
+those revisions to the latest state without erasing their history.
+Preserve comments across rebuilds and show clearly when their target is obsolete.
+
+The rail holds two side-by-side icon-only buttons with styled tooltips (not
+text labels): **Copy comments** and **Clear all comments**. Copy puts a
+ready-to-paste prompt on the clipboard: brief handling instructions followed by
+every open comment (hosted and browser-only) as JSON. Clear opens a small
+in-page confirmation popover (never a browser `confirm()` dialog) that states
+the count. Confirming calls `POST /api/comments/clear`, which appends a
+`resolve` event with the resolution "Cleared from the report" for every open
+comment, and it discards browser-only drafts. The history is never erased.
+Both buttons report their outcome briefly in their tooltip. Use the async clipboard
+API, falling back to a hidden-textarea copy on non-secure origins such as a
+plain-HTTP remote host. If the persistence endpoint is unavailable, retain new
+comments in browser storage; they are marked `"storage": "browser"` in the copied
+payload. Keep `/api/comments/export` for programmatic retrieval. Copied or
+exported comments retain the same schema, and the agent must reconcile them into
+the append-only knowledge store without silently duplicating records.
+
+The Markdown author may also leave invisible source comments such as
+`<!-- @agent: compare this claim with the reference run -->` (and legacy
+`@claude` comments). Before a report is considered reviewed, the agent must
+address each directive, rebuild and validate the report, then remove the source
+comment or replace it with an explicit documented resolution.
+
+For every open exported or hosted comment, locate its selected quote first and
+fall back to its source line or stable target only when necessary. Make the
+requested change or ask when its consequence is ambiguous, rebuild the report,
+and append a resolution event
+`{"id": "<comment id>", "event": "resolve", "timestamp": "<ISO time>", "resolution": "<what changed>"}`
+to `comments.jsonl`. The report then stops showing that comment as open. Never
+rewrite or delete the original comment record.
 
 Support resolution without deleting history: append a status event or retain
 the original comment with resolution state and rationale. Treat comments as
@@ -371,6 +632,8 @@ explain where comments and reviewed findings are stored.
 ## Reproducibility checklist
 
 - [ ] `pixi.lock` is committed and a fresh clone can run documented pixi tasks.
+- [ ] `.pixi`, Hydra outputs, and generated report trees are ignored and
+      explicitly excluded from recursive formatting and other source tooling.
 - [ ] No external or custom experiment-tracking service or database is used.
 - [ ] Every run retains Hydra's `.hydra/` configs plus structured results and a
       recognizable completion state in its Hydra output directory.
@@ -386,9 +649,39 @@ explain where comments and reviewed findings are stored.
       tuning or large multiruns.
 - [ ] The running report is generated from Hydra run outputs and every displayed
       result links to a source run or file.
+- [ ] The report remains concise and structurally coherent: new requests are
+      integrated or used to restructure existing material rather than appended
+      mechanically, and the visible narrative contains no stale duplication.
+- [ ] Callouts highlight only consequential synchronization needs, state the
+      required decision or response, and are removed or revised when resolved.
+- [ ] The canonical report template and builder are used; shared design tokens
+      and components keep styling consistent across projects and rebuilds.
+- [ ] When multiple reports exist, the shared host discovers and builds all of
+      them, lists them at `/`, and keeps routes, hosted comments, and browser
+      fallback comments isolated by stable report slug.
+- [ ] Every image opens in the ordered lightbox; previous/next controls, arrow
+      keys, Escape, zoom buttons, cursor-anchored `+`/`-` and wheel zoom, and
+      pointer/touch panning work as documented, while card previews never crop image content.
+- [ ] Plotly JSON artifacts render interactively from a locally bundled runtime,
+      show a clean hover-only card preview, retain native zoom/pan/hover tools in
+      the lightbox, and participate in the same gallery
+      and comment system as static figures.
+- [ ] Only `python exec` Markdown fences execute; failures fail the build,
+      stdout and figures are embedded, and experimental data comes from files.
+- [ ] Inline and display equations build to semantic MathML, retain source
+      anchors, keep bare delimiters non-stretchy, quote their LaTeX source when
+      commented, and remain readable without a browser-side CDN.
 - [ ] Every report build has a source manifest sufficient to reproduce it.
 - [ ] Comments persist server-side with stable targets and immutable history;
       resolving a comment does not erase it.
+- [ ] Text selection throughout the report creates comments with stable targets;
+      Markdown selections also retain source lines, and Copy comments plus
+      hosted persistence work without losing comments. Clear asks for in-page
+      confirmation and only appends resolve events.
+- [ ] Every image and lightbox view has an icon-only comment affordance anchored
+      to the figure ID or Markdown source line.
+- [ ] Comments autosave without a Save button; highlighted regions and their
+      bubbles reopen them for editing, and each figure holds one comment.
 - [ ] Reviewed findings cite source runs and comment IDs, expose conflicts, and
       distinguish evidence from user interpretation.
 - [ ] User-reported blind spots receive analytical views and suitable metrics;
