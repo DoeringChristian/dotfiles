@@ -150,6 +150,12 @@ run:
   description: <question, purpose, and interpretation constraints>
 
 hydra:
+  callbacks:
+    source_snapshot:
+      _target_: provenance.source_snapshot.SourceSnapshotCallback
+      mode: git                 # git or tree
+      source_root: null         # Hydra's original working directory
+      capture_runtime: true
   run:
     dir: outputs/${run.name}/${now:%Y-%m-%d_%H-%M-%S}
   sweep:
@@ -171,6 +177,35 @@ seeds, timestamps, or hashes in them. Validate names as safe path slugs: reject
 path separators, `.`/`..`, and characters outside the project's documented slug
 alphabet. Put a concise description in config so a report reader understands
 what was tested and how to interpret it.
+
+### Snapshot source and runtime state
+
+Copy [`assets/source_snapshot.py`](assets/source_snapshot.py) into the project as
+`provenance/source_snapshot.py` and register it as shown above. Each Hydra job,
+including every numbered multirun trial, writes `provenance/` into its own run
+directory. The callback supports two modes:
+
+- `git` stores a source-only archive of the committed tree at `HEAD`, a patch
+  containing staged and unstaged changes, and eligible untracked source files.
+  Prefer this compact mode when the project has a commit.
+- `tree` copies the current eligible source tree as ordinary files. Use it when
+  Git history is unavailable or the assembled working tree is more useful.
+
+Both modes allowlist UTF-8 text source and project-definition formats. They
+respect Git ignores when available and exclude symlinks, installed libraries,
+environments, caches, dependency trees, generated reports, run outputs, binary
+files, oversized files, and common credential filenames. Keep the per-file and
+total-size bounds, and extend the deny rules for project-specific data or
+secrets. A limit violation must fail the job rather than silently leave a
+partial snapshot.
+
+With `capture_runtime: true`, `provenance/environment/` also contains
+`pip-freeze.txt`, Python and platform facts, a small allowlist of execution
+environment settings, Git status, and an exact copy of `pixi.lock` when present.
+Do not dump the complete process environment or copy `.pixi`; inventories and
+the lock file describe installed packages without duplicating libraries or
+exposing unrelated secrets. The callback runs before experiment code, so a
+later experimental failure still retains its initial source and runtime state.
 
 ### Maintain a per-name `latest` link
 
@@ -637,6 +672,10 @@ explain where comments and reviewed findings are stored.
 - [ ] No external or custom experiment-tracking service or database is used.
 - [ ] Every run retains Hydra's `.hydra/` configs plus structured results and a
       recognizable completion state in its Hydra output directory.
+- [ ] Every run contains bounded `provenance/` data in `git` or `tree` mode,
+      plus `pip freeze`, runtime facts, Git status, and `pixi.lock` when present;
+      environments, installed libraries, outputs, binaries, and secrets are not
+      copied as source.
 - [ ] Runs use `outputs/<run-name>/<timestamp>/`; after successful completion,
       `outputs/<run-name>/latest` atomically points to that immutable directory.
 - [ ] Failed runs do not advance `latest`; multirun trials do not race to update
