@@ -16,11 +16,13 @@ cask; `brew upgrade` keeps them latest.
 ## Key commands
 
 ```bash
-./bootstrap.sh   # first-time (curl | bash, or in a clone): install git/curl, clone,
-                 # install Homebrew, run update.sh, decrypt the age key
-./update.sh      # reconcile + upgrade: register/trust the tap, `brew bundle` (install
-                 # missing), brew upgrade (+ casks --greedy, --HEAD rebuilds, npm
-                 # globals), Linux app fixups, stow configs. No brew-install, no secrets.
+./bootstrap.sh              # first-time (curl | bash, or in a clone): install git/curl,
+                            # clone, install Homebrew, run update.sh, decrypt the age key
+./bootstrap.sh --no-root    # rootless install into ~/.homebrew (no sudo needed)
+./update.sh                 # reconcile + upgrade: register/trust the tap, `brew bundle`
+                            # (install missing), brew upgrade (+ casks --greedy, --HEAD
+                            # rebuilds, npm globals), Linux app fixups, stow configs.
+                            # No brew-install, no secrets.
 ```
 `bootstrap.sh` = git/curl → clone (skipped when run from a clone) → install
 Homebrew → `update.sh` → decrypt the age key. So the package/config logic lives

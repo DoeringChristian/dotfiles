@@ -28,6 +28,7 @@ lock_set() {
 }
 
 TYPE_ARG=""
+NOROOT_ARG=""
 while [ $# -gt 0 ]; do
     case "$1" in
     --type)
@@ -36,6 +37,10 @@ while [ $# -gt 0 ]; do
         ;;
     --type=*)
         TYPE_ARG="${1#*=}"
+        shift
+        ;;
+    --no-root)
+        NOROOT_ARG=1
         shift
         ;;
     *)
@@ -52,6 +57,13 @@ else
     TYPE="${TYPE:-base}"
 fi # else the saved one, or base
 
+# --no-root: persist in lockfile so future bare ./update.sh picks it up.
+if [ -n "$NOROOT_ARG" ]; then
+    lock_set noroot 1
+elif [ "$(lock_get noroot)" = 1 ]; then
+    NOROOT_ARG=1
+fi
+
 # brew on PATH (standard prefixes + rootless ~/.homebrew)
 for p in "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
     [ -x "$p" ] && {
@@ -63,6 +75,13 @@ command -v brew >/dev/null 2>&1 || {
     echo "brew not found — run ./bootstrap.sh first" >&2
     exit 1
 }
+
+# Linux rootless: Homebrew bottles hardcode RPATHs to $prefix/opt/gcc/lib/gcc/current
+# for libgcc_s / libstdc++. Without gcc installed first, every other binary segfaults
+# or fails to load. Ensure gcc is present before anything else.
+if [ "$OS" = Linux ] && ! brew list --versions gcc >/dev/null 2>&1; then
+    brew install gcc
+fi
 
 # npm uses `#!/usr/bin/env node`. Ensure Homebrew's Node is installed and first
 # on PATH before brew bundle handles npm entries; otherwise an older distro Node
@@ -131,6 +150,14 @@ if [ "$TYPE" != base ]; then
     }
     echo "==> brew bundle (profile: $TYPE)"
     brew bundle --file "$REPO/Brewfile.$TYPE"
+fi
+
+# Linux rootless: stow's bottle hardcodes /home/linuxbrew/.linuxbrew Perl paths
+# that survive relocation only partially. Rebuild from source if the bottle is
+# broken (detects the garbled `use lib` path).
+if [ "$OS" = Linux ] && ! stow --version >/dev/null 2>&1; then
+    echo "==> rebuilding stow from source (bottle relocation broken)"
+    brew reinstall --build-from-source stow
 fi
 
 # Bundle is finished; remove the compatibility wrapper now rather than at exit.

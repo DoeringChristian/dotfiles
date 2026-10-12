@@ -4,7 +4,8 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
 #   # workstation profile:  ... | bash -s -- --type workstation
-#   # or, in a clone:  ./bootstrap.sh [--type workstation]
+#   # rootless (no sudo):   ... | bash -s -- --no-root
+#   # or, in a clone:  ./bootstrap.sh [--type workstation] [--no-root]
 #
 # Day-to-day after this: ./update.sh (install new packages, upgrade everything,
 # apply configs).
@@ -67,8 +68,8 @@ ensure_brew() {
     if ! have brew && ! { [ -n "$BREW_PREFIX" ] && [ -x "$BREW_PREFIX/bin/brew" ]; }; then
         if [ -n "$BREW_PREFIX" ]; then
             log "Installing Homebrew (rootless) into $BREW_PREFIX"
-            mkdir -p "$BREW_PREFIX"
-            curl -fsSL https://github.com/Homebrew/brew/tarball/master | tar xz --strip-components 1 -C "$BREW_PREFIX"
+            mkdir -p "$BREW_PREFIX" && chmod 755 "$BREW_PREFIX"
+            curl -fsSL https://github.com/Homebrew/brew/tarball/main | tar xz --strip-components 1 -C "$BREW_PREFIX"
         else
             log "Installing Homebrew"
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -92,13 +93,24 @@ decrypt_secrets() {
     cp ~/.local/share/age/key.txt ~/.passage/identities
 }
 
+# Parse --no-root (remaining args forwarded to update.sh).
+NOROOT=""
+FORWARD_ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --no-root) NOROOT=1; shift ;;
+    *)         FORWARD_ARGS+=("$1"); shift ;;
+    esac
+done
+[ "$NOROOT" = 1 ] && BREW_PREFIX="${BREW_PREFIX:-$HOME/.homebrew}"
+
 ensure_prereqs
 fetch_repo
 cd "$DEST"
 ensure_brew
 # 4. Packages + configs — the same script as day-to-day updates. Forwards
-#    --type <profile> (e.g. `./bootstrap.sh --type workstation`).
-bash ./update.sh "$@"
+#    --type <profile> and --no-root.
+bash ./update.sh ${NOROOT:+"--no-root"} "${FORWARD_ARGS[@]+"${FORWARD_ARGS[@]}"}"
 decrypt_secrets
 
 cat <<'EOF'
