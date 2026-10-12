@@ -60,20 +60,22 @@ project/
 │   └── <run-name>/
 │       ├── <timestamp>/        # one run, or a multirun study of numbered trials
 │       └── latest -> <timestamp>/
-└── reports/
-    ├── report.md               # the overview (super-report), served at /
-    ├── knowledge/comments.jsonl  # (optional fragments/ and media/ as for directions)
-    ├── generated/              # build output, git-ignored
-    ├── build.py                # one builder for every report
-    ├── serve.py                # one server: overview, directions, comment API
-    ├── template/               # shared page, styles, scripts
-    └── <slug>/                 # one report per research direction or idea
-        ├── report.md           # front matter includes its `summary:`
-        ├── fragments/          # larger author HTML blocks, included by path
-        ├── media/              # non-experimental illustrations only
-        ├── knowledge/
-        │   └── comments.jsonl  # append-only user feedback
-        └── generated/          # build output, git-ignored
+├── reports/                    # report content only; the agent writes here
+│   ├── report.md               # the overview (super-report), served at /
+│   ├── knowledge/comments.jsonl
+│   ├── fragments/  media/      # optional HTML fragments, SVGs, images
+│   └── <slug>/                 # one report per research direction or idea
+│       ├── report.md           # front matter includes its `summary:`
+│       ├── fragments/          # larger author HTML blocks, included by path
+│       ├── media/              # non-experimental illustrations only
+│       └── knowledge/
+│           └── comments.jsonl  # append-only user feedback
+├── report-tooling/             # installed from the skill; never edited in the project
+│   ├── build.py                # one builder for every report
+│   ├── serve.py                # one server: overview, directions, comment API
+│   ├── template/               # shared page, styles, scripts
+│   └── TOOLING.json            # installed version and file hashes
+└── generated/reports/<slug>/   # build output (overview: overview/), git-ignored
 ```
 
 Use a flat import layout rather than `src/<package>/`. Create concept directories
@@ -121,16 +123,16 @@ PYTHONPATH = "."
 
 [tasks]
 experiment = "python experiments/run.py"
-report-build = "python reports/build.py"
-report-serve = "python reports/serve.py --host 127.0.0.1 --port 8000"
-report-host = "python reports/serve.py --host 0.0.0.0 --port 8000"
-format = "black --extend-exclude '/([.]pixi|outputs)/|/reports/(?:[^/]+/)?generated/' ."
+report-build = "python report-tooling/build.py"
+report-serve = "python report-tooling/serve.py --host 127.0.0.1 --port 8000"
+report-host = "python report-tooling/serve.py --host 0.0.0.0 --port 8000"
+format = "black --extend-exclude '/([.]pixi|outputs|generated|report-tooling)/' ."
 ```
 
 Graphviz comes from conda-forge because it is a native binary; the builder runs
 `dot -c` once if pixi skipped conda's plugin registration. List every platform
 the project runs on. Commit `pixi.lock`; ignore `.pixi/`, caches, `outputs/`,
-`reports/generated/`, and `reports/*/generated/` in `.gitignore`, and keep the explicit Black
+and `generated/` in `.gitignore`, and keep the explicit Black
 `--extend-exclude`, because Black does not exclude `.pixi` by itself. Every
 formatter, linter, type checker, and test runner must skip environments and
 generated artifacts. Do not add MLflow, Cairn, W&B, TensorBoard-as-a-tracker,
@@ -580,17 +582,24 @@ python <skill-directory>/scripts/scaffold_report.py <project-root> --report <slu
 python <skill-directory>/scripts/scaffold_report.py <project-root> --update-tooling  # refresh build.py, serve.py, template/
 ```
 
-The project has one builder (`reports/build.py`), one server
-(`reports/serve.py`), and one shared template (`reports/template/`). The first
-install creates the overview and a sample direction (`local-fitting`) that
-exercises every component; build them once as a smoke test and visual
-reference, then rename the direction folder (`reports/<slug>/`) and replace its
-sample content, summary, `media/`, and `fragments/` with the direction's own
-material. Replace the sample overview text at the same time: its `report:` links
-name the sample slug, and the build fails on links to a renamed report. Extend the shared template through its design tokens and existing
-components rather than adding one-off styles or a second visual system, and
-scope any new selector to the report's own classes: embedded libraries such as
-Plotly reuse generic class names (`svg.icon`), which leaking rules distort.
+The report tooling is a dependency, not project code. It lives in
+`report-tooling/` (`build.py`, `serve.py`, `template/`), separate from the
+content in `reports/`, and `TOOLING.json` records the installed version and the
+hash of every tooling file. Do not edit it in the project: every build warns and
+records in its manifest when a tooling file no longer matches. When the tooling
+needs a fix or a feature, change it in the skill, then run `--update-tooling`;
+an explicit, user-approved local change is the only exception, and it must be
+reported in the handoff. Keeping it separate lets the tooling be updated or
+replaced without touching any report.
+
+The first install creates the overview and a sample direction
+(`local-fitting`) that exercises every component; build them once as a smoke
+test and visual reference, then rename the direction folder
+(`reports/<slug>/`) and replace its sample content, summary, `media/`, and
+`fragments/` with the direction's own material. Replace the sample overview
+text at the same time: its `report:` links name the sample slug, and the build
+fails on links to a renamed report. Build output goes to
+`generated/reports/<slug>/` and never into `reports/`.
 
 ### Write the report in `report.md`
 
@@ -631,7 +640,7 @@ project. Take experimental figures directly from the run that wrote them
 `../outputs/...` from the overview); keep `media/` for
 material that is not an experimental result. The build fails on remote URLs,
 missing files, duplicate ids, and figures from runs whose `run.json` is not
-`completed`. It copies each figure into `generated/assets/` by its resolved
+`completed`. It copies each figure into the report's `assets/` output by its resolved
 path and records where it came from.
 
 Every figure opens in one ordered lightbox with keyboard navigation, zoom, and
@@ -722,7 +731,7 @@ input as HTML.
 
 ### Reproducible evidence
 
-Every report build writes `generated/manifest.json` with:
+Every report build writes `generated/reports/<slug>/manifest.json` with:
 
 - the resolved run paths and the selection rule;
 - the hash of every file the report read or displayed, including each run's
@@ -730,7 +739,7 @@ Every report build writes `generated/manifest.json` with:
   patch, and every included fragment;
 - its cross-report links;
 - the Markdown hash and the project's code revision;
-- the hashes of `build.py` and every template file;
+- the hashes of the tooling files and whether they still match `TOOLING.json`;
 - the Python version, rendering package versions, the bundled Plotly.js version
   and hash, and the Graphviz version.
 
@@ -795,8 +804,11 @@ pixi run report-serve  # http://127.0.0.1:8000 (overview); directions at /report
 pixi run report-host   # http://<remote-host>:8000
 ```
 
-Give the concrete URLs in the handoff, with `<remote-host>` replaced by the
-real hostname or address. `report-serve` is the safe local default;
+If the port is taken, for example by another project's report server, the
+server moves to the next free port and prints the URL it actually uses; keep
+8000 in the pixi tasks rather than editing them, and pass `--strict-port` when
+an exact port is required. Give the concrete URLs in the handoff, as printed,
+with `<remote-host>` replaced by the real hostname or address. `report-serve` is the safe local default;
 `report-host` binds to all interfaces, and because the report accepts writes,
 expose it only on a trusted private network, a VPN, or behind an authenticated
 HTTPS reverse proxy. The server validates comment size and format, and the page
@@ -862,8 +874,11 @@ Environment and runs
 - [ ] The project is a Git repository whose scaffold, configs, and `pixi.lock`
       were committed before the first run; a fresh clone runs the documented
       pixi tasks on every listed platform.
-- [ ] `.pixi`, `outputs/`, `reports/generated/`, and `reports/*/generated/` are
-      ignored and excluded from formatting and other source tooling.
+- [ ] `.pixi`, `outputs/`, and `generated/` are ignored, and they and
+      `report-tooling/` are excluded from formatting and other source tooling.
+- [ ] `reports/` holds only report content; `report-tooling/` matches
+      `TOOLING.json` (no build warning), and tooling changes went through the
+      skill and `--update-tooling`.
 - [ ] No experiment-tracking service or custom run database is used.
 - [ ] `experiments/run.py`, `experiments/logger.py`, and
       `provenance/source_snapshot.py` are copied from the skill's assets as

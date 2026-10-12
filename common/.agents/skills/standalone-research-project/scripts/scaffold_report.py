@@ -3,22 +3,27 @@
 
     scaffold_report.py <project>                  # tooling + overview + sample direction
     scaffold_report.py <project> --report <slug>  # add the direction reports/<slug>/
-    scaffold_report.py <project> --update-tooling # replace build.py, serve.py, template/
+    scaffold_report.py <project> --update-tooling # replace report-tooling/ from the skill
 
-reports/report.md is the overview (super-report, served at /). Each research
-direction is reports/<slug>/ with its own report.md (front matter `summary:`),
-fragments/, media/, and knowledge/comments.jsonl. Reports are never overwritten.
+report-tooling/ (build.py, serve.py, template/, TOOLING.json) is installed from the
+skill and is not edited in the project. reports/ holds content only: report.md is
+the overview (served at /); each research direction is reports/<slug>/ with its own
+report.md (front matter `summary:`), fragments/, media/, and knowledge/comments.jsonl.
+Reports are never overwritten. Build output goes to generated/reports/.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import shutil
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parent.parent / "assets" / "report-template"
 TOOLING = ("build.py", "serve.py", "template")
+TOOL_DIR = "report-tooling"
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
 RESERVED = {"overview", "template", "generated", "knowledge", "fragments", "media"}
 SAMPLE_DIRECTION = "local-fitting"  # the sample overview links to this slug
@@ -37,14 +42,25 @@ def copy_writable(source: Path, destination: Path) -> None:
         shutil.copyfile(source, destination)
 
 
-def install_tooling(reports_root: Path, replace: bool) -> None:
+def install_tooling(project: Path, replace: bool) -> Path:
+    """Copy build.py, serve.py, and template/ to report-tooling/ and record their hashes."""
+    tool_root = project / TOOL_DIR
+    if tool_root.exists() and not replace:
+        return tool_root
+    if tool_root.exists():
+        shutil.rmtree(tool_root)
     for name in TOOLING:
-        target = reports_root / name
-        if target.exists() and not replace:
-            continue
-        if target.is_dir():
-            shutil.rmtree(target)
-        copy_writable(SOURCE / name, target)
+        copy_writable(SOURCE / name, tool_root / name)
+    files = sorted(path for path in tool_root.rglob("*") if path.is_file())
+    hashes = {path.relative_to(tool_root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
+    version = hashlib.sha256("".join(f"{name}:{digest}" for name, digest in hashes.items()).encode()).hexdigest()[:16]
+    (tool_root / "TOOLING.json").write_text(json.dumps({
+        "skill_version": version,
+        "source": "standalone-research-project skill, assets/report-template",
+        "note": "Do not edit these files in the project; change the skill and run scaffold_report.py --update-tooling.",
+        "files": hashes,
+    }, indent=2) + "\n")
+    return tool_root
 
 
 def main() -> None:
@@ -54,10 +70,14 @@ def main() -> None:
     parser.add_argument("--update-tooling", action="store_true", help="replace the shared build.py, serve.py, and template/")
     args = parser.parse_args()
 
-    reports_root = args.project.resolve() / "reports"
+    project = args.project.resolve()
+    reports_root = project / "reports"
     first_install = not (reports_root / "report.md").exists()
-    install_tooling(reports_root, replace=args.update_tooling)
-    print(f"Shared tooling in {reports_root}: build.py, serve.py, template/")
+    tool_root = install_tooling(project, replace=args.update_tooling)
+    print(f"Report tooling in {tool_root} (do not edit; update with --update-tooling)")
+    stale = [name for name in TOOLING if (reports_root / name).exists()]
+    if stale:
+        print(f"note: old tooling inside reports/ ({', '.join(stale)}) is no longer used; remove it so reports/ holds content only")
     if first_install:
         for name in ("report.md", "knowledge"):
             copy_writable(SOURCE / "overview" / name, reports_root / name)
@@ -72,7 +92,7 @@ def main() -> None:
         raise SystemExit(f"{destination} already exists; reports are never overwritten")
     copy_writable(SOURCE / "report", destination)
     print(f"Research direction: {destination / 'report.md'} (replace the sample content and summary)")
-    print(f"Build: python {reports_root / 'build.py'}    Serve: python {reports_root / 'serve.py'}")
+    print(f"Build: python {tool_root / 'build.py'}    Serve: python {tool_root / 'serve.py'}")
 
 if __name__ == "__main__":
     main()

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build and serve the overview (reports/report.md) and every research direction.
 
-    /                               the overview super-report (reports/generated/)
-    /reports/<slug>/                one research direction (reports/<slug>/generated/)
+    /                               the overview (generated/reports/overview/)
+    /reports/<slug>/                one research direction (generated/reports/<slug>/)
     /api/reports                    all reports, overview first (drives each sidebar)
     /api/reports/<slug>/comments    GET folded comments, POST a comment revision
               .../comments/export   GET, as a download
@@ -16,6 +16,7 @@ Comments are append-only: reports/knowledge/comments.jsonl for the overview
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import mimetypes
 import re
@@ -27,17 +28,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-REPORTS_ROOT = Path(__file__).resolve().parent
-TEMPLATE = REPORTS_ROOT / "template"
+TOOL_ROOT = Path(__file__).resolve().parent  # report-tooling/: do not edit in a project
+PROJECT = next((parent for parent in TOOL_ROOT.parents if (parent / "pixi.toml").exists()), TOOL_ROOT.parent)
+REPORTS_ROOT = PROJECT / "reports"  # content and comments
+OUTPUT_ROOT = PROJECT / "generated" / "reports"  # build output, one folder per slug
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
 COMMENT_ROUTE = re.compile(r"/api/reports/([a-z0-9][a-z0-9-]*)/comments(?:/(export|clear|delete))?")
 CLOSED = ("resolve", "delete")
 OVERVIEW = "overview"
-RESERVED = {OVERVIEW, "template", "generated", "knowledge", "fragments", "media"}
+RESERVED = {OVERVIEW, "knowledge", "fragments", "media"}
 
 
 def discover_reports() -> dict[str, Path]:
     """The overview first, then every research direction (same rule as build.py)."""
+    if not REPORTS_ROOT.is_dir():
+        return {}
     reports = {OVERVIEW: REPORTS_ROOT} if (REPORTS_ROOT / "report.md").is_file() else {}
     reports.update({
         folder.name: folder
@@ -85,13 +90,13 @@ class Handler(BaseHTTPRequestHandler):
         if match and match.group(1) in self.reports and match.group(1) != OVERVIEW:
             if match.group(2) is None:
                 return self._redirect(f"/reports/{match.group(1)}/")
-            return self._generated(self.reports[match.group(1)], match.group(2))
+            return self._generated(match.group(1), match.group(2))
         if OVERVIEW in self.reports and not path.startswith(("/reports/", "/api/")):
-            return self._generated(REPORTS_ROOT, path)
+            return self._generated(OVERVIEW, path)
         self.send_error(404)
 
-    def _generated(self, folder: Path, relative: str) -> None:
-        generated = (folder / "generated").resolve()
+    def _generated(self, slug: str, relative: str) -> None:
+        generated = (OUTPUT_ROOT / slug).resolve()
         candidate = (generated / (unquote(relative.lstrip("/")) or "index.html")).resolve()
         if candidate != generated and generated in candidate.parents and candidate.is_file():
             return self._file(candidate)
@@ -141,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(error)})
 
     def _summary(self, slug: str, folder: Path) -> dict:
-        data_file = folder / "generated" / "report-data.json"
+        data_file = OUTPUT_ROOT / slug / "report-data.json"
         data = json.loads(data_file.read_text()) if data_file.is_file() else {}
         return {
             "slug": slug,
@@ -201,17 +206,26 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build and serve the project's reports.")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=8000, help="preferred port; the next free one is used if it is taken")
+    parser.add_argument("--strict-port", action="store_true", help="fail instead of moving to the next free port")
     parser.add_argument("--no-build", action="store_true", help="serve the existing generated reports")
     args = parser.parse_args()
     if not args.no_build:
-        subprocess.run([sys.executable, str(REPORTS_ROOT / "build.py")], check=True)
+        subprocess.run([sys.executable, str(TOOL_ROOT / "build.py")], check=True)
     Handler.reports = discover_reports()
-    try:
-        server = ThreadingHTTPServer((args.host, args.port), Handler)  # bind before announcing the URL
-    except OSError as error:
-        raise SystemExit(f"Cannot serve on {args.host}:{args.port}: {error.strerror}. Is another report server running? Pass --port.")
-    print(f"Reports: http://{args.host}:{args.port}/ ({', '.join(Handler.reports)})", flush=True)
+    server, port = None, args.port
+    for port in [args.port] if args.strict_port else range(args.port, args.port + 50):
+        try:
+            server = ThreadingHTTPServer((args.host, port), Handler)  # bind before announcing the URL
+            break
+        except OSError as error:
+            if args.strict_port or error.errno not in (errno.EADDRINUSE, errno.EACCES):
+                raise SystemExit(f"Cannot serve on {args.host}:{port}: {error.strerror}.")
+    if server is None:
+        raise SystemExit(f"No free port in {args.port}-{args.port + 49} on {args.host}; pass --port.")
+    if port != args.port:
+        print(f"Port {args.port} is in use; serving on {port} instead.", flush=True)
+    print(f"Reports: http://{args.host}:{port}/ ({', '.join(Handler.reports)})", flush=True)
     server.serve_forever()
 
 

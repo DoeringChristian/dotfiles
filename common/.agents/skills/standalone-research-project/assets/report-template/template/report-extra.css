@@ -175,3 +175,8 @@ mark.comment-highlight:hover { background: #c7e1d7; }
 .rail .rail-sections-label + nav { margin-top: 6px; }
 .rail .report-list nav { margin-top: 0; }
 .rail .report-list { margin: 26px 0 0; }
+/* The rail scrolls when its contents exceed the window; comment actions sit at the top so a long
+   table of contents never pushes them out of reach. */
+.rail { overflow-y: auto; overscroll-behavior: contain; }
+.rail .rail-actions { margin-top: 18px; }
+.rail-note { padding-top: 18px; }

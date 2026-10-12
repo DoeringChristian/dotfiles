@@ -3,6 +3,12 @@
 
     reports/report.md          the overview (super-report), served at /
     reports/<slug>/report.md   one report per research direction or idea
+    generated/reports/<slug>/  build output (the overview's slug is "overview")
+
+This file and template/ are the project's report tooling, installed from the
+skill into report-tooling/. Do not edit them in a project; change the skill and
+run `scaffold_report.py <project> --update-tooling`. Every build warns when a
+tooling file no longer matches TOOLING.json.
 
 One builder and one template serve all reports. Directions are built first; the
 overview's ```reports``` fence then lists them with the short `summary` from each
@@ -46,16 +52,18 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 from mdit_py_plugins.front_matter import front_matter_plugin
 from plotly.offline import get_plotlyjs, get_plotlyjs_version
 
-REPORTS_ROOT = Path(__file__).resolve().parent
-TEMPLATE = REPORTS_ROOT / "template"
+TOOL_ROOT = Path(__file__).resolve().parent
+TEMPLATE = TOOL_ROOT / "template"
 # The project root is the enclosing pixi workspace.
 PROJECT = next(
-    (parent for parent in REPORTS_ROOT.parents if (parent / "pixi.toml").exists()),
-    REPORTS_ROOT.parent,
+    (parent for parent in TOOL_ROOT.parents if (parent / "pixi.toml").exists()),
+    TOOL_ROOT.parent,
 )
+REPORTS_ROOT = PROJECT / "reports"  # content only: Markdown, fragments, media, comments
+OUTPUT_ROOT = PROJECT / "generated" / "reports"
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
 OVERVIEW = "overview"  # slug of the super-report at reports/report.md
-RESERVED = {OVERVIEW, "template", "generated", "knowledge", "fragments", "media"}
+RESERVED = {OVERVIEW, "knowledge", "fragments", "media"}
 REPORT_LINK = re.compile(r"report:([a-z0-9][a-z0-9-]*)(?:#([A-Za-z0-9_.:-]+))?$")
 PAGE_FILES = ("index.html", "report.css", "report-extra.css", "report.js")
 ASSETS = "assets"
@@ -238,6 +246,8 @@ def read_jsonl(path: Path) -> list[dict]:
 
 def discover_reports() -> dict[str, Path]:
     """Research directions (reports/<slug>/report.md) first, then the overview (reports/report.md)."""
+    if not REPORTS_ROOT.is_dir():
+        return {}
     reports = {
         folder.name: folder
         for folder in sorted(REPORTS_ROOT.iterdir())
@@ -247,6 +257,23 @@ def discover_reports() -> dict[str, Path]:
     if (REPORTS_ROOT / "report.md").is_file():
         reports[OVERVIEW] = REPORTS_ROOT
     return reports
+
+
+def output_dir(slug: str) -> Path:
+    return OUTPUT_ROOT / slug
+
+
+def tooling_status() -> dict:
+    """Compare the installed tooling with TOOLING.json, written by the scaffold."""
+    record_file = TOOL_ROOT / "TOOLING.json"
+    if not record_file.is_file():
+        return {"version": None, "modified": ["TOOLING.json missing"]}
+    record = json.loads(record_file.read_text())
+    modified = sorted(
+        name for name, expected in record.get("files", {}).items()
+        if not (TOOL_ROOT / name).is_file() or digest(TOOL_ROOT / name) != expected
+    )
+    return {"version": record.get("skill_version"), "modified": modified}
 
 
 def report_href(slug: str) -> str:
@@ -270,7 +297,7 @@ class Build:
         self.slug = slug
         self.markdown = folder / "report.md"
         self.content_root = folder
-        self.generated = folder / "generated"
+        self.generated = output_dir(slug)
         self.meta: dict = {}
         self.links: list[dict] = []
         self.typed: list[dict] = []
@@ -740,7 +767,7 @@ def render(build: Build) -> str:
         for slug_ in wanted:
             if slug_ not in directions:
                 raise ValueError(f"{path}:{line}: no research direction {slug_!r} (have: {', '.join(directions)})")
-            data_file = directions[slug_] / "generated" / "report-data.json"
+            data_file = output_dir(slug_) / "report-data.json"
             if not data_file.is_file():
                 raise ValueError(f"{path}:{line}: direction {slug_!r} is not built; build all reports")
             data = json.loads(data_file.read_text())
@@ -878,9 +905,9 @@ def render(build: Build) -> str:
     return rendered
 
 
-def page_ids(folder: Path) -> set[str] | None:
+def page_ids(slug: str) -> set[str] | None:
     """Anchors of a built report (headings, findings, figures), or None if never built."""
-    narrative = folder / "generated" / "narrative.html"
+    narrative = output_dir(slug) / "narrative.html"
     if not narrative.is_file():
         return None
     return set(re.findall(r'\sid="([^"]+)"', narrative.read_text()))
@@ -890,7 +917,7 @@ def build_report(slug: str, folder: Path) -> Build:
     build = Build(slug, folder)
     if build.generated.exists():
         shutil.rmtree(build.generated)
-    build.generated.mkdir()
+    build.generated.mkdir(parents=True)
     for name in PAGE_FILES:
         shutil.copy2(TEMPLATE / name, build.generated / name)
     (build.generated / "plotly.min.js").write_text(get_plotlyjs())
@@ -922,7 +949,7 @@ def build_report(slug: str, folder: Path) -> Build:
         "links_to": sorted({link["slug"] for link in build.links}),
     }
     (build.generated / "report-data.json").write_text(json.dumps(data, indent=2) + "\n")
-    builder = [Path(__file__).resolve(), *sorted(TEMPLATE.iterdir())]
+    builder = [Path(__file__).resolve(), TOOL_ROOT / "serve.py", *sorted(TEMPLATE.iterdir())]
     manifest = {
         "built_at": datetime.now(timezone.utc).isoformat(),
         "report": slug,
@@ -935,6 +962,7 @@ def build_report(slug: str, folder: Path) -> Build:
         "typed_numbers": build.typed,
         "sources": dict(sorted(build.sources.items())),
         "builder": {str(file.relative_to(PROJECT)): digest(file) for file in builder if file.is_file()},
+        "tooling": tooling_status(),
         "runtime": {
             "python": sys.version.split()[0],
             "packages": {name: package_version(name) for name in RENDER_PACKAGES},
@@ -956,7 +984,7 @@ def check_links(builds: list[Build], reports: dict[str, Path]) -> None:
                 problems.append(f"{where}: no report named {link['slug']!r} (reports: {', '.join(reports)})")
                 continue
             if link["anchor"]:
-                ids = page_ids(reports[link["slug"]])
+                ids = page_ids(link["slug"])
                 if ids is None:
                     problems.append(f"{where}: report {link['slug']!r} is not built; build all reports")
                 elif link["anchor"] not in ids:
@@ -975,6 +1003,10 @@ def main() -> None:
     if args.report and args.report not in reports:
         raise SystemExit(f"unknown report {args.report!r}; reports: {', '.join(reports)}")
     selected = {args.report: reports[args.report]} if args.report else reports
+    tooling = tooling_status()
+    if tooling["modified"]:
+        print(f"warning: report tooling differs from the installed version ({', '.join(tooling['modified'])}); "
+              "fix the skill and run scaffold_report.py --update-tooling instead of editing report-tooling/")
     builds = [build_report(slug, folder) for slug, folder in selected.items()]
     check_links(builds, reports)
     for build in builds:
