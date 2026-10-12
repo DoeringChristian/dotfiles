@@ -89,10 +89,9 @@ setup.sh / bootstrap.sh / update.sh
   `common/.config/claudebox/config` adds this machine's extras (the age key). A
   project `.claudebox` only applies after `claudebox --trust`. All paths are
   symlink-resolved so bwrap can mount them. Keep it bash-3.2 compatible.
-- **Shared research skill**: Codex/Pi owns the canonical
-  `common/.agents/skills/research-project/`; the Claude entry at
-  `common/.claude/skills/research-project/` is a symlink to it so its
-  workflow and bundled `registry.py` remain single-source.
+- **Shared agent skills**: `common/.agents/skills/` is the canonical skill
+  directory for Codex/Pi and Claude. `common/.claude/skills` is a single
+  relative symlink to it; add and edit skills only under `.agents/skills`.
 
 ## resh (special case)
 

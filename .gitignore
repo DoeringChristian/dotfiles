@@ -7,6 +7,9 @@ result
 # macOS Finder junk
 **/.DS_Store
 
+# Claude-managed downloaded skill cache; local runtime state, not canonical skills
+common/.agents/skills/synced/
+
 # sunshine runtime state — on a fresh machine stow folds ~/.config/sunshine into
 # the repo, so keep the credentials/state/log it writes there out of git
 common/.config/sunshine/credentials/
