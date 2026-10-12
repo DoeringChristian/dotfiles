@@ -160,5 +160,33 @@ if [ "$OS" = Darwin ] && [ -d darwin ]; then
     plist=~/Library/LaunchAgents/com.ollama.server.plist
     [ -e "$plist" ] && launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null || true
 fi
+# Linux: tev's cask installs an AppImage that is built against a newer system
+# glibc than some of our hosts provide. Extract it and run the inner executable
+# with Homebrew's glibc loader/libstdc++ instead.
+if [ "$OS" = Linux ] && brew list --cask tev >/dev/null 2>&1; then
+    tev_appimage="$(find "$(brew --prefix)/Caskroom/tev" -mindepth 2 -maxdepth 2 -type f -name 'tev.appimage' -print 2>/dev/null | sort -V | tail -1)"
+    if [ -n "$tev_appimage" ]; then
+        tev_version="$(basename "$(dirname "$tev_appimage")")"
+        tev_extract_dir="$HOME/.local/share/tev-appimage/$tev_version"
+        if [ ! -x "$tev_extract_dir/squashfs-root/usr/bin/tev" ]; then
+            rm -rf "$tev_extract_dir"
+            mkdir -p "$tev_extract_dir"
+            (cd "$tev_extract_dir" && "$tev_appimage" --appimage-extract >/dev/null)
+        fi
+        mkdir -p ~/.local/bin
+        rm -f ~/.local/bin/tev
+        cat >~/.local/bin/tev <<EOF_TEV
+#!/usr/bin/env bash
+set -euo pipefail
+root="$tev_extract_dir/squashfs-root"
+brew_prefix="\$(brew --prefix)"
+exec "\$brew_prefix/opt/glibc/lib/ld-linux-x86-64.so.2" \
+  --library-path "\$brew_prefix/opt/glibc/lib:\$brew_prefix/opt/gcc/lib/gcc/current:\$root/usr/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:\$brew_prefix/lib" \
+  "\$root/usr/bin/tev" "\$@"
+EOF_TEV
+        chmod +x ~/.local/bin/tev
+    fi
+fi
+
 [ "$OS" = Linux ] && [ -f dconf.ini ] && dconf load / <dconf.ini 2>/dev/null || true
 echo "==> synced."
