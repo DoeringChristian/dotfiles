@@ -70,11 +70,7 @@ project/
 │       ├── media/              # non-experimental illustrations only
 │       └── knowledge/
 │           └── comments.jsonl  # append-only user feedback
-├── report-tooling/             # installed from the skill; never edited in the project
-│   ├── build.py                # one builder for every report
-│   ├── serve.py                # one server: overview, directions, comment API
-│   ├── template/               # shared page, styles, scripts
-│   └── TOOLING.json            # installed version and file hashes
+├── cairn-report.toml           # optional: paths and style overrides
 └── generated/reports/<slug>/   # build output (overview: overview/), git-ignored
 ```
 
@@ -111,22 +107,20 @@ graphviz = "*"
 numpy = "*"
 matplotlib = "*"
 hydra-core = "*"
-markdown-it-py = "*"
-mdit-py-plugins = "*"
-latex2mathml = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
+cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.1.0" }
 
 [activation.env]
 PYTHONPATH = "."
 
 [tasks]
 experiment = "python experiments/run.py"
-report-build = "python report-tooling/build.py"
-report-serve = "python report-tooling/serve.py --host 127.0.0.1 --port 8000"
-report-host = "python report-tooling/serve.py --host 0.0.0.0 --port 8000"
-format = "black --extend-exclude '/([.]pixi|outputs|generated|report-tooling)/' ."
+report-build = "cairn-report build"
+report-serve = "cairn-report serve --host 127.0.0.1 --port 8000"
+report-host = "cairn-report serve --host 0.0.0.0 --port 8000"
+format = "black --extend-exclude '/([.]pixi|outputs|generated)/' ."
 ```
 
 Graphviz comes from conda-forge because it is a native binary; the builder runs
@@ -576,21 +570,25 @@ variant already exists), `warning` or `risk` (consequential limitation), and
 
 ### Install the report tooling
 
+The report builder, server, and page style are the `cairn-report` package
+(<https://github.com/DoeringChristian/cairn-report>), a pinned pixi dependency
+(see pixi setup). Create the report content with it:
+
 ```bash
-python <skill-directory>/scripts/scaffold_report.py <project-root>                   # tooling, overview, sample direction
-python <skill-directory>/scripts/scaffold_report.py <project-root> --report <slug>   # add a research direction
-python <skill-directory>/scripts/scaffold_report.py <project-root> --update-tooling  # refresh build.py, serve.py, template/
+pixi run cairn-report init         # reports/report.md (overview) and a sample direction
+pixi run cairn-report new <slug>   # add a research direction
 ```
 
-The report tooling is a dependency, not project code. It lives in
-`report-tooling/` (`build.py`, `serve.py`, `template/`), separate from the
-content in `reports/`, and `TOOLING.json` records the installed version and the
-hash of every tooling file. Do not edit it in the project: every build warns and
-records in its manifest when a tooling file no longer matches. When the tooling
-needs a fix or a feature, change it in the skill, then run `--update-tooling`;
-an explicit, user-approved local change is the only exception, and it must be
-reported in the handoff. Keeping it separate lets the tooling be updated or
-replaced without touching any report.
+The tooling is a dependency, not project code: never copy, patch, or vendor
+it into the project. When it needs a fix or a feature, change the
+`cairn-report` repository, release a tag, and bump the pinned `tag` in
+`pixi.toml`; the manifest of every build records the installed version and
+commit. The default style is the shared report style. A project may change it
+only when the user asks, through `cairn-report.toml`: `[style] css = [...]`
+adds stylesheets after the default (override its CSS variables such as
+`--accent` or `--paper`), and `[style] template_dir` replaces whole page files
+(`index.html`, `report.css`, `report-extra.css`, `report.js`) by name. Keep such
+files under `reports/`.
 
 The first install creates the overview and a sample direction
 (`local-fitting`) that exercises every component; build them once as a smoke
@@ -739,7 +737,7 @@ Every report build writes `generated/reports/<slug>/manifest.json` with:
   patch, and every included fragment;
 - its cross-report links;
 - the Markdown hash and the project's code revision;
-- the hashes of the tooling files and whether they still match `TOOLING.json`;
+- the `cairn-report` version and commit, and any style overrides;
 - the Python version, rendering package versions, the bundled Plotly.js version
   and hash, and the Graphviz version.
 
@@ -874,11 +872,11 @@ Environment and runs
 - [ ] The project is a Git repository whose scaffold, configs, and `pixi.lock`
       were committed before the first run; a fresh clone runs the documented
       pixi tasks on every listed platform.
-- [ ] `.pixi`, `outputs/`, and `generated/` are ignored, and they and
-      `report-tooling/` are excluded from formatting and other source tooling.
-- [ ] `reports/` holds only report content; `report-tooling/` matches
-      `TOOLING.json` (no build warning), and tooling changes went through the
-      skill and `--update-tooling`.
+- [ ] `.pixi`, `outputs/`, and `generated/` are ignored and excluded from
+      formatting and other source tooling.
+- [ ] `reports/` holds only report content; the report tooling is the pinned
+      `cairn-report` dependency, with no copied or patched tooling in the
+      project and style changes only through `cairn-report.toml`.
 - [ ] No experiment-tracking service or custom run database is used.
 - [ ] `experiments/run.py`, `experiments/logger.py`, and
       `provenance/source_snapshot.py` are copied from the skill's assets as
