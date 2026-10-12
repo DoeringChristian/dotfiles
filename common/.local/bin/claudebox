@@ -293,6 +293,13 @@ parse_config() {
                 [[ "$section" == *.* && "${section#*.}" != "$AGENT" ]] && continue
                 path="$(expand_path "$value" "$config_dir")"
                 [[ -e "$path" ]] || continue
+                # A directory we can't enter (e.g. root-only /run/podman) is
+                # hidden from the agent anyway, and can't be resolved or mounted.
+                if [[ -d "$path" && ! -x "$path" ]]; then
+                    [[ "$section" == deny* ]] && continue
+                    echo "Error: $config_name: cannot access $path" >&2
+                    exit 1
+                fi
                 physical "$path"
                 case "$section/$key" in
                     mounts*/bind)    WRITE_PATHS+=("$PHYS") ;;
