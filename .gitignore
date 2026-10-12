@@ -1,4 +1,4 @@
-# per-machine choices (profile, …) written by sync.sh via --type
+# per-machine choices (profile, …) written by update.sh via --type
 dotfiles.lock
 
 # nix leftovers
@@ -15,3 +15,6 @@ common/.agents/skills/synced/
 common/.config/sunshine/credentials/
 common/.config/sunshine/sunshine_state.json
 common/.config/sunshine/*.log
+
+# gh writes its token here on machines without a keyring (~/.config/gh is stowed)
+common/.config/gh/hosts.yml

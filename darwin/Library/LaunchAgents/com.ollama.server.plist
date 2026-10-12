@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Autostart the (brew-installed) ollama server on macOS. Stowed to
-  ~/Library/LaunchAgents by the darwin/ package; setup.sh bootstraps it into the
+  ~/Library/LaunchAgents by the darwin/ package; update.sh bootstraps it into the
   GUI launchd domain. launchd starts agents with a minimal PATH, so the wrapper
   prepends Homebrew's bin (where `ollama` lives) before exec'ing `ollama serve`.
 -->

@@ -1,11 +1,58 @@
 #!/usr/bin/env bash
-# update.sh — bring the whole toolset to the newest version.
-#   brew formulae/casks: brew upgrade.  --HEAD formulae (neovim, resh, passage):
-#   refreshed from git via brew upgrade --fetch-HEAD.
+# update.sh — bring this machine in line with the repo, at the newest versions:
+# register the in-repo tap, install missing packages (`brew bundle`), upgrade all
+# formulae and casks (+ rebuild the --HEAD formulae, bump npm globals), then apply
+# configs (stow). Run it after pulling, after adding a tool to the Brewfile or a
+# config to common/, or just to upgrade. No first-time steps — no Homebrew install,
+# no secret decryption (bootstrap.sh does those, then calls this).
 set -euo pipefail
-REPO="$(cd "$(dirname "$0")" && pwd)"; cd "$REPO"
+REPO="$(cd "$(dirname "$0")" && pwd)"
+cd "$REPO"
+OS="$(uname -s)"
 TAP="doeringc/local"
 
+# --type <profile> layers Brewfile.<profile> (e.g. workstation) on top of the base
+# Brewfile. The choice is saved to dotfiles.lock (per-machine, gitignored) so a bare
+# `./update.sh` reuses it. Precedence: --type arg > dotfiles.lock > base.
+LOCK="$REPO/dotfiles.lock"
+lock_get() {
+    [ -f "$LOCK" ] || return 0
+    sed -n "s/^$1=//p" "$LOCK" | tail -1
+}
+lock_set() {
+    local t
+    t="$(mktemp)"
+    { [ -f "$LOCK" ] && grep -vE "^$1=" "$LOCK" >"$t"; } 2>/dev/null || true
+    echo "$1=$2" >>"$t"
+    mv "$t" "$LOCK"
+}
+
+TYPE_ARG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --type)
+        TYPE_ARG="${2:?--type needs a value}"
+        shift 2
+        ;;
+    --type=*)
+        TYPE_ARG="${1#*=}"
+        shift
+        ;;
+    *)
+        echo "update.sh: unknown argument '$1'" >&2
+        exit 2
+        ;;
+    esac
+done
+if [ -n "$TYPE_ARG" ]; then
+    TYPE="$TYPE_ARG"
+    lock_set type "$TYPE" # explicit choice -> remember it
+else
+    TYPE="$(lock_get type)"
+    TYPE="${TYPE:-base}"
+fi # else the saved one, or base
+
+# brew on PATH (standard prefixes + rootless ~/.homebrew)
 for p in "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
     [ -x "$p" ] && {
         eval "$("$p" shellenv)"
@@ -13,36 +60,154 @@ for p in "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew /
     }
 done
 command -v brew >/dev/null 2>&1 || {
-    echo "brew not found — run ./setup.sh first" >&2
+    echo "brew not found — run ./bootstrap.sh first" >&2
     exit 1
 }
 
-# Keep Homebrew's modern Node ahead of an old distro Node. npm's env-based
-# launcher otherwise fails on imports such as `node:path`.
+# npm uses `#!/usr/bin/env node`. Ensure Homebrew's Node is installed and first
+# on PATH before brew bundle handles npm entries; otherwise an older distro Node
+# (for example Ubuntu's /usr/bin/node) may execute Homebrew's modern npm.
 brew list --versions node >/dev/null 2>&1 || brew install node
 NODE_PREFIX="$(brew --prefix node)"
 NODE="$NODE_PREFIX/bin/node"
 NPM_CLI="$NODE_PREFIX/bin/npm"
 export PATH="$NODE_PREFIX/bin:$PATH"
 hash -r
+node -e "require('node:path')" >/dev/null 2>&1 || {
+    echo "Homebrew Node is not active (found $(command -v node), $(node --version 2>/dev/null || echo unknown))" >&2
+    exit 1
+}
 
-if [ "$(uname -s)" = Linux ]; then
+# Homebrew Bundle discovers npm separately, then npm's env-based shebang can pick
+# an old distro Node from Bundle's sanitized PATH. Put a temporary npm wrapper at
+# the front of the PATH Bundle captures; it still uses the npm declarations in
+# the Brewfile, but pins their execution to Homebrew's Node and npm.
+NPM_WRAPPER_DIR="$(mktemp -d)"
+cleanup_npm_wrapper() { rm -rf "$NPM_WRAPPER_DIR"; }
+trap cleanup_npm_wrapper EXIT
+cat >"$NPM_WRAPPER_DIR/npm" <<EOF_NPM
+#!/bin/sh
+exec "$NODE_PREFIX/bin/node" "$NODE_PREFIX/bin/npm" "\$@"
+EOF_NPM
+chmod +x "$NPM_WRAPPER_DIR/npm"
+export PATH="$NPM_WRAPPER_DIR:$PATH"
+hash -r
+
+# HEAD builds can otherwise exhaust memory by compiling once per CPU core on
+# Linux servers. Callers can still override this (for example, set it to 8).
+if [ "$OS" = Linux ]; then
     export HOMEBREW_MAKE_JOBS="${HOMEBREW_MAKE_JOBS:-2}"
 fi
 
-# refresh the tap in case Formula/*.rb changed in the repo
+# Custom-formula tap must be registered + trusted for brew bundle.
 brew tap-new "$TAP" --no-git >/dev/null 2>&1 || true
 cp -f "$REPO/Formula/"*.rb "$(brew --repo "$TAP")/Formula/" 2>/dev/null || true
 brew trust "$TAP" >/dev/null 2>&1 || true
 
-echo "==> brew update && upgrade"
-brew update && brew upgrade
-# --greedy so version:latest casks (claude-code@latest) re-fetch; casks work on Linux too.
+# Workstation profile taps include formulae outside homebrew/core. Trust them
+# before Bundle loads formula Ruby, otherwise newer Homebrew refuses to install.
+if [ "$TYPE" = workstation ]; then
+    [ "$OS" = Darwin ] && brew trust homebrew-zathura/zathura >/dev/null 2>&1 || true
+    brew trust lizardbyte/homebrew >/dev/null 2>&1 || true
+fi
+
+# One-time migration from homebrew/core/neovim to the local HEAD formula. The
+# formula names conflict, so remove the core installation before Bundle installs
+# the tap-qualified replacement.
+if brew list --formula --full-name | grep -Eq '^(homebrew/core/)?neovim$'; then
+    echo "==> replacing homebrew/core/neovim with $TAP/neovim"
+    brew uninstall --ignore-dependencies neovim
+fi
+
+echo "==> brew update"
+brew update
+
+echo "==> brew bundle (base)"
+brew bundle --file "$REPO/Brewfile"
+if [ "$TYPE" != base ]; then
+    [ -f "$REPO/Brewfile.$TYPE" ] || {
+        echo "no Brewfile.$TYPE (available: $(ls Brewfile.* 2>/dev/null | sed 's/Brewfile\.//' | tr '\n' ' '))" >&2
+        exit 1
+    }
+    echo "==> brew bundle (profile: $TYPE)"
+    brew bundle --file "$REPO/Brewfile.$TYPE"
+fi
+
+# Bundle is finished; remove the compatibility wrapper now rather than at exit.
+export PATH="${PATH#"$NPM_WRAPPER_DIR:"}"
+cleanup_npm_wrapper
+trap - EXIT
+hash -r
+
+# Bundle only installs missing packages and upgrades the ones it lists; bring
+# everything else (dependencies, casks, HEAD builds, npm globals) to latest too.
+echo "==> brew upgrade"
+brew upgrade
+# --greedy so auto-updating / version:latest casks (claude-code) re-fetch too.
 brew upgrade --cask --greedy
 echo "==> rebuild --HEAD formulae (neovim, resh, passage) from latest git"
 brew upgrade --fetch-HEAD "$TAP/neovim" "$TAP/resh" "$TAP/passage" 2>/dev/null || true
-# brew bundle's npm entry only installs-if-missing, so bump npm globals. Invoke
-# npm through Homebrew's Node explicitly to avoid an old distro Node on PATH.
+# Bundle's npm entries only install if missing, so bump npm globals. Invoke npm
+# through Homebrew's Node explicitly to avoid an old distro Node on PATH.
 echo "==> npm globals -> latest"
-[ -f "$NPM_CLI" ] && "$NODE" "$NPM_CLI" update -g 2>/dev/null || true
+"$NODE" "$NPM_CLI" update -g 2>/dev/null || true
+
+# Linux: kitty's cask installs the binary but not a GNOME .desktop, so make one.
+if [ "$OS" != Darwin ] && command -v kitty >/dev/null 2>&1; then
+    kbin="$(command -v kitty)"
+    mkdir -p ~/.local/share/applications
+    cat >~/.local/share/applications/kitty.desktop <<EOF_DESKTOP
+[Desktop Entry]
+Type=Application
+Name=kitty
+GenericName=Terminal emulator
+Comment=Fast, feature-rich, GPU-based terminal
+Exec=$kbin
+TryExec=$kbin
+Icon=kitty
+Categories=System;TerminalEmulator;
+EOF_DESKTOP
+    update-desktop-database ~/.local/share/applications 2>/dev/null || true
+fi
+
+# Configs via GNU Stow.
+echo "==> stow configs"
+[ -d stow ] && stow -t ~ stow
+[ -d common ] && stow -t ~ common
+if [ "$OS" = Darwin ] && [ -d darwin ]; then
+    stow -t ~ darwin
+    mkdir -p ~/Library/Fonts && cp -f common/.local/share/fonts/*.ttf ~/Library/Fonts/ 2>/dev/null || true
+    plist=~/Library/LaunchAgents/com.ollama.server.plist
+    [ -e "$plist" ] && launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null || true
+fi
+# Linux: tev's cask installs an AppImage that is built against a newer system
+# glibc than some of our hosts provide. (After the cask upgrade above: each
+# version lives in its own Caskroom dir.) Extract it and run the inner executable
+# with Homebrew's glibc loader/libstdc++ instead.
+if [ "$OS" = Linux ] && brew list --cask tev >/dev/null 2>&1; then
+    tev_appimage="$(find "$(brew --prefix)/Caskroom/tev" -mindepth 2 -maxdepth 2 -type f -name 'tev.appimage' -print 2>/dev/null | sort -V | tail -1)"
+    if [ -n "$tev_appimage" ]; then
+        tev_version="$(basename "$(dirname "$tev_appimage")")"
+        tev_extract_dir="$HOME/.local/share/tev-appimage/$tev_version"
+        if [ ! -x "$tev_extract_dir/squashfs-root/usr/bin/tev" ]; then
+            rm -rf "$tev_extract_dir"
+            mkdir -p "$tev_extract_dir"
+            (cd "$tev_extract_dir" && "$tev_appimage" --appimage-extract >/dev/null)
+        fi
+        mkdir -p ~/.local/bin
+        rm -f ~/.local/bin/tev
+        cat >~/.local/bin/tev <<EOF_TEV
+#!/usr/bin/env bash
+set -euo pipefail
+root="$tev_extract_dir/squashfs-root"
+brew_prefix="\$(brew --prefix)"
+exec "\$brew_prefix/opt/glibc/lib/ld-linux-x86-64.so.2" \
+  --library-path "\$brew_prefix/opt/glibc/lib:\$brew_prefix/opt/gcc/lib/gcc/current:\$root/usr/lib:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:\$brew_prefix/lib" \
+  "\$root/usr/bin/tev" "\$@"
+EOF_TEV
+        chmod +x ~/.local/bin/tev
+    fi
+fi
+
+[ "$OS" = Linux ] && [ -f dconf.ini ] && dconf load / <dconf.ini 2>/dev/null || true
 echo "==> done."

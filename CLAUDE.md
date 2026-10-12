@@ -16,20 +16,16 @@ cask; `brew upgrade` keeps them latest.
 ## Key commands
 
 ```bash
-./bootstrap.sh   # one-liner entry: install git/curl, clone, run setup.sh
-./setup.sh       # first-time: install Homebrew, then sync.sh, then decrypt secrets
-./sync.sh        # reconcile: register/trust the tap, `brew bundle` (install missing),
-                 # kitty .desktop on Linux, stow configs. No brew-install, no secrets.
-./update.sh      # brew update && upgrade (+ rebuild the --HEAD formulae from git)
+./bootstrap.sh   # first-time (curl | bash, or in a clone): install git/curl, clone,
+                 # install Homebrew, run update.sh, decrypt the age key
+./update.sh      # reconcile + upgrade: register/trust the tap, `brew bundle` (install
+                 # missing), brew upgrade (+ casks --greedy, --HEAD rebuilds, npm
+                 # globals), Linux app fixups, stow configs. No brew-install, no secrets.
 ```
-`setup.sh` = install Homebrew → `sync.sh` → decrypt the age key. So the package/
-config logic lives once, in `sync.sh`; `setup.sh` just adds the one-time bits. For
-packages only, `brew bundle` alone works (after the tap is registered).
-
-`setup.sh` steps: install Homebrew → register the `doeringc/local` tap (copy
-`Formula/*.rb` in) → `brew bundle --file Brewfile` → on Linux fetch the GUI apps
-that can't be casks (kitty/tev/claude) → `stow` configs (+ macOS fonts/LaunchAgents)
-→ decrypt the age key.
+`bootstrap.sh` = git/curl → clone (skipped when run from a clone) → install
+Homebrew → `update.sh` → decrypt the age key. So the package/config logic lives
+once, in `update.sh`; `bootstrap.sh` just adds the one-time bits. For packages
+only, `brew bundle` alone works (after the tap is registered).
 
 ## The Brewfile (source of truth)
 
@@ -38,22 +34,22 @@ Each line is a tool. Notable entries:
 - `brew "tree-sitter-cli"` — the CLI (the `tree-sitter` formula is only the library).
 - `brew "python@3.13"` — provides `python3`; brew doesn't link a bare `python` on macOS.
 - `brew "doeringc/local/neovim"`, `…/resh`, `…/passage`, and Linux `…/zathura*` — the in-repo tap formulae.
-- `cask "kitty"/"tev"/"claude-code" if OS.mac?` — macOS GUI apps + the `claude` CLI.
-  On **Linux** casks don't exist, so `setup.sh` installs these from official builds.
+- `cask "claude-code@latest"`, `cask "codex"`, GUI apps — casks work on Linux too;
+  `update.sh` adds Linux fixups (kitty `.desktop`, tev AppImage repack).
 
 `claude` is the `claude-code` cask with auto-update disabled via
 `~/.claude/settings.json` (`autoUpdates:false`) so brew is the sole owner (no
 version drift). Bump with `brew upgrade --cask`.
 
-To add a tool: add a `Brewfile` line, run `./sync.sh`. From-source: add
+To add a tool: add a `Brewfile` line, run `./update.sh`. From-source: add
 `Formula/<name>.rb` + a `brew "doeringc/local/<name>"` line.
 
 **Profiles**: the base `Brewfile` is installed everywhere; `Brewfile.<profile>`
 (e.g. `Brewfile.workstation`) adds machine-type extras, layered via `--type`
-(`./setup.sh --type workstation`). `sync.sh` parses `--type` and persists it to
+(`./bootstrap.sh --type workstation`). `update.sh` parses `--type` and persists it to
 `dotfiles.lock` (repo root, gitignored, per-machine) via the `lock_get`/`lock_set`
-helpers, so a bare `./sync.sh` reuses the saved profile. Precedence: `--type` arg >
-`dotfiles.lock` > `base`. `setup.sh`/`bootstrap.sh` forward `--type` to `sync.sh`.
+helpers, so a bare `./update.sh` reuses the saved profile. Precedence: `--type` arg >
+`dotfiles.lock` > `base`. `bootstrap.sh` forwards `--type` to `update.sh`.
 
 ## Repository structure
 
@@ -64,7 +60,7 @@ common/           # portable stow package (both platforms)
 darwin/           # macOS-only stow package (config overrides + LaunchAgents)
 stow/             # .stow-global-ignore
 setup/            # encrypted age key (age-key.age)
-setup.sh / bootstrap.sh / update.sh
+bootstrap.sh / update.sh
 ```
 
 ## Architecture notes
@@ -78,7 +74,7 @@ setup.sh / bootstrap.sh / update.sh
   plus `~/.local/bin`, and append `~/.pixi/bin` (pixi is kept standalone for
   project toolchains). No version-manager shims.
 - **Secrets**: age + passage. `setup/age-key.age` is decrypted to
-  `~/.local/share/age/key.txt` (and `~/.passage/identities`) by `setup.sh`.
+  `~/.local/share/age/key.txt` (and `~/.passage/identities`) by `bootstrap.sh`.
 - **claudebox / codexbox** (`common/.local/bin/`): sandboxes Claude Code or Codex
   (Seatbelt on macOS / Bubblewrap on Linux). `codexbox` is shorthand for
   `claudebox --agent codex`. The launcher resolves the selected agent from `PATH`

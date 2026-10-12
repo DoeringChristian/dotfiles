@@ -1,8 +1,7 @@
-# Brewfile — the complete toolset, installed with `brew bundle` (run by setup.sh).
-# One list for every machine. macOS uses casks for GUI apps; on Linux (no cask
-# support) setup.sh installs those from official builds instead.
+# Brewfile — the complete toolset, installed with `brew bundle` (run by update.sh).
+# One list for every machine; casks work on Linux too.
 #
-# Some tools come from the in-repo tap (Formula/*.rb), which setup.sh registers
+# Some tools come from the in-repo tap (Formula/*.rb), which update.sh registers
 # before `brew bundle`: neovim, resh, passage, and Linux zathura formulae.
 #
 # Add a tool = add a line. Keep everything at latest with `./update.sh`.
@@ -74,7 +73,7 @@ npm "@agentclientprotocol/codex-acp"
 cask "claude-code@latest"
 cask "codex"
 
-# --- from source, via the in-repo tap (setup.sh registers Formula/*.rb) ---
+# --- from source, via the in-repo tap (update.sh registers Formula/*.rb) ---
 # HEAD-only formulae (no stable release, or intentionally tracking development)
 # use args: ["HEAD"] to build from git main. Neovim is listed above.
 brew "doeringc/local/resh", args: ["HEAD"]      # Rust SSH wrapper (development)

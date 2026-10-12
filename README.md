@@ -21,16 +21,16 @@ Or by hand:
 
 ```bash
 git clone https://github.com/doeringchristian/dotfiles ~/dotfiles
-cd ~/dotfiles && ./setup.sh
+cd ~/dotfiles && ./bootstrap.sh
 ```
 
 Day-to-day:
 
 ```bash
-./sync.sh     # install any missing packages (brew bundle) + re-apply configs. Run
-              # this after adding a tool to the Brewfile or a config to common/.
-./update.sh   # bump everything to the newest version
-# (or just `brew bundle` for packages only; `./setup.sh` is the first-time full run)
+./update.sh   # install missing packages (brew bundle), upgrade everything to the
+              # newest version, re-apply configs. Run after pulling, after adding a
+              # tool to the Brewfile or a config to common/, or just to upgrade.
+# (or just `brew bundle` for packages only)
 ```
 
 After setup, **restart your terminal**.
@@ -41,18 +41,18 @@ The base `Brewfile` is installed everywhere. Extra packages for a machine type l
 in `Brewfile.<profile>` and are layered on top with `--type`:
 
 ```bash
-./setup.sh --type workstation   # base + Brewfile.workstation; saves the choice
-./sync.sh                       # bare — reuses the saved profile (no need to retype)
-./sync.sh  --type server        # switch profiles (re-saves)
+./bootstrap.sh --type workstation   # base + Brewfile.workstation; saves the choice
+./update.sh                     # bare — reuses the saved profile (no need to retype)
+./update.sh --type server       # switch profiles (re-saves)
 # one-liner:  … | bash -s -- --type workstation
 ```
 
 The `--type` choice is saved to **`dotfiles.lock`** (repo root, gitignored,
-per-machine), so bare `./sync.sh` / `./update.sh` reuse it. Precedence:
+per-machine), so a bare `./update.sh` reuses it. Precedence:
 `--type` arg → `dotfiles.lock` → base.
 
 Add a profile = add a `Brewfile.<name>` (same DSL: `brew`/`cask`/`npm`/…). Servers
-just use the base. `update.sh` upgrades whatever's installed, so it needs no profile.
+just use the base.
 
 ## How it works
 
@@ -61,7 +61,7 @@ just use the base. `update.sh` upgrades whatever's installed, so it needs no pro
 | CLI tools + runtimes | Homebrew, one line each in [`Brewfile`](Brewfile) |
 | neovim (nightly) | in-repo formula based on core, with a consistent glibc sysroot on Linux |
 | From-source tools (`neovim`, `resh`, `passage`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
-| GUI apps (kitty, tev) + the `claude` CLI | brew **casks** on macOS; **official builds** on Linux (`setup.sh`) |
+| GUI apps (kitty, tev) + the `claude` CLI | brew **casks** (macOS and Linux; `update.sh` adds Linux desktop fixups) |
 | Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
 | Fonts | `common/.local/share/fonts/` (LFS); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
 | macOS services | LaunchAgents in `darwin/Library/LaunchAgents/` (e.g. the ollama server) |
@@ -80,13 +80,13 @@ common/             # portable config (stowed on all platforms)
 darwin/             # macOS-only config (stowed on macOS), incl. LaunchAgents
 stow/               # stow global ignore rules
 setup/              # encrypted age key
-setup.sh / bootstrap.sh / update.sh
+bootstrap.sh / update.sh
 ```
 
 ## Adding things
 
 - **A tool**: add a line to [`Brewfile`](Brewfile) (`brew "…"` / `cask "…" if OS.mac?`),
-  then `./setup.sh` (or `brew bundle`).
+  then `./update.sh` (or `brew bundle`).
 - **A from-source tool**: add `Formula/<name>.rb` and a
   `brew "doeringc/local/<name>"` line to the Brewfile.
 - **A config file**: drop it under `common/` mirroring its `~` path, then

@@ -1,25 +1,38 @@
 #!/usr/bin/env bash
-# One-line bootstrap: install git+curl, clone the repo, hand off to setup.sh
-# (which installs Homebrew and everything else).
+# bootstrap.sh — first-time setup: install git+curl, clone the repo, install
+# Homebrew, run update.sh (packages + configs), decrypt the age secret.
 #
 #   curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
 #   # workstation profile:  ... | bash -s -- --type workstation
 #   # or, in a clone:  ./bootstrap.sh [--type workstation]
 #
+# Day-to-day after this: ./update.sh (install new packages, upgrade everything,
+# apply configs).
+#
 # Env overrides:
 #   DOTFILES_REPO       git URL to clone (default: this repo)
 #   DOTFILES_DIR        where to clone   (default: ~/dotfiles)
 #   DOTFILES_NO_UPDATE  =1 to use an existing checkout as-is (no clone/pull)
-#   SKIP_SECRETS        =1 to skip age key decryption (passed to setup.sh)
+#   SKIP_SECRETS        =1 to skip age key decryption (CI / minimal)
+#   BREW_PREFIX         e.g. "$HOME/.homebrew" for a ROOTLESS install (no sudo).
+#       Caveat: a non-standard prefix has no prebuilt bottles, so most formulae
+#       build from source (needs a compiler). Use only where you can't get the
+#       standard prefix.
 set -euo pipefail
 
 REPO="${DOTFILES_REPO:-https://github.com/doeringchristian/dotfiles.git}"
 DEST="${DOTFILES_DIR:-$HOME/dotfiles}"
+# Run from a checkout (not piped from curl): use that checkout as-is.
+SELF="${BASH_SOURCE[0]:-}"
+if [ -n "$SELF" ] && [ -f "$(dirname "$SELF")/update.sh" ]; then
+    DEST="$(cd "$(dirname "$SELF")" && pwd)"
+    DOTFILES_NO_UPDATE=1
+fi
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# 1. Minimal prerequisites: git + curl. setup.sh's Homebrew brings the rest.
+# 1. Minimal prerequisites: git + curl. Homebrew brings the rest.
 ensure_prereqs() {
     have git && have curl && return 0
     log "Installing prerequisites (git, curl)..."
@@ -36,11 +49,11 @@ ensure_prereqs() {
     fi
 }
 
-# 2. Clone or update the repo (skippable for local testing).
+# 2. Clone or update the repo (skipped when run from a checkout).
 fetch_repo() {
     if [ "${DOTFILES_NO_UPDATE:-0}" = 1 ]; then
         [ -d "$DEST" ] || { log "DOTFILES_NO_UPDATE=1 but $DEST is missing"; exit 1; }
-        log "Using existing checkout at $DEST (DOTFILES_NO_UPDATE=1)"
+        log "Using existing checkout at $DEST"
     elif [ -d "$DEST/.git" ]; then
         log "Updating $DEST"; git -C "$DEST" pull --ff-only
     else
@@ -48,8 +61,48 @@ fetch_repo() {
     fi
 }
 
+# 3. Homebrew (standard prefix, or rootless into $BREW_PREFIX).
+ensure_brew() {
+    BREW_PREFIX="${BREW_PREFIX:-}"
+    if ! have brew && ! { [ -n "$BREW_PREFIX" ] && [ -x "$BREW_PREFIX/bin/brew" ]; }; then
+        if [ -n "$BREW_PREFIX" ]; then
+            log "Installing Homebrew (rootless) into $BREW_PREFIX"
+            mkdir -p "$BREW_PREFIX"
+            curl -fsSL https://github.com/Homebrew/brew/tarball/master | tar xz --strip-components 1 -C "$BREW_PREFIX"
+        else
+            log "Installing Homebrew"
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+    fi
+    for p in "${BREW_PREFIX:+$BREW_PREFIX/bin/brew}" \
+             "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew \
+             /home/linuxbrew/.linuxbrew/bin/brew; do
+        [ -n "$p" ] && [ -x "$p" ] && { eval "$("$p" shellenv)"; break; }
+    done
+    if [ -n "$BREW_PREFIX" ]; then brew update --force --quiet 2>/dev/null || true; fi
+}
+
+# 5. Secrets: decrypt the age key (age is a brew tool, now on PATH).
+decrypt_secrets() {
+    [ "${SKIP_SECRETS:-0}" != 1 ] && [ -f ./setup/age-key.age ] || return 0
+    log "Decrypting age key"
+    mkdir -p ~/.local/share/age ~/.passage
+    age -d ./setup/age-key.age > ~/.local/share/age/key.txt
+    chmod 600 ~/.local/share/age/key.txt
+    cp ~/.local/share/age/key.txt ~/.passage/identities
+}
+
 ensure_prereqs
 fetch_repo
-log "Handing off to setup.sh..."
 cd "$DEST"
-exec ./setup.sh "$@"     # forwards e.g. --type workstation
+ensure_brew
+# 4. Packages + configs — the same script as day-to-day updates. Forwards
+#    --type <profile> (e.g. `./bootstrap.sh --type workstation`).
+bash ./update.sh "$@"
+decrypt_secrets
+
+cat <<'EOF'
+
+==> Setup complete. Restart your terminal.
+    Day-to-day: ./update.sh (new packages, upgrades, configs).
+EOF

@@ -16,7 +16,7 @@ Each run spins a fresh container and:
 
 1. starts from a bare image (often without `git`/`curl`) so the bootstrap's
    prerequisite install is exercised,
-2. runs `bootstrap.sh` → `setup.sh` → `sync.sh` (with `SKIP_SECRETS=1`, so it
+2. runs `bootstrap.sh` → `update.sh` (with `SKIP_SECRETS=1`, so it
    doesn't prompt for the age passphrase),
 3. asserts the core tools (`rg`, `fish`, `stow`, `git`) are on `~/.pixi/bin` and
    that stow linked `~/.config/fish/config.fish`.

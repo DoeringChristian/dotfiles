@@ -1,6 +1,6 @@
 # Brewfile.workstation — extra packages for a GUI workstation, layered ON TOP of the
 # base Brewfile. Installed only when this machine's profile is "workstation"
-# (`./setup.sh --type workstation`, remembered in dotfiles.lock; see sync.sh).
+# (`./bootstrap.sh` / `./update.sh --type workstation`, remembered in dotfiles.lock; see update.sh).
 # Server machines never install these.
 #
 # Same DSL as the base Brewfile: brew / cask / npm / cargo / tap / ...
