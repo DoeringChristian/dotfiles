@@ -41,10 +41,14 @@ def update_latest(run_dir: Path) -> Path:
     run_dir = Path(run_dir).resolve(strict=True)
     status = json.loads((run_dir / "run.json").read_text()).get("status")
     if status != "completed":
-        raise RuntimeError(f"{run_dir} is {status!r}; only completed runs become latest")
+        raise RuntimeError(
+            f"{run_dir} is {status!r}; only completed runs become latest"
+        )
     link = run_dir.parent / "latest"
     if link.exists() and not link.is_symlink():
-        raise RuntimeError(f"{link} exists and is not a symlink; resolve the conflict by hand")
+        raise RuntimeError(
+            f"{link} exists and is not a symlink; resolve the conflict by hand"
+        )
     temporary = run_dir.parent / f".latest-{uuid.uuid4().hex}"
     os.symlink(run_dir.name, temporary)
     if temporary.resolve() != run_dir:
@@ -56,11 +60,19 @@ def update_latest(run_dir: Path) -> Path:
 
 def run_name(study: Path, present: set[str]) -> str:
     """The study's run name: `run.name` from a trial's Hydra config, else the study's parent folder."""
-    config_file = study / min(present, key=int) / ".hydra" / "config.yaml" if present else None
-    config = yaml.safe_load(config_file.read_text()) if config_file and config_file.is_file() else {}
+    config_file = (
+        study / min(present, key=int) / ".hydra" / "config.yaml" if present else None
+    )
+    config = (
+        yaml.safe_load(config_file.read_text())
+        if config_file and config_file.is_file()
+        else {}
+    )
     name = str(((config or {}).get("run") or {}).get("name") or study.parent.name)
     if not RUN_NAME.fullmatch(name):
-        raise SystemExit(f"run name {name!r} must be a short lowercase slug ({RUN_NAME.pattern})")
+        raise SystemExit(
+            f"run name {name!r} must be a short lowercase slug ({RUN_NAME.pattern})"
+        )
     return name
 
 
@@ -79,7 +91,9 @@ def main(study: Path) -> None:
         status_file = study / trial / "run.json"
         record = json.loads(status_file.read_text()) if status_file.is_file() else {}
         if record.get("status") == "running":
-            raise SystemExit(f"trial {trial} is still 'running'; confirm with squeue/sacct that its job ended first")
+            raise SystemExit(
+                f"trial {trial} is still 'running'; confirm with squeue/sacct that its job ended first"
+            )
         records.append(record)
         trials.append({"trial": trial, "status": record.get("status", "missing")})
     if not trials:
@@ -91,9 +105,14 @@ def main(study: Path) -> None:
             "status": "completed" if complete else "failed",
             "kind": "study",
             "name": run_name(study, present),
-            "started": min((r["started"] for r in records if r.get("started")), default=None),
+            "started": min(
+                (r["started"] for r in records if r.get("started")), default=None
+            ),
             "ended": datetime.now(timezone.utc).isoformat(),
-            "code_revision": next((r["code_revision"] for r in records if r.get("code_revision")), "unversioned"),
+            "code_revision": next(
+                (r["code_revision"] for r in records if r.get("code_revision")),
+                "unversioned",
+            ),
             "trials": trials,
             "finalized_by": "finalize_study.py",
         },

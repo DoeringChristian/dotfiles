@@ -32,16 +32,30 @@ from pathlib import Path
 
 FINDING_STATES = {"tentative", "supported", "contradicted", "superseded"}
 OVERVIEW_SECTIONS = ["Introduction", "Status", "Research directions"]
-SPINE_REQUIRED = ["Abstract", "Introduction", "Background and related work", "Methods", "Conclusion"]
+SPINE_REQUIRED = [
+    "Abstract",
+    "Introduction",
+    "Background and related work",
+    "Methods",
+    "Conclusion",
+]
 SUMMARY_MAX_CHARS = 400
-METHODS_SUBSECTIONS = ["Problem setup", "Method", "Why it works", "Relation to the baselines",
-                      "Implementation", "Experimental design"]
+METHODS_SUBSECTIONS = [
+    "Problem setup",
+    "Method",
+    "Why it works",
+    "Relation to the baselines",
+    "Implementation",
+    "Experimental design",
+]
 METHODS_MIN_WORDS = 400
 METHODS_MIN_FIGURES = 2
 GRAPHVIZ = ("dot", "neato", "fdp", "sfdp", "circo", "twopi")
 RAW_HTML_MAX_LINES = 20
 RAW_HTML_MAX_CHARS = 1_500
-TYPED_NUMBER = re.compile(r"(?<![\w.#/-])\d+(?:\.\d+)?\s?%|(?<![\w.#/-])\d+\.\d+(?![\w.])")
+TYPED_NUMBER = re.compile(
+    r"(?<![\w.#/-])\d+(?:\.\d+)?\s?%|(?<![\w.#/-])\d+\.\d+(?![\w.])"
+)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 COMMENT = re.compile(r"<!--.*?-->", re.S)
 
@@ -59,7 +73,13 @@ def headings(markdown: str) -> list[str]:
     for line in COMMENT.sub("", markdown).splitlines():
         match = FENCE.match(line)
         if match:
-            fence = None if fence and match.group(1).startswith(fence[0]) and len(match.group(1)) >= len(fence) else (fence or match.group(1))
+            fence = (
+                None
+                if fence
+                and match.group(1).startswith(fence[0])
+                and len(match.group(1)) >= len(fence)
+                else (fence or match.group(1))
+            )
             continue
         if fence is None and line.startswith("## "):
             found.append(line[3:].strip())
@@ -86,7 +106,13 @@ def section(markdown: str, title: str) -> str:
     for line in lines:
         match = FENCE.match(line)
         if match:
-            fence = None if fence and match.group(1).startswith(fence[0]) and len(match.group(1)) >= len(fence) else (fence or match.group(1))
+            fence = (
+                None
+                if fence
+                and match.group(1).startswith(fence[0])
+                and len(match.group(1)) >= len(fence)
+                else (fence or match.group(1))
+            )
         elif fence is None and line.startswith("## "):
             if inside:
                 break
@@ -100,12 +126,20 @@ def section(markdown: str, title: str) -> str:
 def methods_problems(source: str, methods: str) -> list[str]:
     """What keeps a Methods section from explaining the method like a paper."""
     problems, prose, figures, fence, block = [], [], 0, None, []
-    subsections = [line[4:].strip() for line in methods.splitlines() if line.startswith("### ")]
+    subsections = [
+        line[4:].strip() for line in methods.splitlines() if line.startswith("### ")
+    ]
     missing = [name for name in METHODS_SUBSECTIONS if name not in subsections]
     if missing:
-        problems.append(f"{source}: Methods needs the subsections {METHODS_SUBSECTIONS} in this order; missing {missing}")
-    elif [name for name in subsections if name in METHODS_SUBSECTIONS] != METHODS_SUBSECTIONS:
-        problems.append(f"{source}: Methods subsections must come in the order {METHODS_SUBSECTIONS}")
+        problems.append(
+            f"{source}: Methods needs the subsections {METHODS_SUBSECTIONS} in this order; missing {missing}"
+        )
+    elif [
+        name for name in subsections if name in METHODS_SUBSECTIONS
+    ] != METHODS_SUBSECTIONS:
+        problems.append(
+            f"{source}: Methods subsections must come in the order {METHODS_SUBSECTIONS}"
+        )
     for line in methods.splitlines():
         match = FENCE.match(line)
         if match and fence is None:
@@ -115,7 +149,9 @@ def methods_problems(source: str, methods: str) -> list[str]:
                 figures += 1
             continue
         if match and fence is not None and match.group(1).startswith(fence.group(1)[0]):
-            if fence.group(2).split()[:2] == ["python", "exec"] and re.search(r"\bplt\.|\.subplots\(|figure\(", "\n".join(block)):
+            if fence.group(2).split()[:2] == ["python", "exec"] and re.search(
+                r"\bplt\.|\.subplots\(|figure\(", "\n".join(block)
+            ):
                 figures += 1
             fence = None
             continue
@@ -125,13 +161,24 @@ def methods_problems(source: str, methods: str) -> list[str]:
         figures += line.count("![")
         prose.append(line)
     text = "\n".join(prose)
-    words = len(re.findall(r"[A-Za-z][A-Za-z'-]+", re.sub(r"\$\$.*?\$\$|\$[^$\n]*\$", " ", text, flags=re.S)))
+    words = len(
+        re.findall(
+            r"[A-Za-z][A-Za-z'-]+",
+            re.sub(r"\$\$.*?\$\$|\$[^$\n]*\$", " ", text, flags=re.S),
+        )
+    )
     if words < METHODS_MIN_WORDS:
-        problems.append(f"{source}: Methods has {words} words of explanation; explain the method like a paper (at least {METHODS_MIN_WORDS})")
+        problems.append(
+            f"{source}: Methods has {words} words of explanation; explain the method like a paper (at least {METHODS_MIN_WORDS})"
+        )
     if "$$" not in text and not re.search(r"^\s*1\.\s", text, re.M):
-        problems.append(f"{source}: Methods needs the method's equations (a display equation) or its algorithm (numbered steps)")
+        problems.append(
+            f"{source}: Methods needs the method's equations (a display equation) or its algorithm (numbered steps)"
+        )
     if figures < METHODS_MIN_FIGURES:
-        problems.append(f"{source}: Methods has {figures} figure(s); illustrate the model and each key concept (at least {METHODS_MIN_FIGURES})")
+        problems.append(
+            f"{source}: Methods has {figures} figure(s); illustrate the model and each key concept (at least {METHODS_MIN_FIGURES})"
+        )
     return problems
 
 
@@ -145,14 +192,23 @@ def check(root: Path) -> tuple[list[str], list[str]]:
     problems, notes = [], []
     if not (reports_dir / "report.md").is_file():
         return [f"{reports_dir / 'report.md'}: the overview is missing"], notes
-    directions = sorted(folder for folder in reports_dir.iterdir()
-                        if folder.is_dir() and (folder / "report.md").is_file() and not folder.name.startswith(("_", ".")))
+    directions = sorted(
+        folder
+        for folder in reports_dir.iterdir()
+        if folder.is_dir()
+        and (folder / "report.md").is_file()
+        and not folder.name.startswith(("_", "."))
+    )
 
     overview = (reports_dir / "report.md").read_text()
     if headings(overview) != OVERVIEW_SECTIONS:
-        problems.append(f"reports/report.md: sections must be exactly {OVERVIEW_SECTIONS}, found {headings(overview)}")
+        problems.append(
+            f"reports/report.md: sections must be exactly {OVERVIEW_SECTIONS}, found {headings(overview)}"
+        )
     if not re.search(r"^ {0,3}(`{3,}|~{3,})reports\s*$", overview, re.M):
-        problems.append("reports/report.md: Research directions needs a ```reports fence")
+        problems.append(
+            "reports/report.md: Research directions needs a ```reports fence"
+        )
 
     for folder in directions:
         source = f"reports/{folder.name}/report.md"
@@ -164,7 +220,9 @@ def check(root: Path) -> tuple[list[str], list[str]]:
         if missing:
             problems.append(f"{source}: missing sections {missing}")
         elif sections[0] != "Abstract" or sections[-1] != "Conclusion":
-            problems.append(f"{source}: Abstract must come first and Conclusion last (found {sections})")
+            problems.append(
+                f"{source}: Abstract must come first and Conclusion last (found {sections})"
+            )
         if "Methods" in sections:
             problems.extend(methods_problems(source, section(markdown, "Methods")))
         data_file = built / folder.name / "report-data.json"
@@ -173,9 +231,13 @@ def check(root: Path) -> tuple[list[str], list[str]]:
             continue
         summary = json.loads(data_file.read_text()).get("summary", "")
         if not summary:
-            problems.append(f"{source}: a research direction needs a front matter `summary:` (one to three sentences)")
+            problems.append(
+                f"{source}: a research direction needs a front matter `summary:` (one to three sentences)"
+            )
         elif len(summary) > SUMMARY_MAX_CHARS:
-            problems.append(f"{source}: summary is {len(summary)} characters; keep it to at most {SUMMARY_MAX_CHARS}")
+            problems.append(
+                f"{source}: summary is {len(summary)} characters; keep it to at most {SUMMARY_MAX_CHARS}"
+            )
 
     for folder in [reports_dir, *directions]:
         key = "" if folder == reports_dir else folder.name
@@ -187,22 +249,35 @@ def check(root: Path) -> tuple[list[str], list[str]]:
         for finding in json.loads(data_file.read_text()).get("findings", []):
             where = f"{source}:{finding['line']}"
             if finding["state"] not in FINDING_STATES:
-                problems.append(f"{where}: finding status {finding['state']!r} is not one of {sorted(FINDING_STATES)}")
+                problems.append(
+                    f"{where}: finding status {finding['state']!r} is not one of {sorted(FINDING_STATES)}"
+                )
             if TYPED_NUMBER.search(finding["title"]) or "{{" in finding["title"]:
-                problems.append(f"{where}: finding title {finding['title']!r} contains a result number; state the claim qualitatively")
+                problems.append(
+                    f"{where}: finding title {finding['title']!r} contains a result number; state the claim qualitatively"
+                )
         manifest = json.loads(manifest_file.read_text())
         for run, status in manifest.get("source_runs", {}).items():
             if status != "completed":
-                problems.append(f"{source}: reads run {run} whose run.json status is {status!r}, not 'completed'")
+                problems.append(
+                    f"{source}: reads run {run} whose run.json status is {status!r}, not 'completed'"
+                )
         for line, block in raw_html_blocks((folder / "report.md").read_text()):
-            if block.count("\n") + 1 > RAW_HTML_MAX_LINES or len(block) > RAW_HTML_MAX_CHARS:
-                problems.append(f"{source}:{line}: html raw block is longer than {RAW_HTML_MAX_LINES} lines or "
-                                f"{RAW_HTML_MAX_CHARS} characters; move it to assets/<name>.html and use an `html include` fence")
+            if (
+                block.count("\n") + 1 > RAW_HTML_MAX_LINES
+                or len(block) > RAW_HTML_MAX_CHARS
+            ):
+                problems.append(
+                    f"{source}:{line}: html raw block is longer than {RAW_HTML_MAX_LINES} lines or "
+                    f"{RAW_HTML_MAX_CHARS} characters; move it to assets/<name>.html and use an `html include` fence"
+                )
         typed = manifest.get("typed_numbers", [])
         if typed:
             shown = ", ".join(f"{hit['line']}:{hit['text']}" for hit in typed[:12])
-            notes.append(f"{source}: typed numbers (line:text) {shown}{' …' if len(typed) > 12 else ''}"
-                         " — results must be {{ }} values; leave only design constants typed")
+            notes.append(
+                f"{source}: typed numbers (line:text) {shown}{' …' if len(typed) > 12 else ''}"
+                " — results must be {{ }} values; leave only design constants typed"
+            )
     return problems, notes
 
 

@@ -112,7 +112,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.6.2" }
+cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.7.0" }
 
 [activation.env]
 PYTHONPATH = "."
@@ -123,6 +123,7 @@ report-build = "cairn-report build && python tools/check_reports.py"
 report-check = "python tools/check_reports.py"
 report-serve = "cairn-report serve --host 127.0.0.1 --port 8000"
 report-host = "cairn-report serve --host 0.0.0.0 --port 8000"
+report-share = "cairn-report build && python tools/check_reports.py && cairn-report share --no-build"
 format = "black --extend-exclude '/([.]pixi|outputs|generated)/' ."
 kuma = "bash experiments/cluster.sh kuma"    # one task per cluster the project uses
 lyra = "bash experiments/cluster.sh lyra"
@@ -916,18 +917,29 @@ VPN, or behind an authenticated HTTPS reverse proxy.
 
 **Share the generated reports unchanged.** When the user asks to share,
 publish, or upload the reports anywhere (the hub, a static host, a claude.ai
-artifact, a document tool), publish the built `generated/reports/` output
-exactly as cairn-report produced it: every file, with the same paths, names,
-and styling. Never restyle, re-template, re-theme, summarize, or re-author the
+artifact, a document tool), publish what cairn-report produced exactly as it
+produced it:
+
+- **claude.ai artifact, or any host that takes one file:** run `pixi run
+  report-share` (`cairn-report share --report <path>` for part of the tree).
+  Then publish the one file it prints, `generated/share/index.html`, as it is.
+  With the Artifact tool, pass that `file_path` and no `files`. Do not read it
+  into a new page, split it, or add to it. If the publish is refused, report the
+  exact refusal to the user. Never work around it by editing the page.
+- **The hub:** `cairn-report push report`.
+- **A static web host:** the whole `generated/reports/` folder, every file, with
+  the same paths and names.
+
+For any destination, keep the pages' paths, names, and styling. Never restyle, re-template, re-theme, summarize, or re-author the
 pages for the destination, and never hand-write a new page "based on" a
 report. A publishing tool's own design or formatting guidance (for example "give
 each page a visual identity" or "make it theme-aware") is for pages the agent
 designs from scratch; it does not apply to these reports, because the user's
 request and the project's existing report design take precedence. Only
 `[style]` in `cairn-report.toml`, changed when the user asks, alters how the
-reports look. If a destination cannot serve the built files unchanged (for
-example, it accepts only one self-contained page), say so and ask the user
-before producing anything different.
+reports look. To change a shared page, edit the report sources, share again, and republish
+to the same artifact. If a destination can take neither the folder nor the
+single page, say so and ask the user before producing anything different.
 
 ### Remote runs and the hub
 
