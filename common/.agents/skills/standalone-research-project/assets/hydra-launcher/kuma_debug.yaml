@@ -1,0 +1,12 @@
+# @package hydra.launcher
+# Kuma smoke-test launcher: a 12 GB H100 MIG slice on the debug QoS (high priority,
+# one job at a time, 1 h maximum). Copy into configs/hydra/launcher/kuma_debug.yaml;
+# `pixi run kuma smoke <overrides>` selects it. Plumbing checks and measurements only.
+defaults:
+  - kuma
+
+partition: mig12gb
+qos: debug
+timeout_min: 10
+cpus_per_task: 2
+array_parallelism: 1

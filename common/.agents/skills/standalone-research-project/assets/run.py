@@ -41,7 +41,9 @@ from hydra.types import RunMode
 from hydra.utils import get_original_cwd, instantiate
 from omegaconf import DictConfig
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # flat imports from the project root
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent.parent)
+)  # flat imports from the project root
 
 from experiments.base import Experiment  # noqa: E402
 from provenance.source_snapshot import require_snapshot  # noqa: E402
@@ -56,7 +58,10 @@ def now() -> str:
 def code_revision(root: Path) -> str:
     try:
         return subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unversioned"
@@ -64,7 +69,9 @@ def code_revision(root: Path) -> str:
 
 def validate_run_name(name: str) -> str:
     if not RUN_NAME.fullmatch(name):
-        raise ValueError(f"run.name {name!r} must be a short lowercase slug ({RUN_NAME.pattern})")
+        raise ValueError(
+            f"run.name {name!r} must be a short lowercase slug ({RUN_NAME.pattern})"
+        )
     return name
 
 
@@ -80,10 +87,14 @@ def update_latest(run_dir: Path) -> Path:
     run_dir = Path(run_dir).resolve(strict=True)
     status = json.loads((run_dir / "run.json").read_text()).get("status")
     if status != "completed":
-        raise RuntimeError(f"{run_dir} is {status!r}; only completed runs become latest")
+        raise RuntimeError(
+            f"{run_dir} is {status!r}; only completed runs become latest"
+        )
     link = run_dir.parent / "latest"
     if link.exists() and not link.is_symlink():
-        raise RuntimeError(f"{link} exists and is not a symlink; resolve the conflict by hand")
+        raise RuntimeError(
+            f"{link} exists and is not a symlink; resolve the conflict by hand"
+        )
     temporary = run_dir.parent / f".latest-{uuid.uuid4().hex}"
     os.symlink(run_dir.name, temporary)
     if temporary.resolve() != run_dir:
@@ -105,22 +116,35 @@ class StudyCompletion(Callback):
     def on_multirun_end(self, config: DictConfig, **kwargs) -> None:
         study = getattr(self, "study", Path(config.hydra.sweep.dir).resolve())
         trials = []
-        for folder in sorted(study.iterdir(), key=lambda path: (len(path.name), path.name)) if study.is_dir() else []:
+        for folder in (
+            sorted(study.iterdir(), key=lambda path: (len(path.name), path.name))
+            if study.is_dir()
+            else []
+        ):
             if folder.is_dir() and folder.name.isdigit():
                 status_file = folder / "run.json"
-                status = json.loads(status_file.read_text()).get("status") if status_file.is_file() else "missing"
+                status = (
+                    json.loads(status_file.read_text()).get("status")
+                    if status_file.is_file()
+                    else "missing"
+                )
                 trials.append({"trial": folder.name, "status": status})
-        complete = bool(trials) and all(trial["status"] == "completed" for trial in trials)
+        complete = bool(trials) and all(
+            trial["status"] == "completed" for trial in trials
+        )
         study.mkdir(parents=True, exist_ok=True)
-        write_status(study, {
-            "status": "completed" if complete else "failed",
-            "kind": "study",
-            "name": validate_run_name(str(config.run.name)),
-            "started": getattr(self, "started", None),
-            "ended": now(),
-            "code_revision": getattr(self, "revision", code_revision(Path.cwd())),
-            "trials": trials,
-        })
+        write_status(
+            study,
+            {
+                "status": "completed" if complete else "failed",
+                "kind": "study",
+                "name": validate_run_name(str(config.run.name)),
+                "started": getattr(self, "started", None),
+                "ended": now(),
+                "code_revision": getattr(self, "revision", code_revision(Path.cwd())),
+                "trials": trials,
+            },
+        )
         if complete:
             update_latest(study)
 
@@ -142,13 +166,21 @@ def main(cfg: DictConfig) -> None:
         require_snapshot(output_dir)
         experiment = instantiate(cfg.experiment, _convert_="all")
         if not isinstance(experiment, Experiment):
-            raise TypeError(f"{type(experiment).__name__} does not implement Experiment")
+            raise TypeError(
+                f"{type(experiment).__name__} does not implement Experiment"
+            )
         experiment.run(output_dir)
     except BaseException as error:
-        write_status(output_dir, {
-            **record, "status": "failed", "ended": now(),
-            "error": f"{type(error).__name__}: {error}", "traceback": traceback.format_exc(),
-        })
+        write_status(
+            output_dir,
+            {
+                **record,
+                "status": "failed",
+                "ended": now(),
+                "error": f"{type(error).__name__}: {error}",
+                "traceback": traceback.format_exc(),
+            },
+        )
         raise
     write_status(output_dir, {**record, "status": "completed", "ended": now()})
     if hydra_cfg.mode == RunMode.RUN:

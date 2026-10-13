@@ -49,11 +49,13 @@ project/
 ├── .envrc
 ├── .gitignore
 ├── configs/
+│   └── hydra/launcher/         # kuma.yaml, kuma_debug.yaml from assets/hydra-launcher/
 ├── <concept>/
 ├── experiments/
 │   ├── base.py                 # Experiment interface
 │   ├── run.py                  # copied from assets/run.py: entry point + run bookkeeping
-│   └── logger.py               # copied from assets/logger.py
+│   ├── kuma.sh                 # copied from assets/kuma.sh: Kuma cluster backend
+│   └── finalize_study.py       # copied from assets/finalize_study.py
 ├── provenance/
 │   └── source_snapshot.py      # copied from assets/source_snapshot.py
 ├── outputs/
@@ -107,10 +109,11 @@ graphviz = "*"
 numpy = "*"
 matplotlib = "*"
 hydra-core = "*"
+hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.1.0" }
+cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.5.0" }
 
 [activation.env]
 PYTHONPATH = "."
@@ -121,11 +124,13 @@ report-build = "cairn-report build"
 report-serve = "cairn-report serve --host 127.0.0.1 --port 8000"
 report-host = "cairn-report serve --host 0.0.0.0 --port 8000"
 format = "black --extend-exclude '/([.]pixi|outputs|generated)/' ."
+kuma = "bash experiments/kuma.sh"
 ```
 
 Graphviz comes from conda-forge because it is a native binary; the builder runs
 `dot -c` once if pixi skipped conda's plugin registration. List every platform
-the project runs on. Commit `pixi.lock`; ignore `.pixi/`, caches, `outputs/`,
+the project runs on; `linux-64` is required for Kuma (see Running on Kuma).
+Commit `pixi.lock`; ignore `.pixi/`, caches, `outputs/`,
 and `generated/` in `.gitignore`, and keep the explicit Black
 `--extend-exclude`, because Black does not exclude `.pixi` by itself. Every
 formatter, linter, type checker, and test runner must skip environments and
@@ -269,14 +274,15 @@ this is what makes a snapshot failure fail the run), instantiates the configured
 with the traceback, and moves `latest`. It validates run names and knows nothing
 experiment-specific; put project logic in `Experiment` subclasses.
 
-### Log run evidence through `experiments/logger.py`
+### Log run evidence through `RunLogger`
 
-Copy [`assets/logger.py`](assets/logger.py) into the project as
-`experiments/logger.py`. Write all evidence of the kinds it supports through one
-`RunLogger` per run directory rather than hand-rolled writers:
+The logger is part of the `cairn-report` dependency, the same package that
+reads runs into reports, so the run file format has one definition. Import it;
+never copy or reimplement it. Write all evidence of the kinds it supports
+through one `RunLogger` per run directory rather than hand-rolled writers:
 
 ```python
-from experiments.logger import RunLogger
+from cairn_report.logger import RunLogger
 
 log = RunLogger(output_dir)
 log.scalar("rmse", rmse)                     # single value
@@ -307,7 +313,7 @@ are append-only JSON Lines; nothing already written is rewritten:
 ```
 
 Readers fold the logs: the latest `metrics.jsonl` event per name is a scalar's
-current value (`read_scalars` in the logger and the report builder), and the
+current value (`read_scalars`, shared by the logger and the report builder), and the
 latest `artifacts.jsonl` line per path describes a file. A torn final line from
 a crash is ignored. Each artifact entry records its `origin` (file, line, and
 function that called the logger) and, when the plotting function itself was
@@ -812,6 +818,118 @@ expose it only on a trusted private network, a VPN, or behind an authenticated
 HTTPS reverse proxy. The server validates comment size and format, and the page
 renders untrusted text only through DOM text nodes.
 
+### Remote runs and the hub
+
+When experiments run elsewhere (a cluster, a cloud machine) or the user wants
+all projects in one place, push them to a `cairn-report` hub: one
+token-protected server, run by the user, that stores every pushed project's
+runs, report sources, comment logs, and built reports, and serves the reports
+at `<hub>/p/<project>/`. Only set this up when the user provides a hub URL or
+asks for one; never invent a hub or send project data to a server the user did
+not name.
+
+Configure the project without the token:
+
+```toml
+# cairn-report.toml
+[hub]
+url = "https://<hub-host>"
+project = "<project-slug>"
+token_file = "~/.config/cairn-report/hub-token"   # or CAIRN_HUB_TOKEN
+exclude = [".submitit/**/*.pkl"]   # gitignore-style; Slurm job pickles stay local
+```
+
+Never write the token into the repository, configs, scripts, logs, or the
+handoff; the config refuses a `token` key. Run remote jobs through the push
+wrapper so evidence leaves the machine while the job runs and once more when it
+ends or is cancelled:
+
+```bash
+pixi run cairn-report push --watch -- python experiments/run.py experiment=<name>
+```
+
+On Kuma, `pixi run kuma submit` and `pixi run kuma pack` do this automatically
+on the login node whenever `cairn-report.toml` has a `[hub]`. The token must
+then exist on Kuma as `CAIRN_HUB_TOKEN` or as the configured chmod-600
+`token_file`, put there by the user. A hub served on a Kuma login node at
+`127.0.0.1` is reachable only from that node, so pin the target with
+`KUMA_HOST=cdoering@kuma1.hpc.epfl.ch` (or `kuma2`).
+
+Build the reports before pushing them (`pixi run report-build`, then
+`pixi run cairn-report push`); the hub serves built output and never builds.
+Pushes are incremental and verified, and the hub keeps every version, so push
+freely. `pixi run cairn-report fetch <project> <dest>` restores a project's
+files from the hub. In the handoff, give the hub URLs of the reports and runs
+(`<hub>/p/<project>/`, `<hub>/runs/<project>/`) next to the local ones. Comments
+made on the hub stay there; the user passes them on with the page's Copy
+button, like any other comments.
+
+## Running on Kuma
+
+Every project is ready for EPFL's Kuma GPU cluster from the start. The local
+checkout stays the source of truth: `pixi run kuma ...` pushes the working
+tree (including `.git`, so provenance records the same revision), runs Hydra
+through a Slurm launcher, and pulls `outputs/` back so reports are built
+locally. Nothing else changes: `run.json`, snapshots, `latest`, and
+`StudyCompletion` behave exactly as for local runs, and every trial is a Slurm
+job. Before the first Kuma command in a session, load the `kuma` skill. It
+holds the cluster rules and the **mandatory GPU-efficiency gate**, and Kuma
+bills every allocated GPU-hour whether or not it is used.
+
+Scaffold it with the other assets:
+
+- Copy [`assets/kuma.sh`](assets/kuma.sh) and
+  [`assets/finalize_study.py`](assets/finalize_study.py) to `experiments/`.
+- Copy [`assets/hydra-launcher/`](assets/hydra-launcher/) (`kuma.yaml`,
+  `kuma_debug.yaml`) to `configs/hydra/launcher/`.
+- Keep `hydra-submitit-launcher` and the `kuma` task in `pixi.toml`.
+
+A project that uses PyTorch takes its CUDA wheels for Kuma's driver (CUDA 12.6
+at most) only on Linux:
+
+```toml
+[target.linux-64.pypi-dependencies]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu126" }
+
+[target.osx-arm64.pypi-dependencies]
+torch = "*"
+```
+
+When a conda package needs CUDA, declare it on a named Linux platform,
+`platforms = [{ name = "linux-64-cuda", platform = "linux-64", cuda = "12" }, "osx-arm64"]`
+(`[target.linux-64.*]` tables still apply). This lets the GPU-less login node
+install it. pixi ≥ 0.81 rejects the deprecated `[system-requirements]` table
+and a CUDA entry named plainly `linux-64`. Never `module load` CUDA or Python: pixi
+owns the environment on Kuma too. Experiment code uses `cuda` or `cuda:0`;
+Slurm sets `CUDA_VISIBLE_DEVICES`.
+
+```bash
+pixi run kuma setup                       # once per account: pixi on Kuma, project directory
+pixi run kuma smoke experiment=<name> <tiny overrides>   # foreground, MIG slice, debug QoS
+pixi run kuma submit experiment=<name> <sweep or overrides> [hydra.launcher.timeout_min=…]
+pixi run kuma pack -t 1:30:00 -- experiment=<name> <sweep>   # small trials, one GPU job
+pixi run kuma status                      # queue and launcher logs
+pixi run kuma gpu <jobid>_<n>             # live GPU utilisation of a running trial
+pixi run kuma pull                        # outputs/ back to the local project
+```
+
+- `smoke` blocks until its tiny study finishes. Use it to validate plumbing and
+  to measure a representative trial. It is not evidence.
+- `submit` starts the launcher detached on the login node. Its log goes to
+  `outputs/.launch/` and names the login node. The launcher waits for every
+  array task and then runs `StudyCompletion`. If it dies, the trials still run;
+  once they have left the queue, `pixi run kuma finalize <study-dir>` writes
+  the study's `run.json` by the same rule.
+- `pack` runs the whole multirun in sequence inside one allocation, using
+  Hydra's basic launcher. It needs an explicit `-t`.
+
+A single run is a one-trial study: submit it without sweep values. Never run
+`pixi run experiment` on the login node. Commit before pushing runs a report
+will cite; uncommitted changes are pushed and recorded as a patch. Never edit
+files on Kuma, because the next push overwrites them. With a hub configured,
+`submit` and `pack` also stream evidence to it from the login node while the
+trials run (see Remote runs and the hub).
+
 ## Parameter studies
 
 Only after feasibility, study parameters systematically. Declare the parameter
@@ -841,7 +959,8 @@ cells the decision depends on. Record each project's runtime budget (for
 example the longest acceptable single run, set with the user, in the report's
 Methods). When runs repeatedly exceed it, stop scaling and spend time on
 performance first: profile, then vectorize, cache shared work, or run trials in
-parallel through a Hydra launcher. Keep optimized code verified against the
+parallel through a Hydra launcher (on Kuma: `pixi run kuma submit`, after the
+`kuma` skill's GPU-efficiency gate). Keep optimized code verified against the
 slower reference implementation.
 
 ## Perceptual blind spots
@@ -878,9 +997,9 @@ Environment and runs
       `cairn-report` dependency, with no copied or patched tooling in the
       project and style changes only through `cairn-report.toml`.
 - [ ] No experiment-tracking service or custom run database is used.
-- [ ] `experiments/run.py`, `experiments/logger.py`, and
-      `provenance/source_snapshot.py` are copied from the skill's assets as
-      writable files.
+- [ ] `experiments/run.py` and `provenance/source_snapshot.py` are copied
+      from the skill's assets as writable files; the logger is imported from
+      `cairn_report.logger`, not copied.
 - [ ] Every run has `.hydra/` configs, `run.json` (the single completion
       contract), and bounded `provenance/`; only `completed` runs count as
       evidence, and a failed snapshot fails the run.
@@ -891,6 +1010,13 @@ Environment and runs
 - [ ] Evidence is written through `RunLogger`; `metrics.jsonl` and
       `artifacts.jsonl` are append-only and name the code that logged and drew
       each file.
+- [ ] `linux-64` is a locked platform, `experiments/kuma.sh`,
+      `experiments/finalize_study.py`, and `configs/hydra/launcher/kuma*.yaml`
+      are copied from the assets, and every Kuma study ran through
+      `pixi run kuma ...` after the GPU-efficiency gate.
+- [ ] If the project uses a hub: no token in the repository or handoff, and
+      remote jobs run through `cairn-report push --watch -- ...` (on Kuma,
+      via `pixi run kuma submit`/`pack`).
 
 Method and evidence
 - [ ] The user confirmed the method specification and consequential
