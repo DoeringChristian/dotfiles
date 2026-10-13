@@ -1,0 +1,12 @@
+# @package hydra.launcher
+# Lyra smoke-test launcher: a 24 GB RTX PRO 6000 slice (1g.24gb) on the debug QoS (one job at a
+# time, 1 h maximum). Copy into configs/hydra/launcher/lyra_debug.yaml;
+# `pixi run lyra smoke <overrides>` selects it. Plumbing checks and measurements only.
+defaults:
+  - lyra
+
+partition: rtx6000_1g.24gb
+qos: debug
+timeout_min: 10
+cpus_per_task: 2
+array_parallelism: 1

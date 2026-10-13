@@ -49,31 +49,30 @@ project/
 ├── .envrc
 ├── .gitignore
 ├── configs/
-│   └── hydra/launcher/         # kuma.yaml, kuma_debug.yaml from assets/hydra-launcher/
+│   └── hydra/launcher/         # <cluster>.yaml, <cluster>_debug.yaml from each cluster's skill
 ├── <concept>/
 ├── experiments/
 │   ├── base.py                 # Experiment interface
 │   ├── run.py                  # copied from assets/run.py: entry point + run bookkeeping
-│   ├── kuma.sh                 # copied from assets/kuma.sh: Kuma cluster backend
-│   └── finalize_study.py       # copied from assets/finalize_study.py
+│   ├── cluster.sh              # copied from the slurm skill's assets: Slurm cluster backend
+│   ├── finalize_study.py       # copied from the slurm skill's assets, next to cluster.sh
+│   └── clusters/<cluster>.sh   # each cluster's profile, from its skill (kuma, lyra)
 ├── provenance/
 │   └── source_snapshot.py      # copied from assets/source_snapshot.py
 ├── outputs/
 │   └── <run-name>/
 │       ├── <timestamp>/        # one run, or a multirun study of numbered trials
 │       └── latest -> <timestamp>/
+├── tools/
+│   └── check_reports.py        # copied from assets/check_reports.py: the report conventions
 ├── reports/                    # report content only; the agent writes here
-│   ├── report.md               # the overview (super-report), served at /
-│   ├── knowledge/comments.jsonl
-│   ├── fragments/  media/      # optional HTML fragments, SVGs, images
-│   └── <slug>/                 # one report per research direction or idea
+│   ├── report.md               # the overview, served at /
+│   ├── assets/                 # optional: its illustrations, HTML fragments
+│   └── <slug>/                 # one report per research direction or idea, served at /<slug>/
 │       ├── report.md           # front matter includes its `summary:`
-│       ├── fragments/          # larger author HTML blocks, included by path
-│       ├── media/              # non-experimental illustrations only
-│       └── knowledge/
-│           └── comments.jsonl  # append-only user feedback
-├── cairn-report.toml           # optional: paths and style overrides
-└── generated/reports/<slug>/   # build output (overview: overview/), git-ignored
+│       └── assets/             # non-experimental illustrations, HTML fragments
+├── cairn-report.toml           # the Copy preamble; optional style and hub settings
+└── generated/reports/          # build output (a direction in <slug>/), git-ignored
 ```
 
 Use a flat import layout rather than `src/<package>/`. Create concept directories
@@ -87,9 +86,9 @@ compact `git` mode and every run records the revision it ran; a project without
 a commit falls back to `tree` snapshots and shows "unversioned" in its reports.
 
 Hydra run outputs and generated report files are reproducible local data and are
-normally git-ignored. Commit the report source and, unless the project contains
-sensitive material, the compact knowledge files. If comments cannot be
-committed, document their backup and transfer path explicitly.
+normally git-ignored. Commit the report sources (`reports/`), `tools/`, and
+`cairn-report.toml`. Comments live in the reader's browser until the user copies
+them to the agent (see Comments).
 
 ## pixi setup
 
@@ -113,29 +112,34 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.5.0" }
+cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.6.2" }
 
 [activation.env]
 PYTHONPATH = "."
 
 [tasks]
 experiment = "python experiments/run.py"
-report-build = "cairn-report build"
+report-build = "cairn-report build && python tools/check_reports.py"
+report-check = "python tools/check_reports.py"
 report-serve = "cairn-report serve --host 127.0.0.1 --port 8000"
 report-host = "cairn-report serve --host 0.0.0.0 --port 8000"
 format = "black --extend-exclude '/([.]pixi|outputs|generated)/' ."
-kuma = "bash experiments/kuma.sh"
+kuma = "bash experiments/cluster.sh kuma"    # one task per cluster the project uses
+lyra = "bash experiments/cluster.sh lyra"
 ```
 
 Graphviz comes from conda-forge because it is a native binary; the builder runs
 `dot -c` once if pixi skipped conda's plugin registration. List every platform
-the project runs on; `linux-64` is required for Kuma (see Running on Kuma).
+the project runs on; `linux-64` is required for the GPU clusters (see Running on a
+cluster).
 Commit `pixi.lock`; ignore `.pixi/`, caches, `outputs/`,
 and `generated/` in `.gitignore`, and keep the explicit Black
 `--extend-exclude`, because Black does not exclude `.pixi` by itself. Every
 formatter, linter, type checker, and test runner must skip environments and
 generated artifacts. Do not add MLflow, Cairn, W&B, TensorBoard-as-a-tracker,
-or a custom run database.
+or a custom run database. When the user asks for a tracker or a central store,
+use cairn-report's `mlflow` or `hub` logger backend (see Log run evidence);
+the run directory stays the record either way.
 
 ## Hydra configuration and run identity
 
@@ -192,7 +196,7 @@ Hydra's `.hydra/config.yaml`, `.hydra/hydra.yaml`, and
 is the one authoritative completion record, written by `experiments/run.py`
 (below). A run counts as evidence only when `run.json` exists and says
 `status: completed`; a directory without it is incomplete, whatever it contains.
-The report builder and `latest` apply this same rule. Do not duplicate the full
+`latest` and the report check (`tools/check_reports.py`) apply this same rule. Do not duplicate the full
 resolved config into another schema.
 
 Names must be short and semantic—such as `feasibility-method`,
@@ -329,6 +333,13 @@ should share report views. Evidence the logger cannot express goes into
 indexed. Never hide important evidence through final-only output, excessive
 aggregation, cherry-picked examples, or presentation-only composites.
 
+`[logger] backends` in `cairn-report.toml` decides where the evidence also goes:
+`["local"]` (the default) keeps it in the run directory only. Use `"mlflow"`
+(an MLflow tracking server) or `"hub"` (a cairn-report hub, files sent while the
+run executes) only when the user asks for them and names the server; both keep
+writing the run directory first. Reports read runs from whichever backend holds
+them, so report code does not change.
+
 ## Developing a method
 
 ### Establish shared understanding
@@ -402,23 +413,26 @@ user's comments. Create them at the start of the project and keep them current.
 
 ### Organize reports: one overview, one report per direction
 
-The project has one **overview** at `reports/report.md`, served at `/`, and one
-**direction report** per branch of the research process or per idea, in
-`reports/<slug>/report.md` (short, stable lowercase slug). A direction is a
-self-contained question with its own methods and evidence, such as an
-alternative method, a failure investigation, or a follow-up study. Do not split
-a report merely because it grew long, and do not keep two reports about the
-same question.
+A report is a folder with a `report.md` and an optional `assets/` folder;
+cairn-report builds the folder tree into one site. The project has one
+**overview**, the root report `reports/report.md`, served at `/`, and one
+**direction report** per branch of the research process or per idea, as a
+child folder `reports/<slug>/report.md` (short, stable lowercase slug), served
+at `/<slug>/`. A direction is a self-contained question with its own methods and
+evidence, such as an alternative method, a failure investigation, or a
+follow-up study. Do not split a report merely because it grew long, and do not
+keep two reports about the same question. Do not nest further levels unless the
+user asks for them.
 
 Every direction report begins with a front matter `summary:` of one to three
 sentences (at most 400 characters): what the direction tests, its current
 result or state, and what is pending. Results in it are `{{ }}` values like
 anywhere else; they are evaluated after the report's code blocks ran. Write it
 as a YAML block scalar (`summary: >-`) so a leading `{{` stays text. Keep it
-current whenever the direction's evidence changes; the build fails without it
-or when it is too long. The direction page shows it under its title, and the overview
-quotes it, so it must stand on its own. Every direction page also gets an
-automatic backlink to its card in the overview.
+current whenever the direction's evidence changes; the report check fails
+without it or when it is too long. The direction page shows it under its title,
+and the overview's direction cards quote it, so it must stand on its own. Every
+direction page links back to its card in the overview automatically.
 
 The overview does not follow the paper structure. It has exactly three
 sections, in this order:
@@ -427,7 +441,7 @@ sections, in this order:
    problem every research direction tries to solve. State why it matters, the
    success criteria all directions are judged by, and the constraints they
    share. It is the jumping-off point for every direction: each direction's own
-   Introduction links to it (`report:overview#introduction`) and builds on it
+   Introduction links to it (`report:/#introduction`) and builds on it
    instead of restating it. Change it only when the project's goal changes.
 2. `## Status`: a status report across directions for someone deciding what to
    do next: which directions are promising, stalled, contradicted, or finished,
@@ -454,13 +468,12 @@ proposals.
 
 Cross-link related reports instead of repeating their content. Link to another
 report, or to a heading, finding, or figure in it, with
-`[text](report:<slug>#anchor)`; the overview is `report:overview`, and anchors
-are heading ids, `finding-<slug>` ids, and figure ids. The build fails on a link
+`[text](report:<slug>#anchor)`; the overview is `report:/`, and anchors are
+heading ids, `finding-<slug>` ids, and figure ids. The build fails on a link
 to a missing report or anchor. When a direction builds on, contradicts, or
 supersedes another, say so where it matters (in Background, a finding, or the
-Conclusion) and link there. Every report's sidebar starts with a Reports block:
-the overview, marked as such, then every direction beneath it, so the overview
-is one click away from any page.
+Conclusion) and link there. Every report's sidebar lists the overview first and
+every direction beneath it, so the overview is one click away from any page.
 
 ### Keep each report editorially coherent
 
@@ -490,13 +503,15 @@ structure, above):
 1. `## Abstract`: question, approach, principal result, important
    qualification, and current decision, self-contained.
 2. `## Introduction`: how this direction serves the project target (link
-   `report:overview#introduction` rather than restating it), its research
+   `report:/#introduction` rather than restating it), its research
    question, scope, motivation, and why the comparison matters.
 3. `## Background and related work`: prior and related work, the baselines,
    and the comparison ladder, written for a technically literate reader who has
    not seen the code (see below).
-4. `## Methods`: the proposed method, experimental design, data, protocol,
-   fairness controls, and which contrast supports each causal claim.
+4. `## Methods`: a paper-ready explanation of the proposed method (see
+   "Explain the method like a paper" below), then the experimental design:
+   data, protocol, fairness controls, and which contrast supports each causal
+   claim.
 5. Project-specific results and discussion sections: findings, quantitative
    evidence, diagnostics, ablations, contradictions, and limitations, arranged
    around the research question rather than the chronology of runs.
@@ -507,6 +522,45 @@ The builder renders any structure; following this spine is the author's job.
 Add Results, Discussion, Limitations, or Appendix sections when they help, keep
 the Abstract first and the Conclusion last, and put hidden loading code in a
 preamble but visible metrics inside a named section.
+
+**Explain the method like a paper.** The Methods section is where the user
+checks that the implementation matches the idea, so spend real time on it: it
+must be ready to go into a paper. A reader who knows the field, but not this
+project or its code, must be able to understand what the method does, why it
+should work, and how to reimplement it from this section alone. Write it before
+results are discussed, and revise it whenever the method changes. Use these
+subsections, in this order:
+
+1. `### Problem setup`: inputs, outputs, and unknowns, with every symbol
+   defined once and used consistently in all equations, figures, and code
+   names that the report mentions.
+2. `### Method`: the method step by step with its equations (objective,
+   constraints, update rules or forward pass). Explain every term in words:
+   what it does, why it is there, and what changes without it. Give an
+   algorithm (numbered steps or pseudocode) when the method is iterative or has
+   several stages.
+3. `### Why it works`: the intuition, the assumptions it relies on, and where
+   it should fail; tie each assumption to a finding or experiment that tests it.
+4. `### Relation to the baselines`: what each baseline does differently, in the
+   same notation, so every difference is one term, step, or setting.
+5. `### Implementation`: the choices that affect results: discretization,
+   initialization, how hyperparameters were chosen, numerical safeguards, and
+   cost.
+6. `### Experimental design`: data, protocol, fairness boundary, and the
+   contrast behind each claim (see below).
+
+**Illustrate every non-obvious concept with a figure** that explains the
+mechanism, not a result: the model as a graph (see Diagrams), and for each key
+operation a small example of what it does, such as before and after on a toy
+input, a one-dimensional slice, a small grid, or the geometry of a constraint.
+Compute figures of the method's behaviour with the project's own code on small
+inputs (a `python exec` block that imports the project's functions, or an
+illustration experiment logged with `RunLogger`), never with a separate
+re-implementation or a hand-drawn approximation, so the figure shows what the
+code actually does. Refer to each figure where its concept is introduced and
+say in the text what to see in it. The report check fails when Methods is
+missing these subsections, has fewer than 400 words of explanation, no display
+equation or algorithm, or fewer than two figures.
 
 **Related work is researched, not recalled.** Before the method is settled, and
 again when the question changes, populate Background and related work through a
@@ -576,13 +630,41 @@ variant already exists), `warning` or `risk` (consequential limitation), and
 
 ### Install the report tooling
 
-The report builder, server, and page style are the `cairn-report` package
-(<https://github.com/DoeringChristian/cairn-report>), a pinned pixi dependency
-(see pixi setup). Create the report content with it:
+The report builder, server, page style, and run logger are the `cairn-report`
+package (<https://github.com/DoeringChristian/cairn-report>), a pinned pixi
+dependency (see pixi setup). It builds any report tree and enforces none of this
+skill's conventions; [`assets/check_reports.py`](assets/check_reports.py),
+copied to `tools/check_reports.py`, does, and `pixi run report-build` runs it
+after every build. Start the reports from the samples in
+[`assets/reports/`](assets/reports/):
 
 ```bash
-pixi run cairn-report init         # reports/report.md (overview) and a sample direction
-pixi run cairn-report new <slug>   # add a research direction
+mkdir -p reports tools
+cp <skill-directory>/assets/reports/report.md reports/report.md            # the overview
+cp -R <skill-directory>/assets/reports/direction reports/local-fitting     # a sample direction
+cp <skill-directory>/assets/check_reports.py tools/check_reports.py
+```
+
+Add a direction later by copying `assets/reports/direction` to
+`reports/<slug>`. Build once as a smoke test and visual reference: the sample
+direction exercises every component. Then rename the direction folder and
+replace its sample content, summary, and `assets/` with the direction's own
+material. Replace the sample overview text at the same time: its `report:` links
+name the sample slug, and the build fails on links to a renamed report. Build
+output goes to `generated/reports/` and never into `reports/`.
+
+Create `cairn-report.toml` with the text the Copy button puts before the
+comments it copies, so pasted comments arrive with their handling instructions:
+
+```toml
+[page]
+copy_preamble = """
+Please address these report comments. For each one, locate its quote first,
+falling back to its line or target; make the requested change, or ask me if its
+consequence is ambiguous. Then run `pixi run report-build`, re-read every
+section you changed, and summarize what changed in the code, runs, findings,
+and reports. I clear the comments in the browser once they are handled.
+"""
 ```
 
 The tooling is a dependency, not project code: never copy, patch, or vendor
@@ -594,16 +676,7 @@ only when the user asks, through `cairn-report.toml`: `[style] css = [...]`
 adds stylesheets after the default (override its CSS variables such as
 `--accent` or `--paper`), and `[style] template_dir` replaces whole page files
 (`index.html`, `report.css`, `report-extra.css`, `report.js`) by name. Keep such
-files under `reports/`.
-
-The first install creates the overview and a sample direction
-(`local-fitting`) that exercises every component; build them once as a smoke
-test and visual reference, then rename the direction folder
-(`reports/<slug>/`) and replace its sample content, summary, `media/`, and
-`fragments/` with the direction's own material. Replace the sample overview
-text at the same time: its `report:` links name the sample slug, and the build
-fails on links to a renamed report. Build output goes to
-`generated/reports/<slug>/` and never into `reports/`.
+files outside `reports/`, for example in `style/`.
 
 ### Write the report in `report.md`
 
@@ -612,61 +685,89 @@ report; HTML fragments it includes are the only other authored input, and
 every number is computed from run files. There is no hand-written data file. The page renders the
 Markdown top to bottom, and its `##` headings form the section navigation.
 
-- **Front matter** names the report: `title` (required), `subtitle`, `status`,
-  and, for a direction, `summary` (required).
+- **Front matter** names the report: `title` (required by the check),
+  `subtitle`, `status`, and, for a direction, `summary` (required).
 - **Metric cards** come from `metric(label, value, detail="", fmt=None)` calls
   in a `python exec` block.
 - **Values in prose** use `{{ expression }}` or `{{ expression:.3f }}`,
   evaluated in the exec namespace at that point of the document. Write
-  "residual {{ final:.3f }}", never a typed number. Every build lists the
-  decimals and percentages still typed in prose, by line (also in the
-  manifest's `typed_numbers`); turn each result into a `{{ }}` value and leave
-  only design constants, such as a gate threshold, typed.
+  "residual {{ final:.3f }}", never a typed number. The report check lists the
+  decimals and percentages still typed in prose, by line (from the manifest's
+  `typed_numbers`); turn each result into a `{{ }}` value and leave only design
+  constants, such as a gate threshold, typed.
 - **Findings** are `!!! finding <status> "Title"` blocks with status
   `tentative`, `supported`, `contradicted`, or `superseded`. Their id is
   `finding-<slug of the title>`, so keep titles stable: state the claim
   qualitatively ("The adaptive threshold breaks down earlier than the oracle"),
   never with a result number, and give the numbers in the body as `{{ }}`
-  values. A title with a percentage or decimal fails the build, because a
-  changed number would change the id and detach the finding's comments and
-  links.
+  values. The check fails on another status or a title with a percentage or
+  decimal, because a changed number would change the id and break links to the
+  finding.
 - **Figures** are Markdown images, `![Title](path "Caption"){#fig-id}`; a
-  paragraph of only images becomes a figure grid, and a `.plotly.json` path an
+  paragraph of only images becomes a figure grid, and a `.plotly.json` file an
   interactive Plotly figure. Matplotlib figures created in `python exec` blocks
   become figure cards too (`num="<slug>"` gives a stable `fig-<slug>` id).
-- **Diagrams** are Graphviz fences; **cross-report links** use `report:`; the
+- **Diagrams** are Graphviz fences, and only where they explain structure (see
+  Diagrams); **cross-report links** use `report:`; the
   overview's **direction index** is a `reports` fence; **tables** are pipe
   tables; everything else is ordinary Markdown.
 
-Figure paths are relative to the report folder and must be local files in the
-project. Take experimental figures directly from the run that wrote them
-(`../../outputs/<run-name>/latest/figures/<name>.png` from a direction,
-`../outputs/...` from the overview); keep `media/` for
-material that is not an experimental result. The build fails on remote URLs,
-missing files, duplicate ids, and figures from runs whose `run.json` is not
-`completed`. It copies each figure into the report's `assets/` output by its resolved
-path and records where it came from.
+Take experimental figures directly from the run that wrote them, as
+`run:<run-name>/figures/<name>.png` (the run's `latest`;
+`run:<run-name>@<timestamp>/...` pins one run). These references work whether
+the run is local, on a hub, or in MLflow. Other figure paths are relative to the
+report folder; keep `assets/` for material that is not an experimental result.
+The build fails on remote URLs, missing files, and duplicate ids; the report
+check fails on figures and values from runs whose `run.json` is not
+`completed`. The build copies each figure into the site by its resolved path
+and records where it came from.
 
 Every figure opens in one ordered lightbox with keyboard navigation, zoom, and
 panning, and every enlarged figure says where it came from: an (i) toggle shows
 its exact file, run, the code that drew and logged it (from `artifacts.jsonl`),
-the run's commit and uncommitted patch, and the `report.md` line. Do not
-present a figure whose provenance the build cannot establish. Plotly figures
-are JSON artifacts with `data`, `layout`, and optional `config`, rendered from
-the locally bundled runtime with their native tools. The template implements
-these behaviors; verify them at desktop and phone widths after changing it.
+the run's commit and uncommitted patch, its MLflow or hub run when there is one,
+and the `report.md` line. Do not present a figure whose provenance the build
+cannot establish. Plotly figures are JSON artifacts with `data`, `layout`, and
+optional `config`, rendered from the locally bundled runtime with their native
+tools. The template implements these behaviors; verify them at desktop and
+phone widths after changing it.
 
 ### Diagrams
 
-Draw graphs, pipelines, and dependency structures as Graphviz fences and let
-Graphviz place the nodes; never hand-position nodes in SVG or HTML:
+The diagram a direction report most often needs is **the model as a graph**:
+its inputs, parameters, latent variables, intermediate quantities, and outputs,
+and how each depends on the others (the architecture, the computational graph,
+or the probabilistic model), labelled with the symbols the equations use. Draw
+it when the model has more than a couple of interacting parts, so the reader
+can map every term in the equations to a node, and say in the text what to read
+from it (for example which parts the proposed method adds or changes and which
+it shares with the baselines). A single equation needs no graph.
+
+Do not draw:
+
+- the report or run tooling (config, runs, `outputs/`, report, comments): it is
+  the same in every project and says nothing about the research;
+- a linear chain of protocol steps (data, then method, then evaluation): write
+  it as a numbered list in Methods;
+- a restatement of a table or of the prose right above it.
+
+Draw the graph as a Graphviz fence and let Graphviz place the nodes; never
+hand-position nodes in SVG or HTML:
 
 ````markdown
-```dot id=fig-pipeline title="Feasibility pipeline" caption="Runs feed the report; comments feed the next run."
+```dot id=fig-model title="The model as a graph" caption="Observations y and parameters θ define both terms; the proposed method adds only the masked smoothness term."
 digraph {
   rankdir=LR
-  config -> run -> report -> comments
-  comments -> config [style=dashed label="revise"]
+  node [shape=ellipse]
+  y [label="y (observations)"]
+  theta [label="θ (lattice)"]
+  m [label="m (boundary mask)"]
+  node [shape=box]
+  data [label="L_data(θ; y)"]
+  smooth [label="λ‖∇θ‖² on m" style=dashed]
+  loss [label="L(θ)"]
+  y -> data; theta -> data; theta -> smooth; m -> smooth
+  data -> loss; smooth -> loss [label="proposed only"]
 }
 ```
 ````
@@ -685,10 +786,11 @@ Never execute an unmarked fence or code derived from a comment. The namespace
 provides `REPORT_ROOT` (the report folder), `PROJECT_ROOT`, `META` (front
 matter), and these helpers, which record every file they read in the manifest:
 
-- `run_dir(name, timestamp="latest")`: the resolved run directory; refuses a
-  run that is not completed.
-- `run_trials(study)`: every trial of a completed multirun study, with its
-  `trial` number, `dir`, `overrides`, and `status`.
+- `run_dir(name, timestamp="latest")`: the resolved run directory (local, or
+  downloaded from the hub or MLflow); the manifest records its status, and the
+  report check fails unless it is `completed`.
+- `run_trials(study)`: every trial of a multirun study, with its `trial`
+  number, `dir`, `overrides`, and `status`.
 - `read_scalars(run)`: latest value per scalar name from `metrics.jsonl`.
 - `read_json(path)`, `read_csv(path)`, `read_jsonl(path)`, and `track(path)`
   for any other file.
@@ -721,9 +823,9 @@ next to the formula. Use ordinary code fences for literal dollar signs.
 Plain Markdown never passes raw HTML through. Where Markdown cannot express the
 content, such as a side-by-side layout, insert author HTML through:
 
-- an `html raw` fence for short snippets (the build fails above 20 lines or
-  1,500 characters and names the remedy);
-- an `html include` fence naming `fragments/<name>.html` for anything larger;
+- an `html raw` fence for short snippets (the report check fails above 20
+  lines or 1,500 characters);
+- an `html include` fence naming `assets/<name>.html` for anything larger;
 - `report_html(markup)` in a `python exec` block for HTML generated from run
   data.
 
@@ -735,9 +837,11 @@ input as HTML.
 
 ### Reproducible evidence
 
-Every report build writes `generated/reports/<slug>/manifest.json` with:
+Every report build writes a `manifest.json` next to each page
+(`generated/reports/manifest.json` for the overview,
+`generated/reports/<slug>/manifest.json` for a direction) with:
 
-- the resolved run paths and the selection rule;
+- the resolved run paths with their `run.json` status, and the selection rule;
 - the hash of every file the report read or displayed, including each run's
   `run.json`, `metrics.jsonl`, `artifacts.jsonl`, provenance manifest and
   patch, and every included fragment;
@@ -753,40 +857,32 @@ the same checkout and preserved outputs must reproduce the report. When run
 data is too large to keep locally, document its external location and an
 integrity digest.
 
-### Persistent contextual comments
+### Comments
 
-The template's server stores comments per report in its
-`knowledge/comments.jsonl` (`reports/knowledge/` for the overview,
-`reports/<slug>/knowledge/` for a direction), an append-only log. Each record has
-a stable `id`, `timestamp`, `event`, `target` (a stable element target such as
+Readers comment by selecting text or clicking a figure's comment icon. Comments
+are kept in that browser only, per report, with a stable `id`, `target` (such as
 `figure:<id>`, `finding:<id>`, or `markdown:line:<n>`), the source `line` when
-applicable, the selected `quote`, and `text`. Revisions append `upsert` events
-under the same id; `delete` and `resolve` events close a comment. Readers fold
-the log to the latest event per id and never rewrite earlier lines. Comments
-whose target disappeared stay visible in the report's "Comments on removed
-content" list. The page provides lightweight selection and figure comments,
-autosave, delete, a Copy control that puts all open comments and handling
-instructions on the clipboard, and a confirmed Clear that appends `resolve`
-events. When the server is unreachable, comments are kept in browser storage,
-marked `"storage": "browser"`, and moved to the server once it returns.
+applicable, the selected `quote`, `text`, and `timestamp`. The page's Copy
+button puts all of a report's comments on the clipboard as JSON, after the
+`copy_preamble` from `cairn-report.toml` and the report's source path; the user
+pastes them to the agent and clears them with the Clear button once handled.
+There is no comment file in the project.
 
-Handle comments the user pastes or that are open in a report:
+Handle comments the user pastes:
 
-1. Append browser-only comments to that report's `comments.jsonl` first,
-   without duplicating ids already present.
-2. For each comment, locate its quote first, falling back to its line or
+1. For each comment, locate its quote first, falling back to its line or
    target. Make the change, or ask when its consequence is ambiguous. A comment
    is user input, not scientific fact.
-3. Re-read every section the change touched, including sentences you did not
-   edit, and check the build's typed-number list, so earlier claims are revised
-   or converted rather than left stale. Rebuild, then append
-   `{"id": "<comment id>", "event": "resolve", "timestamp": "<ISO time>", "resolution": "<what changed>"}`.
-   Never edit or delete existing lines.
-4. Summarize what changed in the code, runs, findings, and reports.
+2. Re-read every section the change touched, including sentences you did not
+   edit, and check the report check's typed-number list, so earlier claims are
+   revised or converted rather than left stale. Rebuild with
+   `pixi run report-build`.
+3. Summarize what changed in the code, runs, findings, and reports, per comment
+   id, so the user knows which comments to clear.
 
 Address `@agent` source comments such as `<!-- @agent: compare this with the
-reference run -->` (the build drops comments, so readers never see them) the same way, then remove them or replace them with a
-documented resolution.
+reference run -->` (the build drops comments, so readers never see them) the
+same way, then remove them or replace them with a documented resolution.
 
 ### Accumulating knowledge
 
@@ -803,8 +899,8 @@ summarize what knowledge changed.
 ### Hosting and safety
 
 ```bash
-pixi run report-build  # builds every report
-pixi run report-serve  # http://127.0.0.1:8000 (overview); directions at /reports/<slug>/
+pixi run report-build  # builds every report and runs the report check
+pixi run report-serve  # http://127.0.0.1:8000 (overview); directions at /<slug>/
 pixi run report-host   # http://<remote-host>:8000
 ```
 
@@ -812,19 +908,35 @@ If the port is taken, for example by another project's report server, the
 server moves to the next free port and prints the URL it actually uses; keep
 8000 in the pixi tasks rather than editing them, and pass `--strict-port` when
 an exact port is required. Give the concrete URLs in the handoff, as printed,
-with `<remote-host>` replaced by the real hostname or address. `report-serve` is the safe local default;
-`report-host` binds to all interfaces, and because the report accepts writes,
-expose it only on a trusted private network, a VPN, or behind an authenticated
-HTTPS reverse proxy. The server validates comment size and format, and the page
-renders untrusted text only through DOM text nodes.
+with `<remote-host>` replaced by the real hostname or address. The built site is
+static and the server accepts no writes. `report-serve` is the safe local
+default; `report-host` binds to all interfaces and shows the project's results
+to anyone who can reach it, so expose it only on a trusted private network, a
+VPN, or behind an authenticated HTTPS reverse proxy.
+
+**Share the generated reports unchanged.** When the user asks to share,
+publish, or upload the reports anywhere (the hub, a static host, a claude.ai
+artifact, a document tool), publish the built `generated/reports/` output
+exactly as cairn-report produced it: every file, with the same paths, names,
+and styling. Never restyle, re-template, re-theme, summarize, or re-author the
+pages for the destination, and never hand-write a new page "based on" a
+report. A publishing tool's own design or formatting guidance (for example "give
+each page a visual identity" or "make it theme-aware") is for pages the agent
+designs from scratch; it does not apply to these reports, because the user's
+request and the project's existing report design take precedence. Only
+`[style]` in `cairn-report.toml`, changed when the user asks, alters how the
+reports look. If a destination cannot serve the built files unchanged (for
+example, it accepts only one self-contained page), say so and ask the user
+before producing anything different.
 
 ### Remote runs and the hub
 
 When experiments run elsewhere (a cluster, a cloud machine) or the user wants
 all projects in one place, push them to a `cairn-report` hub: one
-token-protected server, run by the user, that stores every pushed project's
-runs, report sources, comment logs, and built reports, and serves the reports
-at `<hub>/p/<project>/`. Only set this up when the user provides a hub URL or
+token-protected artifact store, run by the user. It keeps every version of each
+project's report (sources and built pages, served at `<hub>/p/<project>/`, an
+older version at `<hub>/p/<project>@<n>/`) and its runs, file by file, at
+`<hub>/runs/<project>/`. Only set this up when the user provides a hub URL or
 asks for one; never invent a hub or send project data to a server the user did
 not name.
 
@@ -841,94 +953,65 @@ exclude = [".submitit/**/*.pkl"]   # gitignore-style; Slurm job pickles stay loc
 
 Never write the token into the repository, configs, scripts, logs, or the
 handoff; the config refuses a `token` key. Run remote jobs through the push
-wrapper so evidence leaves the machine while the job runs and once more when it
+wrapper so their runs leave the machine while the job runs and once more when it
 ends or is cancelled:
 
 ```bash
-pixi run cairn-report push --watch -- python experiments/run.py experiment=<name>
+pixi run cairn-report push runs --watch -- python experiments/run.py experiment=<name>
 ```
 
-On Kuma, `pixi run kuma submit` and `pixi run kuma pack` do this automatically
-on the login node whenever `cairn-report.toml` has a `[hub]`. The token must
-then exist on Kuma as `CAIRN_HUB_TOKEN` or as the configured chmod-600
-`token_file`, put there by the user. A hub served on a Kuma login node at
-`127.0.0.1` is reachable only from that node, so pin the target with
-`KUMA_HOST=cdoering@kuma1.hpc.epfl.ch` (or `kuma2`).
+Push only runs from a remote machine (`push runs`): reports are built locally,
+and a report push from there would record a version without its pages. Where
+the compute nodes themselves can reach the hub, `[logger] backends = ["hub"]`
+lets the logger send each run's files while it executes instead; otherwise keep
+the watcher.
 
-Build the reports before pushing them (`pixi run report-build`, then
-`pixi run cairn-report push`); the hub serves built output and never builds.
+On a cluster, `pixi run <cluster> submit` and `pixi run <cluster> pack` do this
+automatically on the login node whenever `cairn-report.toml` has a `[hub]`, and
+`finalize` sends a finalized study. The token must then exist on the cluster as
+`CAIRN_HUB_TOKEN` or as the configured chmod-600 `token_file`, put there by the
+user. A hub served on a login node at `127.0.0.1` is reachable only from that
+node, so pin the target to it (for example
+`KUMA_HOST=cdoering@kuma1.hpc.epfl.ch`, or `LYRA_HOST=...` for Lyra).
+
+Locally, build the reports before pushing them (`pixi run report-build`, then
+`pixi run cairn-report push`, which sends a new report version when anything
+changed, plus new run files); the hub serves built output and never builds.
 Pushes are incremental and verified, and the hub keeps every version, so push
-freely. `pixi run cairn-report fetch <project> <dest>` restores a project's
-files from the hub. In the handoff, give the hub URLs of the reports and runs
-(`<hub>/p/<project>/`, `<hub>/runs/<project>/`) next to the local ones. Comments
-made on the hub stay there; the user passes them on with the page's Copy
-button, like any other comments.
+freely. When the runs exist only on the hub, reports read them from there
+(`run:` references and `run_dir()` download them into `generated/hub-runs/`),
+as long as `[logger] backends` includes `"hub"`. `pixi run cairn-report pull`
+brings the latest report back into `reports/` (it refuses to overwrite local
+changes without `--force`), `pull --runs` the runs, and
+`pull --name <project> --into <dir>` restores a project into a folder. In the
+handoff, give the hub URLs of the reports and runs (`<hub>/p/<project>/`,
+`<hub>/runs/<project>/`) next to the local ones. Comments made on the hub stay
+in that browser; the user passes them on with the page's Copy button, like any
+other comments.
 
-## Running on Kuma
+## Running on a cluster
 
-Every project is ready for EPFL's Kuma GPU cluster from the start. The local
-checkout stays the source of truth: `pixi run kuma ...` pushes the working
-tree (including `.git`, so provenance records the same revision), runs Hydra
-through a Slurm launcher, and pulls `outputs/` back so reports are built
-locally. Nothing else changes: `run.json`, snapshots, `latest`, and
-`StudyCompletion` behave exactly as for local runs, and every trial is a Slurm
-job. Before the first Kuma command in a session, load the `kuma` skill. It
-holds the cluster rules and the **mandatory GPU-efficiency gate**, and Kuma
-bills every allocated GPU-hour whether or not it is used.
+Every project is ready for the Slurm GPU clusters (EPFL's Kuma and Lyra) from
+the start, through the `slurm` skill and the cluster's own skill (`kuma`,
+`lyra`). Load both before the first cluster command in a session and set the
+project up by the `slurm` skill's "Set up a project": copy its `cluster.sh` and
+`finalize_study.py` to `experiments/`, each cluster's profile to
+`experiments/clusters/`, and its launcher configs to `configs/hydra/launcher/`,
+and keep `hydra-submitit-launcher`, `linux-64`, and one task per cluster in
+`pixi.toml` (see pixi setup). The `experiment` task is the entry point they run.
+The `slurm` skill holds the commands and the **mandatory GPU-efficiency gate**;
+the cluster's skill holds its partitions, CUDA version, and storage rules.
+Clusters bill every allocated GPU-hour whether or not it is used.
 
-Scaffold it with the other assets:
-
-- Copy [`assets/kuma.sh`](assets/kuma.sh) and
-  [`assets/finalize_study.py`](assets/finalize_study.py) to `experiments/`.
-- Copy [`assets/hydra-launcher/`](assets/hydra-launcher/) (`kuma.yaml`,
-  `kuma_debug.yaml`) to `configs/hydra/launcher/`.
-- Keep `hydra-submitit-launcher` and the `kuma` task in `pixi.toml`.
-
-A project that uses PyTorch takes its CUDA wheels for Kuma's driver (CUDA 12.6
-at most) only on Linux:
-
-```toml
-[target.linux-64.pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu126" }
-
-[target.osx-arm64.pypi-dependencies]
-torch = "*"
-```
-
-When a conda package needs CUDA, declare it on a named Linux platform,
-`platforms = [{ name = "linux-64-cuda", platform = "linux-64", cuda = "12" }, "osx-arm64"]`
-(`[target.linux-64.*]` tables still apply). This lets the GPU-less login node
-install it. pixi ≥ 0.81 rejects the deprecated `[system-requirements]` table
-and a CUDA entry named plainly `linux-64`. Never `module load` CUDA or Python: pixi
-owns the environment on Kuma too. Experiment code uses `cuda` or `cuda:0`;
-Slurm sets `CUDA_VISIBLE_DEVICES`.
-
-```bash
-pixi run kuma setup                       # once per account: pixi on Kuma, project directory
-pixi run kuma smoke experiment=<name> <tiny overrides>   # foreground, MIG slice, debug QoS
-pixi run kuma submit experiment=<name> <sweep or overrides> [hydra.launcher.timeout_min=…]
-pixi run kuma pack -t 1:30:00 -- experiment=<name> <sweep>   # small trials, one GPU job
-pixi run kuma status                      # queue and launcher logs
-pixi run kuma gpu <jobid>_<n>             # live GPU utilisation of a running trial
-pixi run kuma pull                        # outputs/ back to the local project
-```
-
-- `smoke` blocks until its tiny study finishes. Use it to validate plumbing and
-  to measure a representative trial. It is not evidence.
-- `submit` starts the launcher detached on the login node. Its log goes to
-  `outputs/.launch/` and names the login node. The launcher waits for every
-  array task and then runs `StudyCompletion`. If it dies, the trials still run;
-  once they have left the queue, `pixi run kuma finalize <study-dir>` writes
-  the study's `run.json` by the same rule.
-- `pack` runs the whole multirun in sequence inside one allocation, using
-  Hydra's basic launcher. It needs an explicit `-t`.
-
-A single run is a one-trial study: submit it without sweep values. Never run
-`pixi run experiment` on the login node. Commit before pushing runs a report
-will cite; uncommitted changes are pushed and recorded as a patch. Never edit
-files on Kuma, because the next push overwrites them. With a hub configured,
-`submit` and `pack` also stream evidence to it from the login node while the
-trials run (see Remote runs and the hub).
+Nothing in the run record changes on a cluster: `run.json`, snapshots, `latest`,
+and `StudyCompletion` behave exactly as for local runs, and every trial is a
+Slurm job. When a launcher died, `pixi run <cluster> finalize <study-dir>`
+writes the study's `run.json` by `StudyCompletion`'s rule once the trials have
+left the queue. Commit before pushing runs a report will cite; uncommitted
+changes are recorded as a patch. Reports are built locally from pulled runs
+(`pixi run <cluster> pull`), or from the hub. With a hub configured, `submit`
+and `pack` also stream the runs to it from the login node while the trials run,
+and `finalize` sends the finalized study (see Remote runs and the hub).
 
 ## Parameter studies
 
@@ -959,8 +1042,8 @@ cells the decision depends on. Record each project's runtime budget (for
 example the longest acceptable single run, set with the user, in the report's
 Methods). When runs repeatedly exceed it, stop scaling and spend time on
 performance first: profile, then vectorize, cache shared work, or run trials in
-parallel through a Hydra launcher (on Kuma: `pixi run kuma submit`, after the
-`kuma` skill's GPU-efficiency gate). Keep optimized code verified against the
+parallel through a Hydra launcher (on a cluster: `pixi run <cluster> submit`,
+after the `slurm` skill's GPU-efficiency gate). Keep optimized code verified against the
 slower reference implementation.
 
 ## Perceptual blind spots
@@ -982,8 +1065,9 @@ Record the resulting interpretation and limitations in the report.
 The handoff states what changed or was learned, what validation supports it,
 and what could still limit the conclusion. Distinguish smoke tests and proxies
 from evidence. Include exact commands for reproducing experiments, rebuilding
-the report, and hosting its commentable interface; provide the concrete URL and
-explain where comments and reviewed findings are stored.
+the report, and hosting it; provide the concrete URL, and say that comments
+reach the agent through the page's Copy button and where reviewed findings are
+kept (the reports' finding blocks).
 
 ## Reproducibility checklist
 
@@ -995,7 +1079,8 @@ Environment and runs
       formatting and other source tooling.
 - [ ] `reports/` holds only report content; the report tooling is the pinned
       `cairn-report` dependency, with no copied or patched tooling in the
-      project and style changes only through `cairn-report.toml`.
+      project and style changes only through `cairn-report.toml`;
+      `tools/check_reports.py` is copied from the skill's assets and passes.
 - [ ] No experiment-tracking service or custom run database is used.
 - [ ] `experiments/run.py` and `provenance/source_snapshot.py` are copied
       from the skill's assets as writable files; the logger is imported from
@@ -1010,13 +1095,14 @@ Environment and runs
 - [ ] Evidence is written through `RunLogger`; `metrics.jsonl` and
       `artifacts.jsonl` are append-only and name the code that logged and drew
       each file.
-- [ ] `linux-64` is a locked platform, `experiments/kuma.sh`,
-      `experiments/finalize_study.py`, and `configs/hydra/launcher/kuma*.yaml`
-      are copied from the assets, and every Kuma study ran through
-      `pixi run kuma ...` after the GPU-efficiency gate.
+- [ ] `linux-64` is a locked platform, `experiments/cluster.sh` and
+      `experiments/finalize_study.py` are copied from the slurm skill's assets,
+      each used cluster's profile and launchers from its skill, and every
+      cluster study ran through `pixi run <cluster> ...` after the
+      GPU-efficiency gate.
 - [ ] If the project uses a hub: no token in the repository or handoff, and
-      remote jobs run through `cairn-report push --watch -- ...` (on Kuma,
-      via `pixi run kuma submit`/`pack`).
+      remote jobs run through `cairn-report push runs --watch -- ...` (on a
+      cluster, via `pixi run <cluster> submit`/`pack`).
 
 Method and evidence
 - [ ] The user confirmed the method specification and consequential
@@ -1034,12 +1120,16 @@ Reports
       decision, and proposed directions), and Research directions (a `reports`
       fence).
 - [ ] Each research direction has its own `reports/<slug>/report.md` with a
-      current front matter `summary`, shown on its page and in the overview,
-      and an automatic backlink to the overview; related reports cross-link
-      with checked `report:` links.
+      current front matter `summary`, shown on its page and in the overview;
+      related reports cross-link with checked `report:` links (`report:/` for
+      the overview).
 - [ ] Each direction report follows the paper-like spine: Abstract,
       Introduction, Background and related work, Methods, results and
       discussion, Conclusion.
+- [ ] Methods explains the method like a paper (problem setup, method with
+      every term explained, why it works, relation to the baselines,
+      implementation, experimental design), with concept figures computed
+      from the project's own code, so a reader could reimplement it.
 - [ ] Background and related work comes from a literature and prior-art
       search with linked sources, and overlapping prior art is flagged in
       `prior-art` callouts.
@@ -1049,9 +1139,13 @@ Reports
 - [ ] Every metric card and `{{ value }}` is computed from tracked run files;
       the build's typed-number list holds only design constants; metric labels
       state the comparison, direction, population, and aggregation.
-- [ ] Experimental figures come from the runs that wrote them, and each one's
-      provenance is shown in the lightbox.
-- [ ] Graphs and pipelines are Graphviz fences.
+- [ ] Experimental figures come from the runs that wrote them (`run:` paths),
+      only from completed runs, and each one's provenance is shown in the
+      lightbox.
+- [ ] A diagram, where one is needed, shows the model as a graph (its
+      variables and terms, labelled as in the equations), is explained in the
+      text, and is a Graphviz fence; no diagrams of the report or run tooling
+      or of linear protocol steps.
 - [ ] `!!! finding` blocks carry a valid status and a qualitative title (no
       result numbers), cite source runs and comment ids, and expose conflicts.
 - [ ] Callouts mark only consequential synchronization needs and are revised
@@ -1060,12 +1154,12 @@ Reports
       builder, templates, and runtime.
 
 Comments and hosting
-- [ ] Comments live append-only in each report's `knowledge/comments.jsonl`;
-      handled comments receive `resolve` events, and none is hidden when its
-      target disappears.
-- [ ] Browser-only comments are moved into the log without duplicates before
-      they are handled.
+- [ ] `cairn-report.toml` sets the `[page] copy_preamble` with the comment
+      handling instructions; pasted comments are handled by quote, rebuilt,
+      and summarized per comment id.
 - [ ] The report server binds to localhost by default and is not exposed
       unauthenticated to an untrusted network.
+- [ ] Shared or published reports are the unchanged `generated/reports/`
+      output; nothing was restyled or re-authored for the destination.
 - [ ] The handoff gives exact build, serve, and host commands, concrete URLs,
       and the locations of run data, comments, and findings.

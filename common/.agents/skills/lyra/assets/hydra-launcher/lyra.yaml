@@ -1,0 +1,17 @@
+# @package hydra.launcher
+# Lyra Slurm launcher: one array task per trial. Copy into configs/hydra/launcher/lyra.yaml;
+# `pixi run lyra submit <overrides>` selects it. Override per study, e.g. hydra.launcher.timeout_min=90.
+defaults:
+  - submitit_slurm
+
+account: rgl
+partition: rtx6000        # rtx6000 (default, RTX PRO 6000 96 GB) | b200 (B200: largest models, FP64, or a measured speedup)
+qos: normal               # normal (3 d) | long (7 d)
+timeout_min: 60           # set from a measured trial: about 1.3x its wall time
+nodes: 1
+tasks_per_node: 1
+gpus_per_node: 1
+cpus_per_task: 8          # rtx6000 nodes: 128 cores for 8 GPUs; b200 nodes: 96 for 8
+array_parallelism: 16
+name: ${oc.select:run.name,${hydra.job.name}}   # the run name when the config has one
+submitit_folder: ${hydra.sweep.dir}/.submitit/%j

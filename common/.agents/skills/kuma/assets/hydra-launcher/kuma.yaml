@@ -13,5 +13,5 @@ tasks_per_node: 1
 gpus_per_node: 1
 cpus_per_task: 8          # l40s <= 8 per GPU, h100 <= 16; memory is 5.9 GB per core
 array_parallelism: 16
-name: ${run.name}
+name: ${oc.select:run.name,${hydra.job.name}}   # the run name when the config has one
 submitit_folder: ${hydra.sweep.dir}/.submitit/%j
