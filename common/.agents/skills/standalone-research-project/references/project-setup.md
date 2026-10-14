@@ -35,7 +35,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.8.0" }
+cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.9.0" }
 
 [activation.env]
 PYTHONPATH = "."
