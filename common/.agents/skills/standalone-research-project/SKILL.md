@@ -45,7 +45,7 @@ evolving evidence, collect the user's comments, and hold the reviewed findings.
    approximations that may change the scientific meaning.
 8. **Document the method like a paper.** Every direction report explains its
    method well enough for an expert to reimplement it, with the figures a paper
-   would have. An independent review enforces this (see "Finishing a turn").
+   would have. Before finishing, you review it against the rubric (see "Finishing a turn").
 
 ## Where the details are
 
@@ -59,7 +59,7 @@ self-contained.
 | write or revise a direction report's Abstract, Background, or Methods | [references/writing-methods.md](references/writing-methods.md), and once per project [references/example-methods.md](references/example-methods.md) |
 | hand off work that changed the setup, evidence, or reports | [references/checklist.md](references/checklist.md) |
 
-The review rubric the Stop hook applies is
+The rubric you review a direction report against is
 [references/review.md](references/review.md).
 
 ## Project layout
@@ -80,7 +80,7 @@ project/
 │   ├── report.md               # the overview, served at /
 │   └── <slug>/report.md        # one report per research direction, served at /<slug>/
 ├── cairn-report.toml           # Copy preamble; optional style and hub settings
-└── generated/                  # build output and reviews, git-ignored
+└── generated/                  # build output and gate state, git-ignored
 ```
 
 Copy bundled assets by content and make the copies owner-writable (`install -m
@@ -147,6 +147,11 @@ study, with agreed checks, metrics, tolerances, and failure cases. Do not start
 systematic tuning, large multiruns, or expensive scaling until the user has
 seen the evidence and the method has passed this gate.
 
+**Leave the user's machine usable.** Runs on the user's own computer use at
+most half its cores unless the user asks for more: cap worker processes and
+library threads (`OMP_NUM_THREADS`, `torch.set_num_threads`) in config, and size
+a feasibility study to the budget the user gave. Larger work goes to a cluster.
+
 **Perceptual blind spots.** When the user reports an effect that inspection or
 metrics miss (temporal instability, localized artifacts, high-frequency
 structure), preserve the original outputs, add a visualization that isolates
@@ -198,25 +203,23 @@ Report change:
 ## Finishing a turn
 
 The skill's Stop hook runs `scripts/report_gate.py` whenever you try to finish.
-It does nothing unless a report's sources changed since it last passed. Then it
-blocks until:
+It does nothing unless a report's sources changed since it last passed. Then:
 
-1. the changed reports are rebuilt; and
-2. each changed direction report passed an independent review: a fresh,
-   read-only `claude -p` session reads only the built report, its figures, and
-   the configs, and answers the items of
-   [references/review.md](references/review.md).
+1. it blocks until the changed reports are rebuilt;
+2. once, it sends you back to review each changed direction report yourself
+   against [references/review.md](references/review.md): re-read the built
+   report and its Methods figures, fix every failed item in the sources, and
+   rebuild.
 
-A block returns the failed items with a quote and a fix. Fix the report
-sources, not the reviewer's wording; never pad a section to pass an item. When
-you are sure an item is wrong, tell the user which one and why. After three
-blocks in a row the gate lets you stop and shows the user what is still open.
+Fix the problem, never pad a section to pass an item. When you finish, tell the
+user which items, if any, you left open and why. After three blocks in a row
+the gate lets you stop and shows the user what is still open.
 
 ## Handoff
 
 The handoff states what changed or was learned, what validation supports it,
 and what could still limit the conclusion. Distinguish smoke tests and proxies
 from evidence. Give exact commands for reproducing experiments, rebuilding the
-reports, and hosting them, the concrete URLs, and any review items you disputed.
+reports, and hosting them, the concrete URLs, and any review items you left open.
 Say that comments reach the agent through the page's Copy button and that
 reviewed findings live in the reports' finding blocks.

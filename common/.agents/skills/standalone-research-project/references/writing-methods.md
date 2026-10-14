@@ -9,9 +9,9 @@ The standard is a well-written paper in the project's field: a reader who knows
 the field, but not this project or its code, understands what the method does,
 why it should work, and how to reimplement it. Write to that standard, not to a
 length: a paper says what the reader needs once, in the order they need it, and
-leaves the rest to the code and configs. An independent reviewer checks every
-changed direction report against [review.md](review.md) before the agent may
-finish (see "The review" below), so know its items before you write.
+leaves the rest to the code and configs. Before you finish, you review every
+changed direction report against [review.md](review.md) (see "The review"
+below), so know its items before you write.
 
 ## The spine
 
@@ -141,16 +141,10 @@ is discussed, and link to it elsewhere instead of repeating it.
 
 ## The review
 
-When the agent finishes a turn in which a direction report's sources changed,
-the skill's Stop hook (`scripts/report_gate.py`) checks that the report was
-rebuilt. It then has the built report
-reviewed by a fresh, read-only `claude -p` session, against
-[review.md](review.md). A failed item blocks the stop and comes back with a
-quote and a fix. Fix the report sources, rebuild, and finish again; only
-changed reports are reviewed again. To see a review before finishing, run
-`python3 ~/.claude/skills/standalone-research-project/scripts/report_gate.py --review <slug>`
-in the project.
-
-Fix what the reviewer found, not the reviewer's wording: never pad a section
-to satisfy an item. When you are sure an item is wrong, tell the user which one
-and why, instead of rewriting the report to pass it.
+When you finish a turn in which a direction report's sources changed, the
+skill's Stop hook (`scripts/report_gate.py`) checks that the report was rebuilt
+and then sends you back once to review it against [review.md](review.md). Read
+the built report as its reader would, decide each item, fix what fails in the
+sources, and rebuild. Fix the problem, not the wording that revealed it: never
+pad a section to make an item pass, and tell the user which items you left
+open and why.

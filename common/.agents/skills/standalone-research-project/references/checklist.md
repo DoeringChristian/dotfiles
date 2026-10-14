@@ -60,7 +60,7 @@ Reports
 - [ ] Methods states the method as implemented (equations or an algorithm),
       with the figures a paper in the field would have (for a neural network,
       its architecture drawn from the model), and every changed direction
-      report passed the independent review; disputed items are in the handoff.
+      report was reviewed against references/review.md; items left open are in the handoff.
 - [ ] Background and related work comes from a literature and prior-art
       search with linked sources, and overlapping prior art is flagged in
       `prior-art` callouts.
