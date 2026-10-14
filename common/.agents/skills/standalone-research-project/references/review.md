@@ -33,7 +33,9 @@ alone.
   forward pass, the update rules or the algorithm, and every stage are there,
   not only named.
 - **R3 explained**: each non-standard component or term says what it does and
-  why it is there; a reader learns what would change without it.
+  why it is there; a reader learns what would change without it. Every named
+  method, component, or quantity uses a term from the literature, cited; a
+  name made up for this project fails the item.
 - **R4 figures**: where a paper in this field would show the model or mechanism
   in a figure, the report has one, it matches the text, and the text says what
   to see in it. Examples: the architecture of a neural network, the

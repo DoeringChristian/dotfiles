@@ -45,7 +45,9 @@ evolving evidence, collect the user's comments, and hold the reviewed findings.
    approximations that may change the scientific meaning.
 8. **Document the method like a paper.** Every direction report explains its
    method well enough for an expert to reimplement it, with the figures a paper
-   would have. Before finishing, you review it against the rubric (see "Finishing a turn").
+   would have, in the field's established terms: never invent names for
+   concepts no paper has named. Before finishing, you review it against the
+   rubric (see "Finishing a turn").
 
 ## Where the details are
 
@@ -57,6 +59,7 @@ self-contained.
 | create a project, change its environment, Hydra configs, run bookkeeping, or logging; run on a cluster; plan a parameter study | [references/project-setup.md](references/project-setup.md) |
 | create, restructure, build, host, or share reports; handle comments | [references/reports.md](references/reports.md) |
 | write or revise a direction report's Abstract, Background, or Methods | [references/writing-methods.md](references/writing-methods.md), and once per project [references/example-methods.md](references/example-methods.md) |
+| write Mitsuba integrators, scenes, or other plugins | [references/mitsuba.md](references/mitsuba.md) |
 | hand off work that changed the setup, evidence, or reports | [references/checklist.md](references/checklist.md) |
 
 The rubric you review a direction report against is
@@ -131,6 +134,32 @@ from a shared config, not derived from each run's own data. Change a
 visualization only when the analytical question changes, say why in the report,
 and never switch chart types because one representation flatters the preferred
 method.
+
+**Stay inside the framework's ecosystem.** Build the method from the
+framework's own abstractions and extension points, so it composes with the
+framework's tools, baselines, and other people's code, instead of a parallel
+structure beside them:
+
+- **Mitsuba / Dr.Jit:** implement a rendering method as a Mitsuba plugin (an
+  integrator, BSDF, emitter, sensor, or texture, registered with
+  `mi.register_*` and selected in the scene or config). Render with
+  `mi.render`, differentiate with Dr.Jit's autodiff and `mi.ad` integrators,
+  optimize scene parameters through `mi.traverse` and `mi.ad.Adam`, and write
+  array code with `dr.*` operations and symbolic loops, not Python loops over
+  samples or NumPy round trips. Integrators have two constructors (Mitsuba
+  properties and a direct signature for Hydra) and scenes come from constructor
+  functions: see [references/mitsuba.md](references/mitsuba.md).
+- **PyTorch:** models and learned components are `nn.Module`s with their
+  parameters registered, losses use `torch.nn.functional` or loss modules, data
+  comes through `Dataset` and `DataLoader`, and training uses `torch.optim` and
+  its schedulers. Do not keep parameters in hand-made lists or write your own
+  optimizer step.
+- **Any other framework:** find its equivalent (a JAX/Flax module, a
+  scikit-learn estimator, a solver library's problem class) before writing one.
+
+Leave the framework only where it cannot express the method, and say so in
+Methods. A baseline reimplemented outside the framework is not a faithful
+adaptation.
 
 **Build diagnostics with Matplotlib.** Write reusable functions that take
 explicit data and return a `Figure`, with units, labels, legends, and colorbars

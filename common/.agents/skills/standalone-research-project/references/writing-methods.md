@@ -92,6 +92,17 @@ see in it:
 Do not draw the report or run tooling, a linear chain of protocol steps (write
 it as a numbered list), or a restatement of a table or of the text above it.
 
+## Terminology
+
+Use the field's established terms, and only those. Give a method, component,
+quantity, or effect a name only when an existing paper uses that name for the
+same thing, and cite that paper where the term first appears. Do not invent
+words, names, acronyms, or labels for your own constructs, and do not turn a
+config key or code identifier into a term in the prose. Describe a new thing
+plainly instead ("the residual over pairs that cross a boundary", not "the
+boundary leak score") and use the same description every time. If the
+description is too long to repeat, define a symbol for it in Methods.
+
 ## Background and related work
 
 **Related work is researched, not recalled.** Before the method is settled, and

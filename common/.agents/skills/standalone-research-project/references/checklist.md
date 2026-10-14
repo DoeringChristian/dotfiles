@@ -57,6 +57,9 @@ Reports
 - [ ] Each direction report follows the paper-like spine: Abstract,
       Introduction, Background and related work, Methods, results and
       discussion, Conclusion.
+- [ ] The method and baselines are built from the framework's abstractions
+      (Mitsuba plugins and Dr.Jit autodiff, PyTorch `nn.Module`s and
+      `torch.optim`, ...); any departure is stated in Methods.
 - [ ] Methods states the method as implemented (equations or an algorithm),
       with the figures a paper in the field would have (for a neural network,
       its architecture drawn from the model), and every changed direction
