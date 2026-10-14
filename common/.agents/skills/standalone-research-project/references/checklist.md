@@ -13,9 +13,10 @@ Environment and runs
       `cairn-report` dependency, with no copied or patched tooling in the
       project and style changes only through `cairn-report.toml`.
 - [ ] No experiment-tracking service or custom run database is used.
-- [ ] `experiments/run.py` and `provenance/source_snapshot.py` are copied
-      from the skill's assets as writable files; the logger is imported from
-      `cairn_report.logger`, not copied.
+- [ ] `experiments/run.py` is the thin entry point from the skill's assets;
+      the run bookkeeping, snapshot callback, and logger are imported from
+      cairn-report (`cairn_report.runs`, `cairn_report.snapshot`,
+      `cairn_report.logger`), not copied.
 - [ ] Every run has `.hydra/` configs, `run.json` (the single completion
       contract), and bounded `provenance/`; only `completed` runs count as
       evidence, and a failed snapshot fails the run.

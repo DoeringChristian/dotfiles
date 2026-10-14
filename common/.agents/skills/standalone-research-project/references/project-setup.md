@@ -35,7 +35,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.9.0" }
+cairn-report = { git = "https://github.com/DoeringChristian/cairn-report.git", tag = "v0.11.0" }
 
 [activation.env]
 PYTHONPATH = "."
@@ -80,12 +80,12 @@ seed: 0
 hydra:
   callbacks:
     source_snapshot:
-      _target_: provenance.source_snapshot.SourceSnapshotCallback
+      _target_: cairn_report.snapshot.SourceSnapshotCallback
       mode: git                 # git or tree
       source_root: null         # Hydra's original working directory
       capture_runtime: true
     study_completion:           # multirun only: completes the study, moves latest
-      _target_: experiments.run.StudyCompletion
+      _target_: cairn_report.runs.StudyCompletion
   run:
     dir: outputs/${run.name}/${now:%Y-%m-%d_%H-%M-%S}
   sweep:
@@ -135,8 +135,8 @@ Copy bundled assets by content only and make the copies owner-writable (for
 example `install -m 0644 <source> <destination>`): skill directories may come
 from read-only plugin caches, shared installations, or dotfiles mounts.
 
-Copy [`assets/source_snapshot.py`](../assets/source_snapshot.py) into the project as
-`provenance/source_snapshot.py` and register it as shown above. Each Hydra job,
+The snapshot is cairn-report's `cairn_report.snapshot.SourceSnapshotCallback`,
+registered as shown above; import it, never copy it. Each Hydra job,
 including every numbered multirun trial, writes `provenance/` into its own run
 directory. The callback supports two modes:
 
@@ -170,7 +170,7 @@ later experimental failure still retains its initial source and runtime state.
 ### `latest` links
 
 `outputs/<run-name>/latest` is a relative symlink to the newest completed run of
-that name, replaced atomically by `experiments/run.py`. A failed or interrupted
+that name, replaced atomically by the entry point (`run_experiment`). A failed or interrupted
 run stays on disk for diagnosis and never moves `latest`. In a multirun, trials
 never touch it; the `StudyCompletion` callback writes the study root's
 `run.json` after the last trial and moves `latest` to the study only when every
@@ -193,13 +193,17 @@ class Experiment(ABC):
         """Execute the experiment and write its evidence to output_dir."""
 ```
 
-Copy [`assets/run.py`](../assets/run.py) unchanged into the project as
-`experiments/run.py`; it is the entry point. It writes `run.json` as `running`,
-calls `require_snapshot` (Hydra reports callback errors only as warnings, so
-this is what makes a snapshot failure fail the run), instantiates the configured
-`Experiment`, passes it the Hydra run directory, records `completed` or `failed`
-with the traceback, and moves `latest`. It validates run names and knows nothing
-experiment-specific; put project logic in `Experiment` subclasses.
+Copy [`assets/run.py`](../assets/run.py) into the project as
+`experiments/run.py`; it is the entry point, a few lines around cairn-report's
+`run_experiment(cfg, Experiment)`. That function writes `run.json` as
+`running`, requires the source snapshot (Hydra reports callback errors only as
+warnings, so this is what makes a snapshot failure fail the run), instantiates
+the configured `Experiment`, passes it the Hydra run directory, records
+`completed` or `failed` with the traceback, and moves `latest`. It validates run
+names and knows nothing experiment-specific; put project logic in `Experiment`
+subclasses. The run bookkeeping (`run.json`, `latest`, `StudyCompletion`, the
+snapshot) lives in the pinned cairn-report (`cairn_report.runs`,
+`cairn_report.snapshot`); import it, never copy or patch it.
 
 ### Log run evidence through `RunLogger`
 
@@ -219,7 +223,8 @@ log.json("per_class", scores)                # structured result
 log.figure("error_histogram", error_histogram, errors)   # pass the plot function
 log.plotly("running_rmse", spec)
 log.image("reconstruction", array)
-log.artifact("model", checkpoint_path)      # models, animations, archives
+log.video("optimization", frames, fps=30)    # T×H×W[×C] frames or a file; needs cairn-report[video]
+log.artifact("model", checkpoint_path)      # models, archives
 log.text("solver", solver_log)
 ```
 
@@ -281,7 +286,7 @@ Clusters bill every allocated GPU-hour whether or not it is used.
 Nothing in the run record changes on a cluster: `run.json`, snapshots, `latest`,
 and `StudyCompletion` behave exactly as for local runs, and every trial is a
 Slurm job. When a launcher died, `pixi run <cluster> finalize <study-dir>`
-writes the study's `run.json` by `StudyCompletion`'s rule once the trials have
+(or `pixi run cairn-report finalize-study <study-dir>`) writes the study's `run.json` by `StudyCompletion`'s rule once the trials have
 left the queue. Commit before pushing runs a report will cite; uncommitted
 changes are recorded as a patch. Reports are built locally from pulled runs
 (`pixi run <cluster> pull`), or from the hub. With a hub configured, `submit`

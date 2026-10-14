@@ -201,8 +201,11 @@ Markdown top to bottom, and its `##` headings form the section navigation.
   values, because a changed number would change the id and break links to the
   finding.
 - **Figures** are Markdown images, `![Title](path "Caption"){#fig-id}`; a
-  paragraph of only images becomes a figure grid, and a `.plotly.json` file an
-  interactive Plotly figure. Matplotlib figures created in `python exec` blocks
+  paragraph of only images becomes a figure grid, a `.plotly.json` file an
+  interactive Plotly figure, and a video (`.mp4`, `.webm`, `.mov`) a video card
+  that plays on screen and opens in a player with frame steps and scrubbing.
+  Use a video for behavior over time (an optimization, a rollout, temporal
+  artifacts), not for what one still image shows. Matplotlib figures created in `python exec` blocks
   become figure cards too (`num="<slug>"` gives a stable `fig-<slug>` id).
 - **Diagrams** are Graphviz fences, and only where they explain structure (see
   Diagrams); **cross-report links** use `report:`; the

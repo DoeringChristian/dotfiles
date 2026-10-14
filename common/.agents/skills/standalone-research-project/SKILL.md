@@ -74,9 +74,8 @@ project/
 ├── <concept>/                  # project code, flat imports
 ├── experiments/
 │   ├── base.py                 # Experiment interface
-│   ├── run.py                  # from assets/run.py: entry point and run bookkeeping
+│   ├── run.py                  # from assets/run.py: the entry point (run bookkeeping is in cairn-report)
 │   ├── cluster.sh, finalize_study.py, clusters/<cluster>.sh   # from the slurm and cluster skills
-├── provenance/source_snapshot.py   # from assets/source_snapshot.py
 ├── outputs/<run-name>/<timestamp>/ # one run or study; latest -> newest completed
 ├── tools/model_graph.py        # from assets/model_graph.py, for neural-network projects
 ├── reports/                    # report content only
@@ -100,7 +99,7 @@ Copy this checklist into your reply and tick it off:
 Project setup:
 - [ ] Read references/project-setup.md and references/reports.md
 - [ ] pixi.toml with the pinned cairn-report and the report tasks; pixi install
-- [ ] Hydra configs, experiments/run.py, provenance/source_snapshot.py, Experiment base
+- [ ] Hydra configs (with cairn-report's run callbacks), experiments/run.py, Experiment base
 - [ ] Cluster files from the slurm skill and each cluster's skill
 - [ ] reports/ from assets/reports, and cairn-report.toml
 - [ ] git init and commit the scaffold
