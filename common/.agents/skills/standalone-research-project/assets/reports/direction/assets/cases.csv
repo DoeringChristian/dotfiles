@@ -1,4 +1,4 @@
-case,boundary_residual,reference_residual,stable
+case,boundary_residual,global_residual,stable
 case-00,0.0615,0.1294,true
 case-01,0.0689,0.1491,true
 case-02,0.0728,0.1422,true

@@ -1,6 +1,6 @@
 ---
 title: Lattice reconstruction project
-subtitle: Project overview · template example
+subtitle: Project overview
 status: Feasibility in progress
 ---
 
@@ -26,8 +26,10 @@ Keep it short and stable; it changes only when the project's goal changes.
 The project aims to reconstruct lattice structure robustly from noisy
 measurements: recovered geometry must stay accurate near boundaries without
 introducing temporal artifacts. Every research direction proposes one way to
-get closer to that target and is judged by the same criteria, the boundary
-residual against a data-only reference and the absence of visible flicker.
+get closer to that target and is judged by the same two criteria: the boundary
+residual (the reconstruction error against the ground truth on sites near
+boundaries) and flicker (frame-to-frame fluctuation of the reconstruction that
+the ground truth does not have).
 
 ## Status
 
@@ -44,22 +46,22 @@ do state here (a rate, a breaking point, a comparison) comes from a {{ }} value
 computed from run files or becomes a link to the finding; never type it.
 -->
 
-One direction is under way. [Local fitting](report:local-fitting) lowers the
+One direction is under way. [Boundary-aware smoothing](report:boundary-aware) lowers the
 boundary residual
-([main finding](report:local-fitting#finding-local-fitting-improves-edge-alignment)),
-but a temporal artifact is not yet calibrated, so no direction is ready for
+([main finding](report:boundary-aware#finding-boundary-aware-smoothing-lowers-the-boundary-residual)),
+but its flicker score is not yet calibrated, so no direction is ready for
 tuning.
 
 !!! decision "Next decision"
-    Calibrate the temporal artifact score before choosing between directions or
+    Calibrate the flicker score before choosing between directions or
     starting any parameter study.
 
 Proposed directions:
 
 - **Spike-robust preprocessing**: remove impulsive outliers before fitting; worth
-  starting if the edge cases left by local fitting turn out to be outlier-driven.
+  starting if the edge cases left by boundary-aware smoothing turn out to be outlier-driven.
 - **Learned boundary prior**: replace the hand-set smoothness weight; worth
-  starting only once a calibrated artifact score exists.
+  starting only once a calibrated flicker score exists.
 
 ## Research directions
 

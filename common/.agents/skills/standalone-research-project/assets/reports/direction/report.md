@@ -1,22 +1,37 @@
 ---
-title: Lattice reconstruction study
-subtitle: Running feasibility report · template example
+title: Boundary-aware smoothing
+subtitle: Feasibility study
 status: Feasibility in progress
 # summary: one to three sentences (at most 400 characters) for the overview card.
 # Quote results as {{ }} values; they are computed after the report's code ran.
 summary: >-
-  Local smoothness near boundaries ends at a residual of {{ proposed[-1]:.3f }},
-  {{ gain:.0%}} below data-only fitting; {{ unstable }} edge cases stay
-  unresolved, so tuning waits.
+  With the true boundaries known, smoothing that skips boundary edges ends at a
+  boundary residual of {{ proposed[-1]:.3f }}, {{ gain:.0%}} below global
+  smoothing; {{ unstable }} of {{ len(cases) }} sequences still flicker, so
+  tuning waits for a calibrated flicker score.
 ---
 
+<!--
+This sample direction exercises every report component. Replace its content,
+summary, and assets/ with the direction's own material; keep the spine
+(Abstract first, Conclusion last). How to write each section is in the skill's
+references/writing-methods.md, with a worked Methods example in
+references/example-methods.md.
+-->
+
 ```python exec hide
+import statistics
+
 trace = read_json(REPORT_ROOT / "assets" / "interactive.plotly.json")
-proposed, reference = trace["data"][0]["y"], trace["data"][1]["y"]
+proposed, baseline = trace["data"][0]["y"], trace["data"][1]["y"]
 cases = read_csv(REPORT_ROOT / "assets" / "cases.csv")
+ours = [float(row["boundary_residual"]) for row in cases]
+theirs = [float(row["global_residual"]) for row in cases]
 stable = sum(row["stable"] == "true" for row in cases)
 unstable = len(cases) - stable
-gain = 1 - proposed[-1] / reference[-1]
+wins = sum(a < b for a, b in zip(ours, theirs))
+gain = 1 - proposed[-1] / baseline[-1]
+quartiles = statistics.quantiles(ours, n=4)
 ```
 
 ## Abstract
@@ -27,16 +42,18 @@ important qualification, and current decision. The front matter `summary` is a
 shorter version of this for the overview; update both together.
 -->
 
-This feasibility study asks whether adding local smoothness improves lattice
-reconstruction relative to data-only fitting. The proposed method lowers final
-residual while preserving most evaluated cases, but a high-frequency failure is
-not yet perceptually calibrated. The evidence supports continued diagnosis, not
-parameter tuning.
+Smoothing a noisy lattice removes noise but blurs its boundaries. This
+feasibility study tests the classic remedy, a smoothness penalty that skips the
+neighbour pairs crossing a boundary, against smoothing everywhere. With the
+boundaries taken from the ground truth, it lowers the reconstruction error near
+boundaries in {{ wins }} of {{ len(cases) }} synthetic sequences, but
+{{ unstable }} sequences flicker in a way the evaluation cannot yet score
+reliably, so the method is not ready for tuning. Whether the gain survives
+estimated boundaries is untested.
 
 ```python exec hide
-metric("Proposed final residual", proposed[-1], f"{gain:.0%} lower than the reference over the full trace", fmt=".3f")
-metric("Stable evaluated cases", f"{stable} / {len(cases)}", f"{unstable} edge cases remain unresolved")
-metric("Feasibility verdict", "Promising", "Proposed local fitting; not yet tuned")
+metric("Boundary residual, boundary-aware smoothing", proposed[-1], f"{gain:.0%} lower than global smoothing; lower is better; mean over {len(cases)} sequences", fmt=".3f")
+metric("Sequences without flicker", f"{stable} / {len(cases)}", "flicker-band energy at most that of global smoothing")
 ```
 
 ## Introduction
@@ -48,11 +65,13 @@ direction contributes to it: its research question, scope, motivation, and why
 this comparison matters for the shared target.
 -->
 
-Within the [project target](report:/#introduction), this direction
-evaluates whether a localized regularizer improves edge alignment
-without introducing unacceptable temporal artifacts. It is deliberately bounded
-to representative and edge cases so the method can pass a feasibility gate
-before systematic tuning.
+Global smoothing is the standard way to suppress noise, and it fails the
+[project target](report:/#introduction) where the target is strictest: it blurs
+boundaries. This direction asks how much of that error disappears when the
+smoothing knows where the boundaries are. It uses the true boundaries, so the
+answer is an upper bound on what boundary-aware smoothing can gain, measured on
+a bounded set of representative and edge-case sequences before any parameter
+study.
 
 ## Background and related work
 
@@ -61,93 +80,73 @@ Background and related work: fill from a literature and prior-art search (a
 research subagent when available), with linked sources and links to related
 direction reports. Flag any existing version of the idea in a `prior-art`
 callout and say what remains new. Then define every method, baseline, and
-variant in a table whose first column is `Method` (What it does / Difference
-from baseline / Held constant) before results use their names.
+variant in a table whose first column is `Method` before results use their
+names.
 -->
 
-Gradient-penalty smoothness is a standard regularizer (Tikhonov regularization;
-total-variation methods are its edge-preserving relative). This study tests only
-whether applying it *locally near boundaries* helps lattice reconstruction.
+A quadratic penalty on differences between neighbouring values is Tikhonov
+regularization. Stopping the smoothing at edges is the idea of the line process
+of [Geman and Geman (1984)](https://doi.org/10.1109/TPAMI.1984.4767596), which
+infers binary boundary variables that switch the smoothness term off, and of
+the anisotropic diffusion of
+[Perona and Malik (1990)](https://doi.org/10.1109/34.56205), which lowers the
+diffusion coefficient where the gradient is large.
 
-!!! prior-art "Close prior work: spatially adaptive regularization"
-    Spatially varying regularization weights are well established in image
-    reconstruction. This example treats the idea as a replication target, not
-    a novel contribution. In a real project, cite the closest sources here with
-    links, and state what (if anything) the proposed variant adds.
+!!! prior-art "Close prior work: line processes and edge-stopping diffusion"
+    Both papers already smooth within regions and not across boundaries. This
+    direction is a replication on lattice sequences with known boundaries; what
+    it adds is the measurement of flicker, which per-image methods do not
+    consider.
 
-The reference and proposed method use the same evidence and evaluation. The
-comparison isolates one modeling change:
-
-| Method | What it does | Difference from baseline | Held constant |
+| Method | What it does | Difference from global smoothing | Held constant |
 | --- | --- | --- | --- |
-| Reference | Fits the data term without local smoothness | Baseline | Inputs, initialization, optimizer, and evaluation |
-| Local fitting (proposed) | Adds a local smoothness penalty near boundaries | Adds $\lambda \lVert \nabla \theta \rVert_2^2$ | Inputs, initialization, optimizer, and evaluation |
+| Global smoothing | Penalizes the difference across every neighbour pair | Baseline | Observations, $\lambda$, solver, evaluation |
+| Boundary-aware smoothing (proposed) | Penalizes the difference across every neighbour pair except those crossing a boundary | Boundary pairs unpenalized | Observations, $\lambda$, solver, evaluation |
 
 ## Methods
 
 <!--
-Methods: a paper-ready explanation of the method, then the experimental design.
-A reader who knows the field but not this project must be able to understand
-what the method does, why it should work, and reimplement it from this section
-alone. Keep the six subsections below, define every symbol once, explain every
-term of every equation in words, and illustrate each non-obvious concept with a
-figure computed from the project's own code. The report check fails when the
-subsections are missing, Methods has fewer than 400 words, no display equation
-or algorithm, or fewer than two figures.
+Methods: the method as implemented, then the experimental design, to the
+standard of a good paper in the field: problem and notation first, the method
+stated as equations or an algorithm, why it should work, the baselines in the
+same notation, the settings that matter, and the design. Use the figures a paper
+would have, computed with the project's own code.
 -->
 
-### Problem setup
+### Problem
 
-<!--
-Problem setup: inputs, outputs, unknowns, and notation. Every symbol used later
-is defined here, once.
--->
+Each sequence has $T$ frames. In frame $t$ we observe a noisy lattice
+$y_t = \theta^\star_t + \varepsilon_t \in \mathbb{R}^{n}$ (one value per site),
+where $\theta^\star_t$ is the ground truth, piecewise smooth with known
+boundaries, and $\varepsilon_t$ is independent Gaussian noise of standard
+deviation $\sigma$. Each frame is reconstructed separately. A frame is an $H \times W$
+grid with $n = HW$ sites, and its neighbour pairs $P$ are the horizontally and
+vertically adjacent sites. $D \in \mathbb{R}^{|P| \times n}$ has one row per
+pair $(i, j)$, $(D\theta)_{(i,j)} = \theta_j - \theta_i$, and the mask $m \in
+\{0, 1\}^{|P|}$ is $0$ for the pairs that cross a boundary and $1$ for all
+others; $M = \mathrm{diag}(m)$.
 
-We observe a noisy lattice $y \in \mathbb{R}^{n}$ (one value per site) and want
-the clean lattice $\theta \in \mathbb{R}^{n}$. A known binary mask
-$m \in \{0, 1\}^{n-1}$ marks the neighbouring site pairs that lie near a
-boundary; $D \in \mathbb{R}^{(n-1) \times n}$ is the forward-difference
-operator, so $(D\theta)_i = \theta_{i+1} - \theta_i$, and $M = \mathrm{diag}(m)$.
-Reconstruction quality is the boundary residual: the error of $\theta$ against
-the reference, measured only on masked sites.
+### Boundary-aware smoothing
 
-### Method
-
-<!--
-Method: the method step by step with its equations; explain what every term
-does, why it is there, and what changes without it. Add an algorithm when the
-method is iterative or has stages.
--->
-
-The proposed method minimises
+The reconstruction of a frame minimizes
 
 $$
-L(\theta) = \lVert \theta - y \rVert_2^2 + \lambda \lVert M D \theta \rVert_2^2 .
+L(\theta) = \lVert \theta - y \rVert_2^2 + \lambda \lVert M D \theta \rVert_2^2 ,
 $$
 
-The first term, the data term, keeps $\theta$ close to the observations; alone
-it returns $\theta = y$, noise included. The second term penalises differences
-between neighbouring sites, but only where $m$ is one: near boundaries it pulls
-neighbours together and removes noise, elsewhere it does nothing, so detail away
-from boundaries is untouched. The weight $\lambda \geq 0$ trades the two:
-$\lambda = 0$ is the data-only reference, and large $\lambda$ flattens the
-masked region. Because both terms are quadratic, the minimiser solves one
-linear system:
-
-1. Build $D$ and $M$ from the lattice size and the boundary mask.
-2. Form $A = I + \lambda D^{\top} M D$, which is symmetric and positive
-   definite for every $\lambda \geq 0$.
-3. Solve $A \theta = y$ (a sparse Cholesky factorisation for large lattices).
-
-The figure below shows the effect on a one-dimensional slice. Outside the masked
-band the fit equals the data. Inside it the noise is removed, but the step at
-the boundary is smeared over the band as well: the penalty cannot tell noise
-from a real jump, which is the failure discussed under "Why it works".
+with weight $\lambda > 0$. The data term keeps $\theta$ close to the
+observations; the penalty pulls neighbouring values together. Because the mask
+removes exactly the pairs that cross a boundary, the two sides of a boundary are
+smoothed independently and the step between them stays sharp. Global smoothing
+is the same objective with $M = I$. Both terms are quadratic, so the minimizer
+solves $(I + \lambda D^{\top} M D)\,\theta = y$, a symmetric positive definite
+system, by conjugate gradients from $\theta = y$ until the relative residual is
+below $10^{-6}$.
 
 ```python exec hide
 # In a project, import the method from its own code here (for example
-# `from reconstruction.local import solve`) instead of re-implementing it, so
-# the figure shows what the code does. The sample has no project code.
+# `from reconstruction.smoothing import solve`) instead of re-implementing it,
+# so the figure shows what the code does. The sample has no project code.
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -155,87 +154,56 @@ rng = np.random.default_rng(0)
 x = np.linspace(0, 1, 120)
 clean = np.where(x < 0.5, 0.2, 0.8)
 y = clean + rng.normal(0, 0.06, x.size)
-mask = (np.abs(x[:-1] - 0.5) < 0.18).astype(float)
 D = np.diff(np.eye(x.size), axis=0)
-theta = np.linalg.solve(np.eye(x.size) + 25.0 * D.T @ np.diag(mask) @ D, y)
+crossing = np.abs(np.diff(clean)) > 0
+solve = lambda mask: np.linalg.solve(np.eye(x.size) + 25.0 * D.T @ np.diag(mask) @ D, y)
 
-figure, axis = plt.subplots(figsize=(7, 2.8), num="masked-smoothing")
-axis.axvspan(0.32, 0.68, color="#dcebe5", label="masked band (m = 1)")
-axis.plot(x, y, ".", color="#9aa59e", markersize=3, label="observations y (= data-only fit)")
-axis.plot(x, theta, color="#176b5b", linewidth=2, label="proposed θ")
-axis.plot(x, clean, "--", color="#202621", linewidth=1, label="clean lattice")
-axis.set(xlabel="site position", ylabel="value", title="Masked smoothing on a 1-D slice")
+figure, axis = plt.subplots(figsize=(7, 2.8), num="boundary-aware-smoothing")
+axis.plot(x, y, ".", color="#9aa59e", markersize=3, label="observations y")
+axis.plot(x, solve(np.ones(x.size - 1)), color="#b56231", linewidth=1.5, label="global smoothing")
+axis.plot(x, solve((~crossing).astype(float)), color="#176b5b", linewidth=2, label="boundary-aware smoothing")
+axis.plot(x, clean, "--", color="#202621", linewidth=1, label="ground truth θ*")
+axis.set(xlabel="site position", ylabel="value", title="Smoothing across a boundary on a 1-D slice")
 axis.legend(fontsize=7, loc="upper left", frameon=False)
+caption("With the same λ, global smoothing spreads the step over many sites; skipping the one pair that crosses the boundary keeps it sharp while removing the noise on both sides.")
 ```
 
-### Why it works
+The figure shows the difference on a one-dimensional slice with a single
+boundary: away from the boundary the two methods agree, and at the boundary
+only global smoothing spreads the step.
 
-<!--
-Why it works: intuition, assumptions, and where the method should fail; tie
-each assumption to the finding or experiment that tests it.
--->
+### Why it should work
 
-Noise near boundaries is independent between neighbouring sites, while the
-clean lattice varies slowly inside the masked band; penalising neighbour
-differences there removes the first and keeps the second. The method assumes
-that the mask is correct and that the band is narrow relative to the structure
-it protects. A boundary that falls inside the band is blurred, which is the
-failure the edge-case finding tracks, and a mask that misses a boundary leaves
-its noise in place.
-
-### Relation to the baselines
-
-<!--
-Relation to the baselines: each baseline in the same notation, so every
-difference is one term, step, or setting.
--->
-
-The graph maps each term of the objective to the variables it depends on. Both
-methods fit the lattice θ to the observations y through the same data term; the
-proposed method adds only the smoothness term, which reads θ inside the
-boundary mask m. Any difference between the two methods therefore comes from
-the masked region.
-
-```dot id=fig-model title="The model as a graph" caption="Variables are ellipses, objective terms boxes; the dashed term is the only addition of the proposed method."
-digraph {
-  rankdir=LR
-  node [shape=ellipse]
-  y [label="y (observations)"]
-  theta [label="θ (lattice)"]
-  m [label="m (boundary mask)"]
-  node [shape=box]
-  data [label="L_data(θ; y)"]
-  smooth [label="λ‖MDθ‖²" style=dashed]
-  loss [label="L(θ)"]
-  y -> data; theta -> data; theta -> smooth; m -> smooth
-  data -> loss; smooth -> loss [label="proposed only"]
-}
-```
-
-### Implementation
-
-<!--
-Implementation: choices that affect results (discretization, initialization,
-how hyperparameters were chosen, numerical safeguards, cost).
--->
-
-The linear system is solved directly, so there is no initialisation or stopping
-rule to tune. The weight $\lambda$ is chosen on a held-out validation lattice,
-never on the evaluated cases; the mask is computed from the reference geometry
-and is identical for both methods. The cost is one sparse factorisation per
-lattice.
+Inside a region the ground truth varies slowly while the noise is independent
+between neighbours, so penalizing neighbour differences removes mostly noise.
+Across a boundary the difference is mostly signal, and penalizing it is what
+blurs the step; leaving those pairs out removes the blur without giving up the
+denoising. The argument assumes that the mask is right: a missed boundary is
+blurred as under global smoothing, and a spurious one leaves its pair noisy.
+The sample uses the true boundaries, so it measures the gain when this
+assumption holds. Each frame is reconstructed separately, so independent
+noise in consecutive frames leaves slightly different reconstructions; this
+is the possible source of flicker, measured below.
 
 ### Experimental design
 
-<!--
-Experimental design: data and split, seeds, budget, protocol, the fairness
-boundary, and the contrast behind each causal claim.
--->
+The {{ len(cases) }} evaluated sequences come from one synthetic generator:
+$64 \times 64$ frames, $T = 32$ frames per sequence, two to five polygonal
+regions per sequence, each with a linear ramp inside, whose boundaries move by
+at most one site per frame, and noise with $\sigma = 0.06$; every sequence has
+its own seed. Four of them are edge cases with regions narrower than three
+sites, where the smoothing has little within-region support. Both methods use
+the same $\lambda = 25$, chosen from $\{1, 3, 10, 25, 50, 100\}$ by the
+boundary residual of global smoothing on a held-out validation sequence, so the
+comparison isolates the mask and, if anything, favours the baseline. Two measures are reported for
+each sequence:
 
-Both methods run on the same twenty evaluated cases with the same observations,
-mask, and evaluation; the only difference is $\lambda$ (zero for the reference),
-so the contrast between them isolates the smoothness term. This research
-direction lives in `reports/<slug>/`; every number below is computed from files.
+1. The **boundary residual**: the root-mean-square of $\theta_t - \theta^\star_t$
+   over the sites adjacent to a boundary, averaged over frames.
+2. **Flicker**: the energy of the temporal spectrum of $\theta_t -
+   \theta^\star_t$ in the upper quarter of temporal frequencies, averaged over
+   sites. A sequence counts as stable when this energy is at most that of global
+   smoothing.
 
 ## Findings
 
@@ -243,69 +211,57 @@ direction lives in `reports/<slug>/`; every number below is computed from files.
 Results and discussion sections (Findings, Diagnostics, ... as the question
 needs): `!!! finding <status>` blocks for decision-relevant claims only, with
 a qualitative title (no result numbers: the finding id comes from the title) and
-numbers from run files via {{ }} in the body; supporting figures taken from the runs that
-wrote them; contradictions and limitations stated plainly. Arrange by research
-question, not by the chronology of runs.
+numbers from run files via {{ }} in the body; supporting figures taken from the
+runs that wrote them; contradictions and limitations stated plainly.
 -->
 
-!!! finding supported "Local fitting improves edge alignment"
-    The method ends at a residual of {{ proposed[-1]:.3f }}, against
-    {{ reference[-1]:.3f }} for the reference. The high-frequency failure
-    remains visible in {{ unstable }} of {{ len(cases) }} cases.
+!!! finding supported "Boundary-aware smoothing lowers the boundary residual"
+    With the true boundaries, the mean boundary residual is
+    {{ proposed[-1]:.3f }} against {{ baseline[-1]:.3f }} for global smoothing,
+    {{ gain:.0% }} lower; per sequence it is lower in {{ wins }} of
+    {{ len(cases) }} sequences, with an interquartile range of
+    {{ quartiles[0]:.3f }}–{{ quartiles[2]:.3f }} (scatter plot in
+    [Diagnostics](#diagnostics)).
 
-    Sources: `assets/interactive.plotly.json`, `assets/cases.csv` · Reviewed 2026-10-12
+    Sources: `assets/cases.csv` · Reviewed 2026-10-14
 
-!!! finding tentative "Temporal stability needs calibration"
-    The spectral diagnostic detects the reported flicker, but its perceptual
-    threshold is not calibrated yet.
+!!! finding tentative "Flicker remains in some sequences"
+    {{ unstable }} sequences have more flicker-band energy than global
+    smoothing. Whether that energy is visible has not been calibrated against
+    viewers, so the stability count may over- or understate the problem.
 
-    Sources: `assets/spectrum.svg` · Reviewed 2026-10-12
+    Sources: `assets/spectrum.svg`, `assets/cases.csv` · Reviewed 2026-10-14
 
-!!! question "Synchronization needed"
-    Confirm whether the remaining high-frequency artifact is acceptable before
-    the project proceeds from feasibility testing to parameter tuning.
+!!! question "Is the remaining flicker acceptable?"
+    Confirm whether the flicker in the unstable sequences is acceptable before
+    the project moves from feasibility to parameter tuning.
 
 ## Diagnostics
 
-![Residual across iterations](assets/residual.svg "Optimization improves quickly, then plateaus."){#fig-residual}
-![Temporal spectrum](assets/spectrum.svg "A narrow high-frequency band remains in the proposed method."){#fig-spectrum}
-![Representative image grid](assets/grid.svg "Input, method output, reference, and amplified residual use a stable panel order."){#fig-grid}
-![Interactive optimization trace](assets/interactive.plotly.json "Hover, zoom, pan, or open full-screen."){#fig-interactive}
+The scatter plot backs the first finding and the temporal spectrum the second.
+
+![Representative frame](assets/grid.svg "Observation, boundary-aware smoothing, ground truth, and the amplified residual of one frame."){#fig-grid}
+![Temporal spectrum of the residual](assets/spectrum.svg "The marked band is the flicker band of the stability measure."){#fig-spectrum}
+![Convergence](assets/interactive.plotly.json "Mean boundary residual over the first conjugate-gradient iterations of both methods."){#fig-interactive}
 
 ```python exec hide
 import matplotlib.pyplot as plt
 
 figure = plt.figure(figsize=(7.2, 3.2), num="boundary-residual")
-plt.scatter([float(r["reference_residual"]) for r in cases], [float(r["boundary_residual"]) for r in cases],
-            c=["#176b5b" if r["stable"] == "true" else "#b56231" for r in cases])
-plt.xlabel("Reference residual")
-plt.ylabel("Method residual")
-plt.title("Boundary residual per case")
+plt.scatter(theirs, ours, c=["#176b5b" if r["stable"] == "true" else "#b56231" for r in cases])
+limit = max(theirs + ours) * 1.05
+plt.plot([0, limit], [0, limit], color="#9aa59e", linewidth=1)
+plt.xlabel("Boundary residual, global smoothing")
+plt.ylabel("Boundary residual, boundary-aware")
+plt.title("Boundary residual per sequence")
+caption("Points below the diagonal gain from skipping boundary pairs; orange points flicker.")
 ```
 
-## Evidence tables
+## Limitations
 
-Tables are plain Markdown (GitHub-style pipe tables):
-
-| Question | Evidence | Status |
-| --- | --- | --- |
-| Does the method beat the reference on representative cases? | Residual trace, image grid | supported |
-| Is the remaining high-frequency artifact acceptable? | Temporal spectrum | open |
-| Do the two unresolved edge cases share a cause? | Not yet inspected | open |
-
-Use HTML only where Markdown cannot express the content. A short `html raw`
-fence is inserted as is:
-
-```html raw
-<p class="callout">Short HTML snippets may stay inline. Anything larger lives in its own file.</p>
-```
-
-Larger HTML blocks, such as layouts Markdown cannot express, live in
-the report's `assets/` and are referenced by path:
-
-```html include
-assets/side-by-side.html
-```
+The boundaries are taken from the ground truth, which a real application does
+not have, so the measured gain is an upper bound; an estimated mask fails in
+the two ways described in [Why it should work](#why-it-should-work).
 
 ## Conclusion
 
@@ -315,10 +271,11 @@ decision or experiment. Mirror it in the front matter `summary` and, if it
 changes the project's direction, in the overview's Status section.
 -->
 
-Local fitting is promising because it reduces the measured residual relative to
-the reference, but the unresolved temporal artifact prevents a tuning decision.
-The next work should:
+Skipping the neighbour pairs that cross a boundary lowers the boundary residual
+compared with global smoothing when the boundaries are known. Two questions
+remain before tuning:
 
-1. Calibrate the temporal score with pairwise judgments.
-2. Test the {{ unstable }} unresolved edge cases.
-3. Do not begin tuning until the feasibility review is confirmed.
+1. Calibrate the flicker score with pairwise judgments, and inspect the
+   {{ unstable }} unstable sequences for a shared cause.
+2. Measure the gain with boundaries estimated from the observations, which
+   decides whether the direction is worth pursuing.
