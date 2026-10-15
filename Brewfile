@@ -83,3 +83,6 @@ brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 #     `brew bundle` installs them on Linux too, not just macOS) ---
 cask "kitty"
 cask "tev"
+
+cargo "hyperqueue", source:
+  "https://github.com/It4innovations/hyperqueue?tag=v0.26.2"
