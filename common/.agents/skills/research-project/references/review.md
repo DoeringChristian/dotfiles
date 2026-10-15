@@ -7,7 +7,7 @@ for this review once whenever you finish a turn in which a direction report
 changed.
 
 Read the report as its reader sees it: the built page under
-`generated/reports/<slug>/`, not only the Markdown source. Pretend you have
+`.cairn/build/<slug>/`, not only the Markdown source. Pretend you have
 not seen the code or the conversation. Open every figure that the Methods
 section relies on and look at it.
 
@@ -52,8 +52,9 @@ alone.
   procedure, and how the settings that matter were chosen.
 - **R8 claims**: the abstract and conclusion claim no more than the evidence
   shown supports. Smoke tests and proxies are not presented as evidence, results
-  come only from completed runs, and no result number is typed into the prose
-  where it should be computed from a run (a typed design constant is fine).
+  come only from the report's declared inputs (completed artifact versions), and
+  no result number is typed into the prose where it should be computed from an
+  input (a typed design constant is fine).
 - **R9 concise**: there is no padding, filler, or repetition between sections,
   and the length fits the content.
 

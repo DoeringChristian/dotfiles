@@ -2,18 +2,28 @@
 title: Boundary-aware smoothing
 subtitle: Feasibility study
 status: Feasibility in progress
-# summary: one to three sentences (at most 400 characters) for the overview card.
-# Quote results as {{ }} values; they are computed after the report's code ran.
+# summary: one to three sentences (at most 400 characters) for the project page
+# in the Cairn UI and the report index. Quote results as {{ }} values; they are
+# computed after the report's code ran.
 summary: >-
   With the true boundaries known, smoothing that skips boundary edges ends at a
-  boundary residual of {{ proposed[-1]:.3f }}, {{ gain:.0%}} below global
+  boundary residual of {{ proposed:.3f }}, {{ gain:.0%}} below global
   smoothing; {{ unstable }} of {{ len(cases) }} sequences still flicker, so
   tuning waits for a calibrated flicker score.
+# inputs: every artifact the report reads, by local name. The build pins each
+# reference to an exact version and fails on any read outside this report
+# folder and these inputs. The sample reads the skill's assets/sample-run,
+# published once as the artifact `sample-run` (see project-setup.md). In a
+# project, the result is the draft an experiment wrote (`feasibility-method@latest`)
+# and, for per-step curves, the run behind it is a second input:
+#   run: runs/feasibility-method@latest   then read_series(inputs.run, "loss")
+inputs:
+  result: sample-run@latest
 ---
 
 <!--
 This sample direction exercises every report component. Replace its content,
-summary, and assets/ with the direction's own material; keep the spine
+summary, inputs, and assets/ with the direction's own material; keep the spine
 (Abstract first, Conclusion last). How to write each section is in the skill's
 references/writing-methods.md, with a worked Methods example in
 references/example-methods.md.
@@ -22,15 +32,16 @@ references/example-methods.md.
 ```python exec hide
 import statistics
 
-trace = read_json(REPORT_ROOT / "assets" / "interactive.plotly.json")
-proposed, baseline = trace["data"][0]["y"], trace["data"][1]["y"]
-cases = read_csv(REPORT_ROOT / "assets" / "cases.csv")
+scores = read_scalars(inputs.result)
+proposed = scores["boundary_residual_proposed"]
+baseline = scores["boundary_residual_global"]
+cases = read_csv(inputs.result / "tables" / "cases.csv")
 ours = [float(row["boundary_residual"]) for row in cases]
 theirs = [float(row["global_residual"]) for row in cases]
 stable = sum(row["stable"] == "true" for row in cases)
 unstable = len(cases) - stable
 wins = sum(a < b for a, b in zip(ours, theirs))
-gain = 1 - proposed[-1] / baseline[-1]
+gain = 1 - proposed / baseline
 quartiles = statistics.quantiles(ours, n=4)
 ```
 
@@ -39,7 +50,7 @@ quartiles = statistics.quantiles(ours, n=4)
 <!--
 Abstract: a self-contained summary of the question, approach, principal result,
 important qualification, and current decision. The front matter `summary` is a
-shorter version of this for the overview; update both together.
+shorter version of this for the project page; update both together.
 -->
 
 Smoothing a noisy lattice removes noise but blurs its boundaries. This
@@ -52,22 +63,23 @@ reliably, so the method is not ready for tuning. Whether the gain survives
 estimated boundaries is untested.
 
 ```python exec hide
-metric("Boundary residual, boundary-aware smoothing", proposed[-1], f"{gain:.0%} lower than global smoothing; lower is better; mean over {len(cases)} sequences", fmt=".3f")
+metric("Boundary residual, boundary-aware smoothing", proposed, f"{gain:.0%} lower than global smoothing; lower is better; mean over {len(cases)} sequences", fmt=".3f")
 metric("Sequences without flicker", f"{stable} / {len(cases)}", "flicker-band energy at most that of global smoothing")
 ```
 
 ## Introduction
 
 <!--
-Introduction: link to the project target in the overview
-(report:/#introduction) instead of restating it, then state what this
+Introduction: state the project's shared target in one or two sentences (or
+link the report that defines it, report:<slug>#introduction), then what this
 direction contributes to it: its research question, scope, motivation, and why
-this comparison matters for the shared target.
+this comparison matters for the target.
 -->
 
-Global smoothing is the standard way to suppress noise, and it fails the
-[project target](report:/#introduction) where the target is strictest: it blurs
-boundaries. This direction asks how much of that error disappears when the
+The project reconstructs lattices from noisy measurements and judges every
+method by its error near boundaries and by flicker. Global smoothing is the
+standard way to suppress noise, and it fails that target where it is
+strictest: it blurs boundaries. This direction asks how much of that error disappears when the
 smoothing knows where the boundaries are. It uses the true boundaries, so the
 answer is an upper bound on what boundary-aware smoothing can gain, measured on
 a bounded set of representative and edge-case sequences before any parameter
@@ -211,26 +223,26 @@ each sequence:
 Results and discussion sections (Findings, Diagnostics, ... as the question
 needs): `!!! finding <status>` blocks for decision-relevant claims only, with
 a qualitative title (no result numbers: the finding id comes from the title) and
-numbers from run files via {{ }} in the body; supporting figures taken from the
-runs that wrote them; contradictions and limitations stated plainly.
+numbers from the inputs via {{ }} in the body; supporting figures taken from
+the artifacts that hold them (input:<name>/...); contradictions and limitations stated plainly.
 -->
 
 !!! finding supported "Boundary-aware smoothing lowers the boundary residual"
     With the true boundaries, the mean boundary residual is
-    {{ proposed[-1]:.3f }} against {{ baseline[-1]:.3f }} for global smoothing,
+    {{ proposed:.3f }} against {{ baseline:.3f }} for global smoothing,
     {{ gain:.0% }} lower; per sequence it is lower in {{ wins }} of
     {{ len(cases) }} sequences, with an interquartile range of
     {{ quartiles[0]:.3f }}–{{ quartiles[2]:.3f }} (scatter plot in
     [Diagnostics](#diagnostics)).
 
-    Sources: `assets/cases.csv` · Reviewed 2026-10-14
+    Sources: `sample-run` (`tables/cases.csv`, `metrics.jsonl`) · Reviewed 2026-10-14
 
 !!! finding tentative "Flicker remains in some sequences"
     {{ unstable }} sequences have more flicker-band energy than global
     smoothing. Whether that energy is visible has not been calibrated against
     viewers, so the stability count may over- or understate the problem.
 
-    Sources: `assets/spectrum.svg`, `assets/cases.csv` · Reviewed 2026-10-14
+    Sources: `sample-run` (`figures/spectrum.svg`, `tables/cases.csv`) · Reviewed 2026-10-14
 
 !!! question "Is the remaining flicker acceptable?"
     Confirm whether the flicker in the unstable sequences is acceptable before
@@ -240,9 +252,9 @@ runs that wrote them; contradictions and limitations stated plainly.
 
 The scatter plot backs the first finding and the temporal spectrum the second.
 
-![Representative frame](assets/grid.svg "Observation, boundary-aware smoothing, ground truth, and the amplified residual of one frame."){#fig-grid}
-![Temporal spectrum of the residual](assets/spectrum.svg "The marked band is the flicker band of the stability measure."){#fig-spectrum}
-![Convergence](assets/interactive.plotly.json "Mean boundary residual over the first conjugate-gradient iterations of both methods."){#fig-interactive}
+![Representative frame](input:result/figures/grid.svg "Observation, boundary-aware smoothing, ground truth, and the amplified residual of one frame."){#fig-grid}
+![Temporal spectrum of the residual](input:result/figures/spectrum.svg "The marked band is the flicker band of the stability measure."){#fig-spectrum}
+![Convergence](input:result/figures/convergence.plotly.json "Mean boundary residual over the first conjugate-gradient iterations of both methods."){#fig-convergence}
 
 ```python exec hide
 import matplotlib.pyplot as plt
@@ -267,8 +279,8 @@ the two ways described in [Why it should work](#why-it-should-work).
 
 <!--
 Conclusion: the answer the current evidence supports, its limits, and the next
-decision or experiment. Mirror it in the front matter `summary` and, if it
-changes the project's direction, in the overview's Status section.
+decision or experiment. Mirror it in the front matter `summary`, and update
+the related direction reports it changes, with `report:` links.
 -->
 
 Skipping the neighbour pairs that cross a boundary lowers the boundary residual

@@ -75,7 +75,7 @@ these are small across jumps and large on flat regions.
 
 ```python exec hide
 from priors.illustrate import weight_slice_figure
-weight_slice_figure(load_checkpoint(run_dir("learned-prior")), num="weight-slice")
+weight_slice_figure(load_checkpoint(inputs.prior / "files" / "model.pt"), num="weight-slice")
 ```
 
 ### Why it should work
@@ -107,7 +107,7 @@ Training uses 2,000 synthetic lattices of $64 \times 64$ points with
 $\sigma = 0.1$ from the generator in `data/lattices.py`; validation and test
 use 200 lattices each from disjoint seeds, plus a held-out family with curved
 boundaries that training never sees. All methods are evaluated on the same test
-lattices with the boundary residual of the [project target](report:/#introduction).
+lattices with the boundary residual of the [project target](report:boundary-aware#introduction).
 $\lambda$ of the baselines is chosen on the validation set
 by the same grid search, so each baseline is at its best setting. The network
 trains for 20 epochs with batch size 16 and learning rate $10^{-3}$; the

@@ -2,443 +2,287 @@
 name: research-project
 description:
   Initialize, extend, or develop a reproducible research project managed with
-  pixi, Hydra-configured object construction, config-selected experiments, and
-  MLflow tracking. Use for research project setup, experiment implementations,
-  method development, tracking and artifacts, feasibility studies, baselines,
-  parameter studies, analytical diagnostics, or reproducible reports. Also use
-  when the user mentions pixi, Hydra `_target_`, MLflow, experiment tracking,
-  perceptual calibration, or reproducible reports.
+  pixi, Hydra-configured object construction, and Cairn (an artifact store in
+  which every experiment is a recorded run and its results are versioned
+  artifacts, single-page paper-like reports built from pinned artifacts, and a
+  browser UI). Use for research project setup, experiments, method
+  development, feasibility studies, baselines, parameter studies, diagnostics,
+  cluster runs, and reports.
+hooks:
+  Stop:
+    - hooks:
+        - type: command
+          command: 'python3 "$HOME/.claude/skills/research-project/scripts/report_gate.py"'
+          timeout: 1800
 ---
 
 # Research Project
 
-Build research projects in which every reported result can be traced to its
-resolved configuration, code, inputs, environment, and artifacts, then
-regenerated from a fresh checkout with documented commands.
+Build research projects whose evidence is versioned artifacts. Every experiment
+process is a Cairn **run** (`runs/<name>@vN`, recording its config, inputs,
+metrics, logs, code, and environment); its results go into **drafts** that
+become artifacts (`<name>@vN`) with the run as their input; datasets and models
+are artifacts too. One single-page report per research direction reads the
+artifacts it declares, presents the evidence as a paper would, and holds the
+reviewed findings.
 
 ## Core principles
 
-1. **pixi owns the environment.** Put Python packages mainly in
-   `[pypi-dependencies]`; reserve conda-forge dependencies for the interpreter,
-   compilers, CUDA, and packages PyPI does not provide reliably. Commit
-   `pixi.lock`.
-2. **Hydra owns configuration and object construction.** Keep configs under
-   `configs/`, select implementations with `_target_`, and instantiate the
-   object graph with `hydra.utils.instantiate`. Do not add a parallel registry.
+1. **pixi owns the environment.** Prefer `[pypi-dependencies]` for Python
+   packages; reserve conda-forge for the interpreter, compilers, CUDA, Graphviz,
+   and packages PyPI does not provide reliably. Commit `pixi.lock`.
+2. **Hydra owns configuration and object construction; Cairn owns the run.**
+   Put configs under `configs/`, construct configurable objects with `_target_`
+   and `hydra.utils.instantiate`, and make Hydra's job folder the run's folder
+   (`hydra.run.dir: ${cairn.run:}`), so every run is self-contained in one
+   artifact version.
 3. **The experiment is the executable boundary.** A config-selected
    `Experiment` is the highest-level behavior. The entry point composes config,
-   starts an MLflow run, instantiates the experiment, and invokes it.
-4. **MLflow is the research record.** Track what is necessary to understand,
-   diagnose, compare, and reproduce a run. Do not hide important evidence, but
-   do not impose a universal logging hierarchy or log noise for completeness.
-5. **Develop the method with the user.** Resolve ambiguities, make intermediate
-   behavior inspectable, and establish feasibility against relevant baselines
-   before tuning or scaling.
-6. **Use a flat project layout.** Create top-level directories named for the
-   concepts the project actually contains; do not add `src/<package>/` nesting.
-7. **Validation tests the claim.** Identify smoke tests and debugging proxies as
+   prepares the run folder, instantiates the experiment, and invokes it.
+4. **Cairn holds the evidence; reports read only what they declare.** A
+   result becomes evidence when a completed run writes it into a draft that
+   becomes an artifact version. A report lists its artifacts under `inputs:`,
+   the build pins each to an exact version, and any other read fails the build.
+   Reports never become an independent source of experimental numbers.
+5. **Develop the method with the user.** Resolve consequential ambiguities,
+   visualize intermediate behavior, and establish feasibility against relevant
+   baselines before tuning or scaling.
+6. **Validation tests the claim.** Identify smoke tests and debugging proxies as
    such; do not present them as scientific evidence.
-8. **Do not improve results by weakening the problem.** Configure and disclose
+7. **Do not improve results by weakening the problem.** Configure and disclose
    approximations that may change the scientific meaning.
-9. **Preserve comparability.** Compared runs should differ only in intended
-   factors. Reuse established result names when that enables meaningful views
-   across compatible runs, without forcing unrelated work into one schema.
+8. **Document the method like a paper.** Every direction report explains its
+   method well enough for an expert to reimplement it, with the figures a paper
+   would have, in the field's established terms: never invent names for
+   concepts no paper has named. Before finishing, you review it against the
+   rubric (see "Finishing a turn").
+
+## Where the details are
+
+Read the reference a step needs before doing that step; each is short and
+self-contained.
+
+| Before you | Read |
+|---|---|
+| create a project, change its environment, Hydra configs, run bookkeeping, logging, or the store; publish or pull artifacts; run on a cluster; plan a parameter study | [references/project-setup.md](references/project-setup.md) |
+| create, restructure, build, publish, host, or share reports; handle pasted location markers | [references/reports.md](references/reports.md) |
+| write or revise a direction report's Abstract, Background, or Methods | [references/writing-methods.md](references/writing-methods.md), and once per project [references/example-methods.md](references/example-methods.md) |
+| write Mitsuba integrators, scenes, or other plugins | [references/mitsuba.md](references/mitsuba.md) |
+| hand off work that changed the setup, evidence, or reports | [references/checklist.md](references/checklist.md) |
+
+The rubric you review a direction report against is
+[references/review.md](references/review.md).
 
 ## Project layout
 
 ```text
 project/
-├── pixi.toml
-├── pixi.lock
-├── .envrc
-├── .gitignore
-├── mlflow.db           # local MLflow metadata, git-ignored
-├── mlruns/             # local artifacts, git-ignored
-├── configs/
-├── <concept>/          # one flat directory per actual project concept
-├── experiments/        # Experiment interface, variants, and run.py
-└── reports/             # reproducible MLflow-backed running reports
+├── pixi.toml, pixi.lock, .envrc, .gitignore
+├── cairn.toml                  # [store] (project, optional url); optional [style]
+├── configs/                    # Hydra configs; hydra/launcher/ from each cluster's skill
+├── <concept>/                  # project code, flat imports
+├── experiments/
+│   ├── base.py                 # Experiment interface
+│   ├── run.py                  # from assets/run.py: the entry point (run bookkeeping is Cairn's)
+│   ├── cluster.sh, finalize_study.py, clusters/<cluster>.sh   # from the slurm and cluster skills
+├── data/                       # local datasets before they are published (git-ignored)
+├── tools/model_graph.py        # from assets/model_graph.py, for neural-network projects
+├── reports/<slug>/             # one single-page report per research direction
+│   ├── report.md
+│   └── assets/, data/          # non-result material kept with the report
+└── .cairn/                     # everything Cairn writes: local store, run and draft folders, pending uploads, cache, built reports (ignores itself; CAIRN_DIR moves it)
 ```
 
-Only `configs/`, `experiments/`, and `reports/` are conventional. Create each
-`<concept>` directory only when the project needs that abstraction. The project
-root is the import root. Before using a top-level name, check it with
-`python -c "import <name>"`; if that succeeds, choose another name.
+There is no overview report and no nesting: the Cairn UI's project page and the
+build's index list the reports. Copy bundled assets by content and make the
+copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (store
+client, runs and drafts, report builder, Hydra helpers, server, UI) is the pinned
+`cairn` dependency: import and run it, never copy or patch it. Initialize Git
+and commit the scaffold before the first run, and commit again before runs a
+report will cite.
 
-## pixi and MLflow setup
+## Starting a project
 
-Initialize git before pixi in a new project:
+Copy this checklist into your reply and tick it off:
 
-```bash
-git init
-pixi init --format pixi
+```text
+Project setup:
+- [ ] Read references/project-setup.md and references/reports.md
+- [ ] pixi.toml with the pinned cairn (extras hydra, video) and the tasks; pixi install
+- [ ] cairn.toml with [store] (project; the user's server url if they run one)
+- [ ] Hydra configs (hydra.run.dir ${cairn.run:}, Cairn's callbacks), experiments/run.py, Experiment base
+- [ ] Cluster files from the slurm skill and each cluster's skill
+- [ ] .gitignore: .pixi/, data/ (Cairn's .cairn/ ignores itself)
+- [ ] git init and commit the scaffold
+- [ ] Sample: publish assets/sample-run as sample-run, copy assets/reports/direction, pixi run report-build passes
+- [ ] Replace the sample report and its input with the project's own
 ```
-
-Use this as a starting point and adapt it to the project:
-
-```toml
-[workspace]
-channels = ["conda-forge"]
-name = "<project>"
-platforms = ["linux-64"]
-
-[dependencies]
-python = "3.12.*"
-
-[pypi-dependencies]
-numpy = "*"
-matplotlib = "*"
-hydra-core = "*"
-mlflow = "*"
-black = "*"
-
-[activation.env]
-PYTHONPATH = "."
-MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"
-
-[tasks]
-experiment = "python experiments/run.py"
-report = "python reports/method-development/report.py"
-mlflow-ui = "mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db"
-format = "black ."
-all = { depends-on = ["experiment"] }
-```
-
-Run `pixi install`. Ignore `.pixi/`, `mlflow.db`, `mlruns/`, Hydra output
-directories, and caches. Add every runnable operation as a pixi task, commit
-`pixi.lock`, and format through pixi.
-
-Always provide the exact MLflow server command and concrete URL for remote
-access. The example task serves `http://<remote-host>:5000`; replace the
-placeholder in the handoff with the actual reachable hostname or IP. Confirm
-options against the installed MLflow version and configure allowed hosts, CORS,
-artifact serving, and authentication or an HTTPS/VPN boundary as required.
-Binding to `0.0.0.0` provides reachability, not access control.
-
-## direnv
-
-```sh
-watch_file pixi.lock
-eval "$(pixi shell-hook)"
-```
-
-Then run `direnv allow`.
-
-## Hydra configuration
-
-Put the seed and every scientifically meaningful choice in config. Disable
-Hydra's output tree because MLflow owns the research record:
-
-```yaml
-# configs/config.yaml
-defaults:
-  - experiment: primary
-  - override hydra/job_logging: stdout
-  - _self_
-
-seed: 0
-tracking:
-  experiment_name: <project>
-  run_name: <short semantic purpose>
-  description: <question, purpose, and interpretation constraints>
-  tags: {}
-
-hydra:
-  run:
-    dir: .
-  sweep:
-    dir: .
-    subdir: .
-  output_subdir: null
-  job:
-    chdir: false
-```
-
-Open every group config with a one-line comment explaining when to select it.
-An experiment config names its implementation and nested object graph:
-
-```yaml
-# configs/experiment/primary.yaml
-# Use for <project-specific regime and reason>.
-_target_: experiments.primary.PrimaryExperiment
-component:
-  _target_: components.primary.PrimaryComponent
-```
-
-An `_target_` and its arguments form one semantic unit. Do not inherit a sibling
-variant and replace only `_target_`, because Hydra may retain arguments for the
-old implementation. Write the variant in full or use another config group.
-
-## Entry point and Experiment boundary
-
-Keep the experiment interface independent of MLflow's global fluent API:
-
-```python
-# experiments/base.py
-from abc import ABC, abstractmethod
-
-class Experiment(ABC):
-    @abstractmethod
-    def run(self) -> None:
-        """Execute and log this experiment within the active MLflow run."""
-```
-
-```python
-# experiments/run.py
-import hydra
-import mlflow
-from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf
-
-from experiments.base import Experiment
-
-
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
-def main(cfg: DictConfig) -> None:
-    resolved = OmegaConf.to_container(cfg, resolve=True)
-    name = str(cfg.tracking.run_name or "").strip()
-    description = str(cfg.tracking.description or "").strip()
-    if not name or not description:
-        raise ValueError("Every MLflow run needs a semantic name and description")
-
-    mlflow.set_experiment(cfg.tracking.experiment_name)
-    with mlflow.start_run(
-        run_name=name,
-        description=description,
-        tags=dict(cfg.tracking.tags),
-    ):
-        mlflow.log_dict(resolved, "config/resolved.yaml")
-        experiment = instantiate(cfg.experiment)
-        if not isinstance(experiment, Experiment):
-            raise TypeError("Configured experiment must implement Experiment")
-        experiment.run()
-
-
-if __name__ == "__main__":
-    main()
-```
-
-Keep run names short, readable, and based on purpose: for example,
-`feasibility-method`, `reference-baseline`, or `ablation-no-<feature>`. Do not
-serialize parameters, seeds, timestamps, or hashes into names; MLflow already
-records config. Record a concise description of what the run tests and how it
-should be interpreted in MLflow's run description.
-Descriptions must add context rather than repeat the config.
-
-The configured experiment owns construction, lifecycle, tracking cadence, and
-result semantics. Put materially different orchestration in separate
-`Experiment` implementations, not branches in the entry point.
 
 ## Developing a method
 
-### Establish a shared specification
+**Establish shared understanding.** Ask focused questions about ambiguities in
+purpose, inputs, outputs, operations, state, update rules, objectives,
+invariants, assumptions, intended advantages, and failure cases. Restate the
+interpretation with equations, pseudocode, diagrams, or simple examples and ask
+the user to confirm it. Record confirmed choices in config, code, and the
+report's Methods. Reopen the discussion when implementation exposes a
+consequential ambiguity.
 
-At the beginning, optimize for shared understanding. Ask focused questions
-about ambiguities in purpose, inputs, outputs, operations, state, update rules,
-objectives, invariants, assumptions, advantages, regimes, and failure cases.
-Do not silently choose an interpretation that could change the method or its
-scientific conclusion.
+**Make behavior inspectable.** Create simple examples that expose important
+mechanisms. Visualize inputs, intermediate states, transformations, outputs,
+loss terms, update directions, small optimization trajectories, baseline
+comparisons, ablations, and representative failure cases as appropriate:
+enough complementary views for the user to verify the implementation, not
+decorative figures. Prefer image grids for related inputs, references,
+predictions, residuals, masks, or steps.
 
-Expect several short dialogue rounds for a new method. Restate the current
-understanding with equations, pseudocode, diagrams, or concrete examples and
-ask the user to confirm it. Record confirmed choices in config, code, and the
-early report. Reopen the dialogue when implementation exposes new ambiguity.
-Small probes may proceed meanwhile if their assumptions are explicit.
+Treat every repeated dataset, seed, model, or method comparison as one
+visualization family with a declared visual grammar: keep chart type, model
+colors, axis orientation, limits and scales, ordering, normalization,
+aggregation, and panel layout stable, generated by one plotting function.
+Figures from separate runs need cross-run limits and ordering passed explicitly
+from a shared config, not derived from each run's own data. Change a
+visualization only when the analytical question changes, say why in the report,
+and never switch chart types because one representation flatters the preferred
+method.
 
-### Make the interpretation inspectable
+**Stay inside the framework's ecosystem.** Build the method from the
+framework's own abstractions and extension points, so it composes with the
+framework's tools, baselines, and other people's code, instead of a parallel
+structure beside them:
 
-Create simple examples that expose important mechanisms. Visualize inputs,
-intermediate states, transformations, outputs, loss terms, update directions,
-and small optimization trajectories where useful. Show representative
-iterations, baseline comparisons, ablations, spatial or frequency views, and
-failure cases—not only polished final output.
+- **Mitsuba / Dr.Jit:** implement a rendering method as a Mitsuba plugin (an
+  integrator, BSDF, emitter, sensor, or texture, registered with
+  `mi.register_*` and selected in the scene or config). Render with
+  `mi.render`, differentiate with Dr.Jit's autodiff and `mi.ad` integrators,
+  optimize scene parameters through `mi.traverse` and `mi.ad.Adam`, and write
+  array code with `dr.*` operations and symbolic loops, not Python loops over
+  samples or NumPy round trips. Integrators have two constructors (Mitsuba
+  properties and a direct signature for Hydra) and scenes come from constructor
+  functions: see [references/mitsuba.md](references/mitsuba.md).
+- **PyTorch:** models and learned components are `nn.Module`s with their
+  parameters registered, losses use `torch.nn.functional` or loss modules, data
+  comes through `Dataset` and `DataLoader`, and training uses `torch.optim` and
+  its schedulers. Do not keep parameters in hand-made lists or write your own
+  optimizer step.
+- **Any other framework:** find its equivalent (a JAX/Flax module, a
+  scikit-learn estimator, a solver library's problem class) before writing one.
 
-Implement visualization generation as reusable project code. Track the views
-and source values needed to interpret or regenerate them in MLflow, and use the
-most informative ones in reports. Prefer image grids for related images so
-corresponding inputs, references, predictions, residuals, masks, samples, or
-steps can be compared together. Keep layout, normalization, labels, and order
-consistent where comparison matters, while preserving important full-resolution
-outputs.
+Leave the framework only where it cannot express the method, and say so in
+Methods. A baseline reimplemented outside the framework is not a faithful
+adaptation.
 
-### Build method diagnostics with Matplotlib
+**Build diagnostics with Matplotlib.** Write reusable functions that take
+explicit data and return a `Figure`, with units, labels, legends, and colorbars
+where needed, method colors and ordering centralized in one module. Add the
+figures to the experiment's run or result draft with `add_figure(name, plot_function, metadata, *args)`
+and reuse the same functions in the reports.
 
-Use Matplotlib for diagnostic figures. Depending on the method, show objective
-terms, residuals, update magnitudes, distributions, spatial maps, spectra,
-convergence, intermediate states, uncertainty, before/after views, and baseline
-overlays. Functions should accept explicit data and return a `Figure`.
+**Establish baselines and feasibility.** Agree with the user which baselines
+test the claimed advantage. Prefer faithful adaptations of authoritative
+reference implementations: read the paper, documentation, configuration,
+evaluation protocol, and the complete relevant execution path; record the
+reference version and material deviations. Begin with a bounded feasibility
+study, with agreed checks, metrics, tolerances, and failure cases. Do not start
+systematic tuning, large multiruns, or expensive scaling until the user has
+seen the evidence and the method has passed this gate.
 
-Give axes units and meaningful labels; include legends and colorbars where
-needed. Keep scales, limits, normalization, colormaps, and panel order
-consistent across comparable figures, and show variability when relevant.
-Log the figure with `mlflow.log_figure` and, when practical, its underlying
-numeric values.
-Reuse the same functions in reports.
+**Leave the user's machine usable.** Runs on the user's own computer use at
+most half its cores unless the user asks for more: cap worker processes and
+library threads (`OMP_NUM_THREADS`, `torch.set_num_threads`) in config, and size
+a feasibility study to the budget the user gave. Larger work goes to a cluster.
 
-### Establish baselines with the user
+**Perceptual blind spots.** When the user reports an effect that inspection or
+metrics miss (temporal instability, localized artifacts, high-frequency
+structure), preserve the original outputs, add a visualization that isolates
+it, and record a quantitative measure: a standard metric when its assumptions
+fit, otherwise one tested on known positive, negative, and confounding cases.
+If its relation to perception stays unclear, propose a small calibration with
+focused ratings or pairwise comparisons.
 
-Identify baselines that test the claimed advantage under comparable conditions.
-If several are plausible or the target comparison is unclear, discuss them with
-the user before building a large comparison.
+## Evidence flow
 
-Prefer faithful adaptations of authoritative reference implementations. Read
-the paper, documentation, configuration, evaluation protocol, and complete
-relevant execution path. Reuse or adapt reference code when licensing and
-interfaces permit; otherwise document material deviations. Record the reference
-version, configuration, inputs, and deviations with the baseline run. Keep
-workloads, preprocessing, budgets, stopping rules, and evaluation equivalent
-unless a justified difference is part of the question.
+```text
+pixi run publish data/x datasets/x                # datasets and models are artifacts too
+pixi run experiment experiment=<name>             # a run: runs/<name>@vN; cairn.use(...) records its inputs
+#   inside the experiment: with cairn.draft("<name>") as result: result.add_*(...)  ->  <name>@vN, input: the run
+# reports/<slug>/report.md front matter:  inputs: {fit: <name>@latest, run: runs/<name>@latest}
+pixi run report-build && pixi run publish reports/<slug>
+```
 
-### Pass a feasibility gate before tuning
-
-Begin with a bounded feasibility study, not a sweep. Establish that the method
-behaves as agreed on simple and representative cases, then compare it with the
-chosen baselines. Agree with the user on the qualitative checks, metrics,
-tolerances, and failure cases needed to pass. Do not start systematic tuning,
-large sweeps, or expensive scaling until the user has seen the evidence and the
-method has passed this gate. If it fails, diagnose or revise it rather than tune
-until an advantage appears.
-
-## MLflow tracking guidance
-
-Track all sensible metrics and the configurations, inputs, diagnostics,
-outputs, and environment facts needed to evaluate and reproduce the work. Use
-meaningful steps for evolving quantities. Preserve model or artifact lineage
-when one run consumes another run's output.
-
-Choose MLflow representations that make the evidence easy to inspect. Scalars,
-series, images, figures, tables, structured data, and artifacts should remain
-in their natural useful form. Related images should be an image table or another
-clear grid when practical. Autologging may supplement explicit
-tracking, but it must not determine what scientific evidence is visible.
-
-There is deliberately no required key hierarchy, component protocol, fixed
-cadence, or universal list of fields. Structure logging around the actual
-question and the views a reviewer needs. Reuse clear established names when
-the same quantity appears across compatible runs or projects, especially when
-that lets MLflow comparisons and reports be reused. Preserve units and
-meaning. Do not force different quantities under the same name merely for
-uniformity.
-
-Do not hide important information through excessive aggregation, cherry-picked
-examples, presentation-only composites, or final-only logging. Keep comparison
-operands available where they matter, retain full-fidelity reusable artifacts,
-and make sampling or reduction explicit. At the same time, avoid redundant
-logging that obscures the result or materially distorts execution.
-
-## Runs and parameter studies
-
-An `Experiment` is a config-selected strategy; an MLflow run is one execution
-of it. Parent and nested child runs may organize a coherent study. Give
-independently runnable evaluation its own experiment and run when that improves
-lineage or reuse.
-
-Only after the feasibility gate, use a maintained search tool for repeated
-comparable trials when appropriate. Declare the search space, seed, budget,
-objective and direction, and associate every trial with an MLflow run. Record
-the best result and source run. Prefer a finite grid for intentional
-comparisons, random search for bounded exploration, and adaptive search only
-when a scalar objective justifies it. Do not use a parameter study to group
-incomparable jobs or replace a workflow scheduler.
-
-## Scientific validity and perceptual blind spots
-
-Verify that evaluation has enough fidelity, coverage, and statistical quality
-to reveal the effect under study. Changes that could alter the claim belong in
-config and tracking, not hidden code.
-
-When the user reports an important effect that current inspection or metrics
-miss—such as temporal instability, localized artifacts, or high-frequency
-structure—preserve the original outputs, add an analytical visualization that
-isolates the phenomenon, and track a plausible quantitative measure.
-
-Prefer a standard established metric when its assumptions fit. Adapt or devise
-a more specific measure only when standard metrics are unavailable or miss the
-effect. When its relationship to perception is unclear, test it on known
-positive, negative, and confounding cases. If uncertainty remains, propose a
-small calibration phase using focused ratings, rankings, or pairwise
-comparisons. Do not claim that a metric replaces expert judgment until evidence
-supports that conclusion; report disagreement and blind spots.
+The process is the run: it records code, packages, logs, and system metrics by
+itself, and it is completed when the process exits. A non-zero exit or an
+uncaught exception marks it failed; an open draft publishes nothing then, and only completed versions resolve through aliases such as
+`latest`, so a report never reads a failed run. Details in
+[project-setup.md](references/project-setup.md).
 
 ## Reports
 
-Create a running method-development report at the start of every project and
-maintain it throughout the work. It is the written research record: state the
-current method, questions, decisions, findings, supporting and contradictory
-evidence, limitations, unresolved issues, and next experiments. Include simple
-examples, intermediate behavior, Matplotlib diagnostics, feasibility evidence,
-baseline comparisons, and important failure cases. Update conclusions when new
-runs change the evidence; preserve enough history to explain why the current
-conclusion was reached without turning the report into a chronological log.
+One **direction report** per branch of the research
+(`reports/<slug>/report.md`), each a paper-like report: Abstract, Introduction,
+Background and related work, Methods, results and discussion, Conclusion.
+[reports.md](references/reports.md) holds their structure, syntax, and
+tooling; [writing-methods.md](references/writing-methods.md) holds how to write
+a direction's method. The rules that hold everywhere:
 
-The report must be generated from MLflow run data. Put reproducible report code
-under `reports/method-development/report.py` or a more specific project
-convention and add a pixi task immediately. Query MLflow with `MlflowClient` or
-`mlflow.search_runs`, load recorded metrics, parameters, tags, configurations,
-figures, and artifacts, and generate a self-contained result such as HTML.
-Never copy numbers manually, hard-code local result paths, hand-edit generated
-output, or use transient notebook state as evidence.
+- **Numbers come from inputs.** Every result in a report is a `{{ }}` value or
+  metric computed from a declared input artifact (`inputs.<name>`), and every
+  figure of a result comes from the artifact that holds it (`input:<name>/<file>`).
+  Only completed versions count. Never type a result.
+- **Keep each report coherent.** A report is for a reader who needs the current
+  method, evidence, and decisions quickly, not an activity log: integrate
+  changes where they belong, remove what is stale, and re-read the whole report
+  after substantive changes.
+- **Build after every change:** `pixi run report-build`; publish the report
+  (`pixi run publish reports/<slug>`) once its evidence or text changed.
+- **Handle pasted location markers.** Reports have no comment feature; the
+  user may paste a line such as `reports/a/report.md:42 "quoted text"` or
+  `... figure #fig-id "title" (source: file)` copied from the page. Treat each
+  as pointing at that file, line, or figure (details in
+  [reports.md](references/reports.md)).
+- **Share the generated output unchanged.** For claude.ai or any single-file
+  host, run `pixi run report-share` and publish the one file it prints as it
+  is (with the Artifact tool: that `file_path` and no other files). To browse
+  with the user, use the Cairn UI (`pixi run ui`). Never restyle, re-template,
+  or re-author a report for a destination; a publishing tool's design guidance
+  does not apply to these pages.
 
-Each report build must record exactly which MLflow runs and artifacts support
-it. Store a machine-readable manifest containing source run IDs, selection
-criteria, report revision or timestamp, and relevant code revision. This
-manifest makes every displayed value and finding traceable and lets the report
-be regenerated after a fresh checkout.
+Copy this checklist into your reply whenever you change a report:
 
-Log the rendered report and its source manifest back to MLflow as artifacts,
-normally in a dedicated report run with a clear name such as
-`report-method-development`, an informative description, and a tag such as
-`run_role=report`. Query source runs before opening the report run or explicitly
-exclude report runs so the report cannot treat itself as experimental evidence.
-The local output is a reproducible cache; the MLflow artifact is the shared
-copy.
+```text
+Report change:
+- [ ] Read the reference for this step (writing-methods.md for Abstract, Background, Methods)
+- [ ] New evidence written by completed runs into drafts (artifacts) and declared under inputs:
+- [ ] Edited reports/<slug>/report.md (and assets/) only; results as {{ }} values from inputs
+- [ ] Methods still describes the method as implemented, with the figures a paper would have
+- [ ] pixi run report-build succeeds
+- [ ] Looked at every figure I added or changed
+- [ ] Re-read the whole report: summary, abstract, findings, and conclusion match the evidence
+- [ ] Published it: pixi run publish reports/<slug>
+```
 
-Host the report through MLflow by keeping it attached to the tracked report run
-and serving the MLflow UI remotely. If the chosen output needs richer rendering
-than MLflow's artifact preview provides, also add a pixi task for a report
-server, but keep MLflow as the index and source of truth. The handoff must give
-the concrete remote MLflow URL, report run or artifact location, and exact
-hosting command.
+## Finishing a turn
 
-## Documentation and handoff
+The skill's Stop hook runs `scripts/report_gate.py` whenever you try to finish.
+It does nothing unless a report's sources changed since it last passed. Then:
 
-Document durable constraints and non-obvious scientific choices, not the
-chronology of development. The handoff states what changed or was learned, what
-validation supports it, and what could still limit the conclusion. Distinguish
-smoke tests and proxies from evidence. Disclose consequential approximations.
-Include exact commands for reproducing experiments and rebuilding the running
-report, plus the concrete MLflow URL and command that host its run data and
-report artifacts for remote access.
+1. it blocks until the changed reports are rebuilt;
+2. once, it sends you back to review each changed direction report yourself
+   against [references/review.md](references/review.md): re-read the built
+   report and its Methods figures, fix every failed item in the sources, and
+   rebuild.
 
-## Reproducibility checklist
+Fix the problem, never pad a section to pass an item. When you finish, tell the
+user which items, if any, you left open and why. After three blocks in a row
+the gate lets you stop and shows the user what is still open.
 
-- [ ] `pixi.lock` is committed; `.pixi/`, local MLflow state, and caches are
-      ignored.
-- [ ] Python is formatted through pixi; a fresh clone can run documented tasks.
-- [ ] Hydra config contains seeds and scientifically meaningful choices; the
-      resolved config is attached to each MLflow run.
-- [ ] Configurable objects use `_target_` and `instantiate`; the entry point is
-      independent of experiment-specific orchestration.
-- [ ] Runs have concise semantic names and useful descriptions; configuration
-      values are not encoded into unreadable names.
-- [ ] MLflow shows the metrics, diagnostics, inputs, outputs, environment facts,
-      and lineage necessary to understand and reproduce each result without
-      hiding important evidence.
-- [ ] Related images use consistent grids or galleries when practical, and
-      reusable Matplotlib diagnostics expose intermediate method behavior.
-- [ ] The user and agent confirmed a precise shared method specification with
-      simple examples and resolved consequential ambiguities.
-- [ ] Relevant baselines were agreed with the user and faithfully adapted from
-      fully inspected authoritative references, with deviations recorded.
-- [ ] A bounded feasibility study precedes tuning and large parameter studies.
-- [ ] A running findings report is maintained from the beginning, generated
-      from MLflow run data, and updated as understanding evolves.
-- [ ] Every report build and source manifest is logged back to MLflow, and every
-      displayed result is traceable to its supporting run and artifact.
-- [ ] Validation supports the intended claim; proxies are labeled as proxies.
-- [ ] User-reported blind spots receive analytical views and suitable metrics;
-      established measures are preferred and calibrated only when needed.
-- [ ] Compared runs differ only in intended factors, or differences are tracked
-      and accounted for.
-- [ ] The handoff includes the exact project-correct MLflow hosting command,
-      concrete remote URL, and report artifact location.
+## Handoff
+
+The handoff states what changed or was learned, what validation supports it,
+and what could still limit the conclusion. Distinguish smoke tests and proxies
+from evidence. Give exact commands for reproducing experiments, rebuilding
+and publishing the reports, and viewing them, the run and artifact references
+(`runs/<name>@vN`, `name@vN`) the reports read, the concrete URLs, and any
+review items you left open. Say that the user can paste a page's copy-location
+markers to point at a line or figure, and that reviewed findings live in the
+reports' finding blocks.

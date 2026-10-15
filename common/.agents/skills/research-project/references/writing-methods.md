@@ -15,13 +15,14 @@ below), so know its items before you write.
 
 ## The spine
 
-Author every direction report with this ordered spine (the overview has its own
-structure, in [reports.md](reports.md)):
+Author every direction report with this ordered spine (how reports are
+organized is in [reports.md](reports.md)):
 
 1. `## Abstract`: question, approach, principal result, important
    qualification, and current decision, self-contained.
-2. `## Introduction`: how this direction serves the project target (link
-   `report:/#introduction` rather than restating it), its research question,
+2. `## Introduction`: how this direction serves the project's shared target
+   (stated briefly, or linked with `report:<slug>#introduction` when another
+   report defines it), its research question,
    scope, and why the comparison matters.
 3. `## Background and related work`: prior and related work, the baselines,
    and the comparison ladder, for a technically literate reader who has not
@@ -85,7 +86,7 @@ see in it:
 - **A toy example of a key operation**: before and after on a small input, a
   one-dimensional slice, a small grid, the geometry of a constraint. Compute it
   with the project's own code (a `python exec` block importing the project's
-  functions, or an illustration experiment logged with `RunLogger`), never with
+  functions, or an illustration experiment whose result is added with `add_figure`), never with
   a separate reimplementation or a hand-drawn approximation, so the figure
   shows what the code does.
 

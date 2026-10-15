@@ -1,0 +1,1 @@
+{"boundary_residual_proposed": 0.071, "boundary_residual_global": 0.15, "time": "2026-10-14T09:04:10+00:00", "origin": {"file": "experiments/smoothing.py", "line": 88, "function": "run"}}
