@@ -86,5 +86,8 @@ brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 #     `brew bundle` installs them on Linux too, not just macOS) ---
 cask "kitty"
 
-cargo "hyperqueue", source:
-  "https://github.com/It4innovations/hyperqueue?tag=v0.26.2"
+# hyperqueue (`hq`): Linux uses the prebuilt release binary (in-repo tap), since
+# building it needs a libclang that older glibc hosts can't load; macOS has no
+# prebuilt binary, so it builds with cargo.
+brew "doeringc/local/hyperqueue" if OS.linux?
+cargo "hyperqueue", source: "https://github.com/It4innovations/hyperqueue?tag=v0.26.2" if OS.mac?
