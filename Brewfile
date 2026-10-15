@@ -51,6 +51,8 @@ brew "fish"
 brew "tree"
 brew "wget"
 brew "mosh"
+brew "tailscale" if OS.linux?    # mesh VPN: CLI + tailscaled (the daemon runs as root)
+cask "tailscale-app" if OS.mac?  # macOS: the app (network extension; official .pkg)
 brew "ncdu"
 brew "curl"
 brew "unzip"
