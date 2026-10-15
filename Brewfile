@@ -51,7 +51,8 @@ brew "fish"
 brew "tree"
 brew "wget"
 brew "mosh"
-brew "tailscale" if OS.linux?    # mesh VPN: CLI + tailscaled (the daemon runs as root)
+# Tailscale on Linux: the official package (tailscale.com/install.sh) — it runs
+# tailscaled as a root systemd service; a brew copy would only shadow its CLI.
 cask "tailscale-app" if OS.mac?  # macOS: the app (network extension; official .pkg)
 brew "ncdu"
 brew "curl"
@@ -84,7 +85,6 @@ brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 # --- GUI apps + claude CLI (brew casks — these ship Linux variations, so
 #     `brew bundle` installs them on Linux too, not just macOS) ---
 cask "kitty"
-cask "tev"
 
 cargo "hyperqueue", source:
   "https://github.com/It4innovations/hyperqueue?tag=v0.26.2"

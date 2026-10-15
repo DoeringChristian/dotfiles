@@ -6,6 +6,7 @@
 # Same DSL as the base Brewfile: brew / cask / npm / cargo / tap / ...
 
 cask "inkscape"
+cask "tev"          # HDR/EXR image viewer (slow to install; Linux fixup in update.sh)
 cask "obsidian"
 
 # zathura — keyboard-driven PDF/PS/DjVu viewer (not in homebrew-core).
