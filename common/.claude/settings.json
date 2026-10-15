@@ -2,6 +2,7 @@
   "permissions": {
     "defaultMode": "auto"
   },
+  "cleanupPeriodDays": 3650,
   "model": "fable",
   "enabledPlugins": {
     "rust-analyzer-lsp@claude-plugins-official": true,
