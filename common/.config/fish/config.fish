@@ -80,6 +80,11 @@ status is-interactive; and begin
 
     # atuin init fish | source
 
-    direnv hook fish | source
+    # direnv, evaluated before each prompt. Not `direnv hook fish | source`: that
+    # hook embeds direnv's versioned Cellar path, which `brew upgrade` deletes
+    # under long-lived (shpool) shells. Calling it via PATH survives upgrades.
+    function __direnv_export_eval --on-event fish_prompt
+        direnv export fish | source
+    end
 
 end
