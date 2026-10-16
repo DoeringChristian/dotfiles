@@ -13,10 +13,9 @@ adog = log --all --decorate --oneline --graph --abbrev-commit
 adogs = log --all --decorate --oneline --graph --abbrev-commit --stat
 dog = log --decorate --oneline --graph --abbrev-commit
 dogs = log --decorate --oneline --graph --abbrev-commit --stat
-[filter "lfs"]
+[filter "lfs"]  # for repos that use Git LFS; not required, so a machine without git-lfs can still pull
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
-	required = true
 [pull]
 	ff = only

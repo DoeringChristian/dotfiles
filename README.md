@@ -63,7 +63,7 @@ just use the base.
 | From-source tools (`neovim`, `resh`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
 | GUI apps (kitty, tev) + the `claude` CLI | brew **casks** (macOS and Linux; `update.sh` adds Linux desktop fixups) |
 | Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
-| Fonts | `common/.local/share/fonts/` (LFS); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
+| Fonts | `common/.local/share/fonts/` (plain git files); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
 | macOS services | LaunchAgents in `darwin/Library/LaunchAgents/` (e.g. the ollama server) |
 
 `claude` is the `claude-code` cask with its self-updater disabled

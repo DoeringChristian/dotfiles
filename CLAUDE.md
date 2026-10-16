@@ -68,7 +68,7 @@ bootstrap.sh / update.sh
 
 - **Stow ordering**: `stow -t ~ stow` runs before `common` so the global ignore
   rules are in place; `darwin` is stowed in addition to `common` on macOS.
-- **Fonts**: source is `common/.local/share/fonts/` (Git LFS). Linux follows the
+- **Fonts**: source is `common/.local/share/fonts/` (plain git files). Linux follows the
   stow symlink; macOS copies real files into `~/Library/Fonts` (CoreText ignores
   symlinked fonts).
 - **PATH**: the shell configs put the Homebrew prefix on PATH via `brew shellenv`,
@@ -100,7 +100,6 @@ legitimately won't exist on a Mac.
 
 ## Conventions
 
-- **Git LFS**: `.local/bin/` binaries and `*.ttf` fonts.
 - **Catppuccin Macchiato**: theme across starship, fish, bat, btop, kitty, eza.
 - **Fish** is the default shell (vi-mode). PATH is set in `config.fish` via
   `brew shellenv`; no `mise activate` or version-manager hooks.
