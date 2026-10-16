@@ -2,7 +2,7 @@
 # One list for every machine; casks work on Linux too.
 #
 # Some tools come from the in-repo tap (Formula/*.rb), which update.sh registers
-# before `brew bundle`: neovim, resh, passage, and Linux zathura formulae.
+# before `brew bundle`: neovim, resh, and Linux zathura formulae.
 #
 # Add a tool = add a line. Keep everything at latest with `./update.sh`.
 
@@ -41,7 +41,6 @@ brew "zellij"
 brew "btop"
 brew "uv"
 brew "pixi"                     # package manager for project toolchains (mitsuba, …)
-brew "age"
 brew "typst"
 brew "stow"
 
@@ -80,7 +79,6 @@ cask "codex"
 # HEAD-only formulae (no stable release, or intentionally tracking development)
 # use args: ["HEAD"] to build from git main. Neovim is listed above.
 brew "doeringc/local/resh", args: ["HEAD"]      # Rust SSH wrapper (development)
-brew "doeringc/local/passage", args: ["HEAD"]   # age-backed password store
 
 # --- GUI apps + claude CLI (brew casks — these ship Linux variations, so
 #     `brew bundle` installs them on Linux too, not just macOS) ---

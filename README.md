@@ -5,7 +5,7 @@ Cross-platform (macOS & Linux) dotfiles, managed with two tools:
 - **[GNU Stow](https://www.gnu.org/software/stow/)** — symlinks config files from
   this repo into `~`.
 - **[Homebrew](https://brew.sh)** — installs **every** tool from a single
-  [`Brewfile`](Brewfile). Three source builds (`neovim`, `resh`, `passage`) come
+  [`Brewfile`](Brewfile). Two source builds (`neovim`, `resh`) come
   from an in-repo tap ([`Formula/`](Formula)); GUI apps are casks on macOS and official
   builds on Linux.
 
@@ -60,12 +60,11 @@ just use the base.
 |---|---|
 | CLI tools + runtimes | Homebrew, one line each in [`Brewfile`](Brewfile) |
 | neovim (nightly) | in-repo formula based on core, with a consistent glibc sysroot on Linux |
-| From-source tools (`neovim`, `resh`, `passage`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
+| From-source tools (`neovim`, `resh`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
 | GUI apps (kitty, tev) + the `claude` CLI | brew **casks** (macOS and Linux; `update.sh` adds Linux desktop fixups) |
 | Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
 | Fonts | `common/.local/share/fonts/` (LFS); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
 | macOS services | LaunchAgents in `darwin/Library/LaunchAgents/` (e.g. the ollama server) |
-| Secrets | [age](https://github.com/FiloSottile/age) + [passage](https://github.com/FiloSottile/passage) |
 
 `claude` is the `claude-code` cask with its self-updater disabled
 (`~/.claude/settings.json` `autoUpdates:false`), so Homebrew is the sole owner —
@@ -75,11 +74,10 @@ bump it with `brew upgrade --cask`.
 
 ```
 Brewfile            # THE tool list (source of truth)
-Formula/            # in-repo brew tap: neovim.rb, resh.rb, passage.rb
+Formula/            # in-repo brew tap: neovim.rb, resh.rb
 common/             # portable config (stowed on all platforms)
 darwin/             # macOS-only config (stowed on macOS), incl. LaunchAgents
 stow/               # stow global ignore rules
-setup/              # encrypted age key
 bootstrap.sh / update.sh
 ```
 

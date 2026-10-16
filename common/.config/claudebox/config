@@ -1,5 +1,5 @@
 # Added to claudebox's built-in defaults (`claudebox --print-config`).
 
 [deny]
-# age identity decrypted by bootstrap.sh (passage's copy is denied by default)
+# an age identity, if one is still around (passage's ~/.passage is denied by default)
 path = ~/.local/share/age

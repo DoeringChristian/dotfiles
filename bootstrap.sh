@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bootstrap.sh — first-time setup: install git+curl, clone the repo, install
-# Homebrew, run update.sh (packages + configs), decrypt the age secret.
+# Homebrew, run update.sh (packages + configs).
 #
 #   curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
 #   # workstation profile:  ... | bash -s -- --type workstation
@@ -14,7 +14,6 @@
 #   DOTFILES_REPO       git URL to clone (default: this repo)
 #   DOTFILES_DIR        where to clone   (default: ~/dotfiles)
 #   DOTFILES_NO_UPDATE  =1 to use an existing checkout as-is (no clone/pull)
-#   SKIP_SECRETS        =1 to skip age key decryption (CI / minimal)
 #   BREW_PREFIX         e.g. "$HOME/.homebrew" for a ROOTLESS install (no sudo).
 #       Caveat: a non-standard prefix has no prebuilt bottles, so most formulae
 #       build from source (needs a compiler). Use only where you can't get the
@@ -83,16 +82,6 @@ ensure_brew() {
     if [ -n "$BREW_PREFIX" ]; then brew update --force --quiet 2>/dev/null || true; fi
 }
 
-# 5. Secrets: decrypt the age key (age is a brew tool, now on PATH).
-decrypt_secrets() {
-    [ "${SKIP_SECRETS:-0}" != 1 ] && [ -f ./setup/age-key.age ] || return 0
-    log "Decrypting age key"
-    mkdir -p ~/.local/share/age ~/.passage
-    age -d ./setup/age-key.age > ~/.local/share/age/key.txt
-    chmod 600 ~/.local/share/age/key.txt
-    cp ~/.local/share/age/key.txt ~/.passage/identities
-}
-
 # Parse --no-root (remaining args forwarded to update.sh).
 NOROOT=""
 FORWARD_ARGS=()
@@ -111,7 +100,6 @@ ensure_brew
 # 4. Packages + configs — the same script as day-to-day updates. Forwards
 #    --type <profile> and --no-root.
 bash ./update.sh ${NOROOT:+"--no-root"} "${FORWARD_ARGS[@]+"${FORWARD_ARGS[@]}"}"
-decrypt_secrets
 
 cat <<'EOF'
 

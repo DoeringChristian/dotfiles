@@ -3,8 +3,8 @@
 # register the in-repo tap, install missing packages (`brew bundle`), upgrade all
 # formulae and casks (+ rebuild the --HEAD formulae, bump npm globals), then apply
 # configs (stow). Run it after pulling, after adding a tool to the Brewfile or a
-# config to common/, or just to upgrade. No first-time steps — no Homebrew install,
-# no secret decryption (bootstrap.sh does those, then calls this).
+# config to common/, or just to upgrade. No first-time steps — no Homebrew install
+# (bootstrap.sh does that, then calls this).
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")" && pwd)"
 cd "$REPO"
@@ -172,8 +172,8 @@ echo "==> brew upgrade"
 brew upgrade
 # --greedy so auto-updating / version:latest casks (claude-code) re-fetch too.
 brew upgrade --cask --greedy
-echo "==> rebuild --HEAD formulae (neovim, resh, passage) from latest git"
-brew upgrade --fetch-HEAD "$TAP/neovim" "$TAP/resh" "$TAP/passage" 2>/dev/null || true
+echo "==> rebuild --HEAD formulae (neovim, resh) from latest git"
+brew upgrade --fetch-HEAD "$TAP/neovim" "$TAP/resh" 2>/dev/null || true
 # Bundle's npm entries only install if missing, so bump npm globals. Invoke npm
 # through Homebrew's Node explicitly to avoid an old distro Node on PATH.
 echo "==> npm globals -> latest"

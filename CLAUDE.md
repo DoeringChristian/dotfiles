@@ -17,7 +17,7 @@ cask; `brew upgrade` keeps them latest.
 
 ```bash
 ./bootstrap.sh              # first-time (curl | bash, or in a clone): install git/curl,
-                            # clone, install Homebrew, run update.sh, decrypt the age key
+                            # clone, install Homebrew, run update.sh
 ./bootstrap.sh --no-root    # rootless install into ~/.homebrew (no sudo needed)
 ./update.sh                 # reconcile + upgrade: register/trust the tap, `brew bundle`
                             # (install missing), brew upgrade (+ casks --greedy, --HEAD
@@ -25,7 +25,7 @@ cask; `brew upgrade` keeps them latest.
                             # No brew-install, no secrets.
 ```
 `bootstrap.sh` = git/curl → clone (skipped when run from a clone) → install
-Homebrew → `update.sh` → decrypt the age key. So the package/config logic lives
+Homebrew → `update.sh`. So the package/config logic lives
 once, in `update.sh`; `bootstrap.sh` just adds the one-time bits. For packages
 only, `brew bundle` alone works (after the tap is registered).
 
@@ -35,7 +35,7 @@ Each line is a tool. Notable entries:
 - `brew "doeringc/local/neovim", args: ["HEAD"]` — nightly-equivalent; the local formula prevents mixed host/Homebrew glibc headers on Linux.
 - `brew "tree-sitter-cli"` — the CLI (the `tree-sitter` formula is only the library).
 - `brew "python@3.13"` — provides `python3`; brew doesn't link a bare `python` on macOS.
-- `brew "doeringc/local/neovim"`, `…/resh`, `…/passage`, and Linux `…/zathura*` / `…/hyperqueue` (prebuilt `hq`; macOS builds it via `cargo`) — the in-repo tap formulae.
+- `brew "doeringc/local/neovim"`, `…/resh`, and Linux `…/zathura*` / `…/hyperqueue` (prebuilt `hq`; macOS builds it via `cargo`) — the in-repo tap formulae.
 - `cask "claude-code@latest"`, `cask "codex"`, GUI apps — casks work on Linux too;
   `update.sh` adds Linux fixups (kitty `.desktop`, tev AppImage repack).
 
@@ -57,11 +57,10 @@ helpers, so a bare `./update.sh` reuses the saved profile. Precedence: `--type` 
 
 ```
 Brewfile          # the tool list
-Formula/          # in-repo brew tap (neovim.rb, resh.rb, passage.rb, zathura*.rb, hyperqueue.rb)
+Formula/          # in-repo brew tap (neovim.rb, resh.rb, zathura*.rb, hyperqueue.rb)
 common/           # portable stow package (both platforms)
 darwin/           # macOS-only stow package (config overrides + LaunchAgents)
 stow/             # .stow-global-ignore
-setup/            # encrypted age key (age-key.age)
 bootstrap.sh / update.sh
 ```
 
@@ -75,8 +74,6 @@ bootstrap.sh / update.sh
 - **PATH**: the shell configs put the Homebrew prefix on PATH via `brew shellenv`,
   plus `~/.local/bin`, and append `~/.pixi/bin` (pixi is kept standalone for
   project toolchains). No version-manager shims.
-- **Secrets**: age + passage. `setup/age-key.age` is decrypted to
-  `~/.local/share/age/key.txt` (and `~/.passage/identities`) by `bootstrap.sh`.
 - **claudebox / codexbox** (`common/.local/bin/`): sandboxes Claude Code or Codex
   (Seatbelt on macOS / Bubblewrap on Linux). `codexbox` is shorthand for
   `claudebox --agent codex`. The launcher resolves the selected agent from `PATH`
@@ -84,7 +81,7 @@ bootstrap.sh / update.sh
   special-casing. Everything is readable except denied paths; writes are limited
   to the project and configured mounts. The defaults (agent state, `~/.cache`,
   denied credentials) are the built-in `DEFAULT_CONFIG` in the script;
-  `common/.config/claudebox/config` adds this machine's extras (the age key). A
+  `common/.config/claudebox/config` adds this machine's extras (denied secret paths). A
   project `.claudebox` only applies after `claudebox --trust`. All paths are
   symlink-resolved so bwrap can mount them. Keep it bash-3.2 compatible.
 - **Shared agent skills**: `common/.agents/skills/` is the canonical skill
