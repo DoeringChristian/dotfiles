@@ -144,7 +144,7 @@ repository, release a tag, and bump the pinned `tag` in `pixi.toml` (ask the
 user first); the
 manifest of every build records the installed version. The default style is
 the shared report style. A project may change it only when the user asks,
-through `cairn.toml`: `[style] css = [...]` adds stylesheets after the default
+through `[style]` in `.cairn/config.toml`: `[style] css = [...]` adds stylesheets after the default
 (override its CSS variables such as `--accent` or `--paper`), and `[style]
 template_dir` replaces whole page files (`index.html`, `report.css`,
 `report-extra.css`, `report.js`) by name. Keep such files outside `reports/`,
@@ -211,7 +211,7 @@ title: Boundary-aware smoothing
 summary: >-
   ...
 inputs:
-  fit: feasibility-method@latest     # [project:]name[@vN|@alias|@label]: the result draft
+  fit: feasibility-method@latest     # name[@vN|@alias|@label|@<short id>]: the result draft
   run: runs/feasibility-method@latest   # the run behind it: its metrics.jsonl (loss curves), config, logs
   baseline: reference-baseline@v4
   crops: datasets/crops@paper
@@ -219,11 +219,11 @@ inputs:
 ```
 
 Local names are lowercase identifiers. At build time each reference is
-resolved to an exact version, materialized read-only from the store's cache,
+resolved to an exact version, materialized read-only from the repo,
 and exposed as `inputs.<name>` (a `Path`) in `python exec` blocks and as
 `input:<name>/<file>` in figures. A result draft holds what the experiment
 added to it (`figures/`, `tables/`, `data/`, `metrics.jsonl`); the run
-(`runs/<name>`) holds the per-step series from `run.add`, plus its config
+(`runs/<name>`) holds the per-step series from `cairn.run.add`, plus its config
 and logs, so declare the run when the report plots a training curve. Aliases resolve only completed versions, so a
 running or failed version never reaches a report. The page's Data section,
 `manifest.json`, and the published report version record the exact version of
@@ -238,7 +238,7 @@ depend on it.
 **Strict.** A report may read only its own folder and its declared inputs. The
 read helpers raise a build error for any other path, and while a `python exec`
 block or a `{{ }}` value runs, the build fails when code opens a file inside
-the project or the store cache that is neither in the report folder nor in a
+the project or the repo that is neither in the report folder nor in a
 declared input (for example `open("data/crops/p.json")`). The fix is
 always to publish that evidence as an artifact and declare it, never to read around the rule
 (through a subprocess, a native library, or a path outside the project).
@@ -418,7 +418,7 @@ pixi run report-build                    # builds every report into .cairn/build
 pixi run report-build --report <slug>    # one report
 pixi run publish reports/<slug>          # builds it and stores the next version of reports/<slug>
 pixi run report-serve                    # http://127.0.0.1:8000: the index; reports at /<slug>/
-pixi run ui                              # the Cairn UI on the configured store: projects, reports, artifacts, lineage
+pixi run ui                              # the Cairn UI on the project's repo: reports, artifacts, lineage
 pixi run report-share                    # one self-contained page: .cairn/share/index.html
 ```
 
@@ -431,14 +431,17 @@ version lists its inputs and each input lists the report as a consumer, so the
 UI shows which reports rest on a run.
 
 **View with the user in the Cairn UI.** `pixi run ui` serves the UI for the
-store in `cairn.toml` on `127.0.0.1:8801` (it asks for a store token at login;
-for a local store folder on your own machine, `--no-auth` on loopback skips
-that). Its project page lists the published reports (title, status, summary,
-latest version) and the artifacts; a report opens at its published version
+project's repo (read through its remote, if it has one) on `127.0.0.1:8801`,
+moving to a free port when that one is taken. It prints a one-time login link
+(a code that works once, never the token) and opens it in the browser, so there
+is no token to paste; when the user opens it on another machine, give them the
+printed link (`--no-browser` only prints it). `cairn ui --remote
+<server>/<project>` shows a project on a remote. Its project page lists the
+published reports (title, status, summary, latest version) and the artifacts; a report opens at its published version
 with a Data panel linking each input's artifact page, files, and lineage graph.
-With a store server, `cairn server` already started a UI beside it; give the
-user that URL. `pixi run report-serve` serves the local build without the
-store, for checking a build before publishing.
+With a server, `cairn server` already started a UI beside it; give the user
+that URL. `pixi run report-serve` serves the local build without the repo,
+for checking a build before publishing.
 
 If a port is taken, `serve` moves to the next free port and prints the URL it
 actually uses; keep the default ports in the pixi tasks, and pass
@@ -459,7 +462,7 @@ document tool), publish what Cairn produced exactly as it produced it:
   pass that `file_path` and no `files`. Do not read it into a new page, split
   it, or add to it. If the publish is refused, report the exact refusal to the
   user. Never work around it by editing the page.
-- **The project's store:** `pixi run publish reports/<slug>`, viewed in the UI.
+- **The project's repo:** `pixi run publish reports/<slug>`, viewed in the UI.
 - **A static web host:** the whole `.cairn/build/` folder, every file, with
   the same paths and names.
 
@@ -469,7 +472,7 @@ and never hand-write a new page "based on" a report. A publishing tool's own
 design or formatting guidance (for example "give each page a visual identity"
 or "make it theme-aware") is for pages the agent designs from scratch; it does
 not apply to these reports, because the user's request and the project's
-existing report design take precedence. Only `[style]` in `cairn.toml`,
+existing report design take precedence. Only `[style]` in `.cairn/config.toml`,
 changed when the user asks, alters how the reports look. To change a shared
 page, edit the report sources, share again, and republish to the same
 artifact. If a destination can take neither the folder nor the single page, say

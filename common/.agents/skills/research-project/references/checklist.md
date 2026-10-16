@@ -11,9 +11,9 @@ Environment and runs
       excluded from formatting and other source tooling.
 - [ ] `reports/` holds only report content; Cairn is the pinned `cairn`
       dependency, with no copied or patched tooling in the project and style
-      changes only through `cairn.toml`.
+      changes only through `[style]` in `.cairn/config.toml`.
 - [ ] No experiment-tracking service or custom run database is used; Cairn's
-      store (runs and artifacts) is the record.
+      repo (runs and artifacts) is the record.
 - [ ] `experiments/run.py` is the thin entry point from the skill's assets;
       the run bookkeeping and snapshot callback are imported from Cairn
       (`cairn.runs.hydra`, `cairn.runs.snapshot`), not copied.
@@ -26,7 +26,7 @@ Environment and runs
       the run.
 - [ ] Run names are concise semantic slugs, and descriptions explain purpose
       and interpretation limits.
-- [ ] Evidence is added through `run.add` / `add_*` on the run or a
+- [ ] Evidence is added through `cairn.run.add` / `add_*` on the run or a
       `cairn.draft`; `metrics.jsonl` and `artifacts.jsonl` are append-only and
       name the code that added each file.
 - [ ] `linux-64` is a locked platform, `experiments/cluster.sh` and
@@ -35,7 +35,7 @@ Environment and runs
       cluster study ran through `pixi run <cluster> ...` after the
       GPU-efficiency gate.
 
-Artifacts and store
+Artifacts and repo
 - [ ] Every result a report cites is a draft (`cairn.draft`) written by a
       completed run, so it has that run as its input; failed runs leave no
       version a report could resolve, and no experiment output was published
@@ -43,15 +43,15 @@ Artifacts and store
 - [ ] Datasets and models experiments read are artifacts, used with
       `cairn.use` (exact versions in configs for cited evidence), so each
       run lists them as inputs.
-- [ ] `cairn.toml` names the store (`[store] path`, or the user's server in
-      `[store] url`) and project; no token is in the repository, configs,
-      scripts, logs, or the handoff.
-- [ ] With a store server and a cluster: one `cairn server` on a local disk
-      (never a store folder on a shared filesystem written by several
-      machines), jobs publish over HTTP with `CAIRN_STORE_TOKEN` from the
-      environment, the local queue on persistent storage, `CAIRN_CACHE_DIR`
-      on node-local scratch, `cairn sync` at the end of each job, and
-      `cairn status` shows nothing waiting.
+- [ ] The project has its repo (`cairn init`, `.cairn/config.toml` with the
+      `[repo] exclude` rules); a remote is set (`cairn remote set
+      <server>/<project>`) only for a server the user runs and named; no token
+      is in the repository, configs, scripts, logs, or the handoff.
+- [ ] On a cluster: one `cairn server` on a local disk (never on a compute
+      node or a shared filesystem), the cluster project set to it with `cairn
+      remote set` and its token in `.cairn/token` or `~/.config/cairn/token`,
+      jobs leaving what they could not send in `.cairn/outbox/`, `cairn sync
+      --watch` on the login node, and `cairn status` shows nothing waiting.
 
 Method and evidence
 - [ ] The user confirmed the method specification and consequential

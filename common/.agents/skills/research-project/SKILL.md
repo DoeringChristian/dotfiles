@@ -64,7 +64,7 @@ self-contained.
 
 | Before you | Read |
 |---|---|
-| create a project, change its environment, Hydra configs, run bookkeeping, logging, or the store; publish or pull artifacts; run on a cluster; plan a parameter study | [references/project-setup.md](references/project-setup.md) |
+| create a project, change its environment, Hydra configs, run bookkeeping, logging, the repo or its remote; publish or pull artifacts; run on a cluster; plan a parameter study | [references/project-setup.md](references/project-setup.md) |
 | create, restructure, build, publish, host, or share reports; handle pasted location markers | [references/reports.md](references/reports.md) |
 | write or revise a direction report's Abstract, Background, or Methods | [references/writing-methods.md](references/writing-methods.md), and once per project [references/example-methods.md](references/example-methods.md) |
 | write Mitsuba integrators, scenes, or other plugins | [references/mitsuba.md](references/mitsuba.md) |
@@ -78,7 +78,6 @@ The rubric you review a direction report against is
 ```text
 project/
 ├── pixi.toml, pixi.lock, .envrc, .gitignore
-├── cairn.toml                  # [store] (project, optional url); optional [style]
 ├── configs/                    # Hydra configs; hydra/launcher/ from each cluster's skill
 ├── <concept>/                  # project code, flat imports
 ├── experiments/
@@ -90,12 +89,12 @@ project/
 ├── reports/<slug>/             # one single-page report per research direction
 │   ├── report.md
 │   └── assets/, data/          # non-result material kept with the report
-└── .cairn/                     # everything Cairn writes: local store, run and draft folders, pending uploads, cache, built reports (ignores itself; CAIRN_DIR moves it)
+└── .cairn/                     # the repo (`cairn init`): config.toml ([remote] url, [repo] exclude, optional [style]), artifacts, run and draft folders, outbox, built reports (ignores itself; CAIRN_DIR moves it)
 ```
 
 There is no overview report and no nesting: the Cairn UI's project page and the
 build's index list the reports. Copy bundled assets by content and make the
-copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (store
+copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (repo
 client, runs and drafts, report builder, Hydra helpers, server, UI) is the pinned
 `cairn` dependency: import and run it, never copy or patch it. Initialize Git
 and commit the scaffold before the first run, and commit again before runs a
@@ -109,7 +108,7 @@ Copy this checklist into your reply and tick it off:
 Project setup:
 - [ ] Read references/project-setup.md and references/reports.md
 - [ ] pixi.toml with the pinned cairn (extras hydra, video) and the tasks; pixi install
-- [ ] cairn.toml with [store] (project; the user's server url if they run one)
+- [ ] cairn init; .cairn/config.toml [repo] exclude; cairn remote set <server>/<project> only if the user runs a server
 - [ ] Hydra configs (hydra.run.dir ${cairn.run:}, Cairn's callbacks), experiments/run.py, Experiment base
 - [ ] Cluster files from the slurm skill and each cluster's skill
 - [ ] .gitignore: .pixi/, data/ (Cairn's .cairn/ ignores itself)

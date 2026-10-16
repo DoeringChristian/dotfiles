@@ -13,7 +13,8 @@ builds each into `<output_dir>/<slug>/` (default `.cairn/build/<slug>/`). Then i
    (`stop_hook_active`), only the build check runs again, so the review never loops.
 
 It blocks at most MAX_BLOCKS times in a row; after that it lets the agent stop and tells the user
-what is still open. State lives in `<cairn dir>/reviews/gate.json`. Stdlib only (Python 3.8+).
+what is still open. State lives in `<repo>/reviews/gate.json` (the repo is `$CAIRN_DIR`, else the
+nearest `.cairn/` upward; its `config.toml` places reports). Stdlib only (Python 3.8+).
 """
 
 from __future__ import annotations
@@ -31,67 +32,65 @@ SAMPLE = SKILL / "assets" / "reports" / "direction"  # a fresh scaffold's report
 MAX_BLOCKS = 3
 # Set by a host (e.g. cairn-agents) that gates reports itself; the second name is the older one.
 QUIET_ENVS = ("RESEARCH_REPORT_REVIEWER", "STANDALONE_REPORT_REVIEWER")
-CONFIG = "cairn.toml"
+CONFIG = "config.toml"  # inside the repo, .cairn/config.toml (Cairn 0.14)
 SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,62}")  # Cairn's report folder names
 
 
-def config(root: Path) -> dict:
-    """The top-level keys of cairn.toml that place reports (tomllib when available)."""
-    path = root / CONFIG
+def locate(start: Path) -> tuple[Path, Path] | None:
+    """(project root, repo) by Cairn's rule: the repo is $CAIRN_DIR, else the nearest `.cairn/` upward that
+    holds `repo.json`; the project root is the folder holding that `.cairn/` (with $CAIRN_DIR and no such
+    folder, the working directory). None when there is no repo."""
+    root = next((folder for folder in [start, *start.parents] if (folder / ".cairn" / "repo.json").is_file()), None)
+    if os.environ.get("CAIRN_DIR"):
+        return (root or start), Path(os.environ["CAIRN_DIR"]).expanduser().resolve()
+    return (root, root / ".cairn") if root else None
+
+
+def config(repo: Path) -> dict:
+    """The [reports] table of <repo>/config.toml (tomllib when available)."""
+    path = repo / CONFIG
     if not path.is_file():
         return {}
     text = path.read_text()
     try:
         import tomllib  # Python 3.11+
 
-        return tomllib.loads(text)
+        table = tomllib.loads(text).get("reports")
+        return table if isinstance(table, dict) else {}
     except ImportError:
         pass
     except ValueError:
         return {}
     found = {}
-    for line in text.splitlines():
-        if line.lstrip().startswith("["):
-            break  # top-level keys come before the first table
-        match = re.match(r"\s*(reports_dir|output_dir)\s*=\s*[\"']([^\"']+)[\"']", line)
-        if match:
-            found[match.group(1)] = match.group(2)
-    table = re.search(r"^\[cairn\]\s*$(.*?)(?=^\[|\Z)", text, re.M | re.S)
+    table = re.search(r"^\[reports\]\s*$(.*?)(?=^\s*\[|\Z)", text, re.M | re.S)
     if table:
-        match = re.search(r"^\s*dir\s*=\s*[\"']([^\"']+)[\"']", table.group(1), re.M)
-        if match:
-            found["cairn"] = {"dir": match.group(1)}
+        for match in re.finditer(r"^\s*(dir|output_dir)\s*=\s*[\"']([^\"']+)[\"']", table.group(1), re.M):
+            found[match.group(1)] = match.group(2)
     return found
 
 
-def cairn_dir(root: Path) -> Path:
-    """Cairn's project folder: $CAIRN_DIR, else [cairn] dir in cairn.toml, else <root>/.cairn."""
-    if os.environ.get("CAIRN_DIR"):
-        return Path(os.environ["CAIRN_DIR"]).expanduser()
-    configured = (config(root).get("cairn") or {}).get("dir")
-    return (root / configured) if configured else root / ".cairn"
+class Project:
+    """Where a project's reports and builds are: paths in config.toml are relative to the root."""
+
+    def __init__(self, root: Path, repo: Path):
+        self.root, self.repo = root, repo
+        settings = config(repo)
+        self.reports_dir = root / settings.get("dir", "reports")
+        self.output_dir = (root / settings["output_dir"]) if settings.get("output_dir") else repo / "build"
 
 
-def output_dir(root: Path) -> Path:
-    configured = config(root).get("output_dir")
-    return (root / configured) if configured else cairn_dir(root) / "build"
+def project(start: Path) -> Project | None:
+    """The project around `start` when it has a repo and at least one report."""
+    found = locate(start)
+    if found is None:
+        return None
+    found_project = Project(*found)
+    return found_project if reports(found_project) else None
 
 
-def project_root(start: Path) -> Path | None:
-    """The nearest folder with cairn.toml or pixi.toml that has at least one report."""
-    for folder in [start, *start.parents]:
-        if (folder / CONFIG).is_file() or (folder / "pixi.toml").is_file():
-            return folder if reports(folder) else None
-    return None
-
-
-def reports_dir(root: Path) -> Path:
-    return root / config(root).get("reports_dir", "reports")
-
-
-def reports(root: Path) -> dict[str, Path]:
+def reports(proj: Project) -> dict[str, Path]:
     """Report slug -> its source folder (flat: reports/<slug>/report.md)."""
-    folder = reports_dir(root)
+    folder = proj.reports_dir
     if not folder.is_dir():
         return {}
     return {child.name: child for child in sorted(folder.iterdir())
@@ -114,8 +113,8 @@ def source_hash(folder: Path) -> str:
     return digest.hexdigest()
 
 
-def built_is_current(root: Path, slug: str, folder: Path) -> bool:
-    data = output_dir(root) / slug / "report-data.json"
+def built_is_current(proj: Project, slug: str, folder: Path) -> bool:
+    data = proj.output_dir / slug / "report-data.json"
     if not data.is_file():
         return False
     built = data.stat().st_mtime
@@ -126,11 +125,11 @@ def gate(event: dict) -> dict | None:
     """The hook's answer: None to let the agent stop, or a JSON reply."""
     if any(os.environ.get(name) for name in QUIET_ENVS):
         return None
-    root = project_root(Path(event.get("cwd") or os.getcwd()).resolve())
-    if root is None:
+    proj = project(Path(event.get("cwd") or os.getcwd()).resolve())
+    if proj is None:
         return None
-    found = reports(root)
-    state_file = cairn_dir(root) / "reviews" / "gate.json"
+    found = reports(proj)
+    state_file = proj.repo / "reviews" / "gate.json"
     try:
         state = json.loads(state_file.read_text())
     except (OSError, ValueError):
@@ -142,7 +141,7 @@ def gate(event: dict) -> dict | None:
         return None
 
     problems: list[str] = []
-    stale = [slug for slug in changed if not built_is_current(root, slug, found[slug])]
+    stale = [slug for slug in changed if not built_is_current(proj, slug, found[slug])]
     if stale:
         problems.append("These reports changed after their last build: "
                         + ", ".join(f"reports/{slug}/report.md" for slug in stale)
@@ -189,7 +188,7 @@ def self_review(slugs: list[str]) -> str:
 
 def save(path: Path, state: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    ignore = path.parent.parent / ".gitignore"  # <cairn dir>/.gitignore, as Cairn writes it: never committed
+    ignore = path.parent.parent / ".gitignore"  # <repo>/.gitignore, as Cairn writes it: never committed
     if not ignore.exists():
         try:
             with open(ignore, "x") as handle:

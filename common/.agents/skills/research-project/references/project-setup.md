@@ -1,13 +1,13 @@
 # Project setup
 
 Read this when creating a project, changing its environment, run bookkeeping,
-or store, logging evidence, publishing or pulling artifacts, running on a
+the repo or its remote, logging evidence, publishing or pulling artifacts, running on a
 cluster, or planning a parameter study.
 
 Contents:
 
 - pixi setup
-- Cairn and `cairn.toml`
+- Cairn and `.cairn/`
 - Hydra configuration and run identity
   - Snapshot source and runtime state
   - Where a run lives
@@ -41,7 +41,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn = { git = "https://github.com/DoeringChristian/cairn.git", tag = "v0.13.0", extras = ["hydra", "video"] }
+cairn = { git = "https://github.com/DoeringChristian/cairn.git", tag = "v0.14.0", extras = ["hydra", "video"] }
 
 [activation.env]
 PYTHONPATH = "."
@@ -55,14 +55,14 @@ report-share = "cairn share"
 publish = "cairn publish"
 pull = "cairn pull"
 ui = "cairn ui"
-store-status = "cairn status"
-store-sync = "cairn sync"
+status = "cairn status"
+sync = "cairn sync"
 format = "black --extend-exclude '/([.]pixi|[.]cairn|data)/' ."
 kuma = "bash experiments/cluster.sh kuma"    # one task per cluster the project uses
 lyra = "bash experiments/cluster.sh lyra"
 ```
 
-The pin is `cairn[hydra,video] @ git+https://github.com/DoeringChristian/cairn.git@v0.13.0`
+The pin is `cairn[hydra,video] @ git+https://github.com/DoeringChristian/cairn.git@v0.14.0`
 in pip or uv form (the pixi `[pypi-dependencies]` entry above is the same). The
 extras are `hydra` (the Hydra helpers), `video` (`add_video`), and `server` (only
 on the machine that runs `cairn server`; the UI needs none). Bump the tag only
@@ -80,43 +80,55 @@ own folder `.cairn/` writes a `.gitignore` that ignores itself), and keep the
 explicit Black `--extend-exclude`, because Black does not exclude `.pixi` by
 itself. Every formatter, linter, type checker, and test runner must skip
 environments, `.cairn/`, and generated artifacts. Do not add MLflow, W&B, TensorBoard-as-a-tracker, or a
-custom run database: Cairn's store is the project's one record.
+custom run database: Cairn's repo is the project's one record.
 
-## Cairn and `cairn.toml`
+## Cairn and `.cairn/`
 
 Cairn is one package with these parts: the client (the `cairn` command and the
-light Python API `cairn.init`/`use`/`draft`/`pull`/`publish`/`connect`), the run
+light Python API `cairn.init`/`run`/`use`/`draft`/`pull`/`publish`/`connect`), the run
 and draft machinery, the Hydra helpers (`cairn.runs.hydra`), the report builder,
-the store server (`cairn server`, an API only), and the UI (`cairn ui`, which
-explores a store in a browser). Everything is configured in `cairn.toml` at the
-project root (it is the only config file Cairn reads):
+the server (`cairn server`, an API only), and the UI (`cairn ui`, which
+explores the repo or a remote in a browser). A project is the folder that holds
+its repo, `.cairn/`; `cairn init` creates it (Cairn finds it upward from the
+working directory, as git finds `.git`) with a commented `.cairn/config.toml`,
+the only settings file Cairn reads. Every key is optional:
 
 ```toml
-# cairn.toml
-[store]
-# path = ".cairn/store"        # the local store folder (the default); or, for a shared store:
-# url = "https://<store-host>"  # a `cairn server` the user runs; the token comes from CAIRN_STORE_TOKEN
-project = "<project-slug>"      # default: the project folder's name
+# .cairn/config.toml
+# [remote]                       # written by `cairn remote set`; only if the user runs a server
+# url = "https://<host>/<project>"
+[repo]
 exclude = [".submitit/**/*.pkl"]   # gitignore-style; Slurm job pickles are never published
+# [style]                        # only when the user asks (see reports.md)
 ```
 
-A local store needs nothing else and works offline. Use `url` only when the user
-runs a store server and names it; never invent one or send project data to a
-server the user did not name. Never write the token into the repository,
-configs, scripts, logs, or the handoff: Cairn refuses a `token` key, and the
-token comes from `CAIRN_STORE_TOKEN` (or a chmod-600 `token_file` outside the
-project). The UI asks for a token at login and keeps it out of the browser.
+`.cairn/` ignores itself in git, so these settings are local to the checkout,
+like `.git/config`: on a fresh clone or a cluster, run `cairn init` and set
+them again. Without a remote the repo works alone and offline. Add one only
+when the user runs a server and names it; never invent one or send project data
+to a server the user did not name:
 
-Cairn keeps everything it writes for a project in one folder, `.cairn/` at the
-project root (it ignores itself in git): `store/` (the local store, when no
-server URL is set), `drafts/` (the folders of open and kept runs and drafts),
-`pending/` (versions published while the server was unreachable, not yet
-uploaded), `cache/` (pulled versions, read-only), and `build/` (built reports).
-`CAIRN_DIR` (or `[cairn] dir` in cairn.toml) moves the whole folder;
-`CAIRN_CACHE_DIR` and `CAIRN_DATA_DIR` move only the cache or the pending
-versions. `cairn status` lists versions still waiting, `cairn sync` sends them,
-`cairn drafts` lists open and kept drafts and runs, and `cairn prune` trims the
-cache.
+```bash
+pixi run cairn remote set https://<host>/<project>   # checks it; asks for the token if none is accepted
+pixi run cairn remote                                # shows it; `cairn remote remove` drops it
+```
+
+The last path segment of the URL is the project; the server creates it on the
+first sync. There is no push or pull: every write goes to the repo first and is
+sent by itself (at every command, during and after a run); `pixi run sync`
+(`cairn sync [--watch]`) sends now and `pixi run status` (`cairn status`) lists
+what still waits. There is one token per server, without scopes. A client
+takes the first of `$CAIRN_TOKEN`, `.cairn/token` (where `cairn remote set`
+saves it), and `~/.config/cairn/token`. Never write the token into the
+repository, configs, scripts, logs, or the handoff. Plain HTTP works with a
+warning (the token travels unencrypted); use it only over a VPN or SSH tunnel.
+
+The repo holds everything Cairn writes for the project: the metadata and file
+contents, `versions/` (read-only copies that pulls return), `drafts/` (the
+folders of open and kept runs and drafts), `outbox/` (versions on their way to
+the remote), and `build/` (built reports). `CAIRN_DIR` moves it. `cairn drafts`
+lists open and kept drafts and runs, and `cairn prune` trims the read-only
+copies.
 
 ## Hydra configuration and run identity
 
@@ -286,12 +298,11 @@ import cairn
 
 class Primary(Experiment):
     def run(self, output_dir: Path) -> None:
-        run = cairn.run()                                  # the job's run (cairn.init(...) in a plain script)
         data = cairn.use(self.data_ref)                    # an input of the run: "datasets/crops@v3", exact version recorded
         crops = data.path                                  # read-only local files
         for step in range(self.steps):
             ...
-            run.add({"loss": loss, "step": step})          # one entry of the run's metrics.jsonl
+            cairn.run.add({"loss": loss, "step": step})    # the current run's metrics.jsonl, from anywhere
         with cairn.draft("feasibility-method") as result:  # the result artifact: feasibility-method@vN
             result.add_json("scores", scores, {"split": "test"})
             result.add_table("cases", rows)
@@ -303,8 +314,10 @@ class Primary(Experiment):
   that records code, environment, logs, and system metrics by itself; there is no
   `run.json`. Without the call, the first `cairn.use`, `cairn.pull`, or
   `cairn.draft` starts a run (named after the script), and a later
-  `cairn.init(config=...)` adds the config to it. A non-zero exit, an uncaught
-  exception, or SIGTERM marks the run failed.
+  `cairn.init(config=...)` adds the config to it. After that, `cairn.run` is the
+  process's run from anywhere (`cairn.run.add({...})`, `cairn.run.add_*`); there
+  is no run object to pass around. A non-zero exit, an uncaught exception, or
+  SIGTERM marks the run failed.
 - **`cairn.use("<ref>")`** records the exact version as an input of the run and
   returns the `Version` (`.path` is a read-only local copy; `.ref` the exact
   reference). Pin exact versions (`@v3`) in configs for evidence a report will
@@ -316,7 +329,7 @@ class Primary(Experiment):
 
 ### Record evidence with `add` and `add_*`
 
-The run (`run.add`, `run.add_*`) and every draft share one writer, so write
+The run (`cairn.run.add`, `cairn.run.add_*`) and every draft share one writer, so write
 evidence of the supported kinds through it rather than hand-rolled writers.
 Import Cairn's; never reimplement it. Every `add_*` takes an optional `metadata`
 dict for that item:
@@ -359,16 +372,18 @@ experiments should share report views. Evidence the writer cannot express goes
 into `add_file`, documented in the experiment's docstring, so it is still
 indexed. Never hide important evidence through final-only output, excessive
 aggregation, cherry-picked examples, or presentation-only composites. Put the
-loss curve and other per-step series in the **run** (`run.add`); put the
+loss curve and other per-step series in the **run** (`cairn.run.add`); put the
 results a report cites in the **result draft**.
 
 ## Artifacts: datasets, models, and results
 
-The store holds **artifacts**: named, versioned folders in the project. A name
+The repo holds **artifacts**: named, versioned folders of the project. A name
 is a slash path (`feasibility-method`, `datasets/crops`, `models/denoiser`,
 `runs/feasibility-method`); reports are the artifacts `reports/<slug>`. A
 completed version is immutable; publishing an unchanged folder creates no new
-version. References are `[project:]name[@vN|@alias|@label][//file]`; `latest`
+version. References are `name[@vN|@alias|@label|@<short id>][//file]`, with no
+project prefix; every version also has a short id (7 hex digits, shown by
+`cairn versions` and `cairn show`), and `cairn show <id>` finds it. `latest`
 moves by itself to the newest completed version, other aliases (`best`, `paper`)
 are set by hand (`cairn alias <ref> <alias>`). Runs and result drafts become
 artifacts automatically; datasets and other existing folders you publish:
@@ -376,14 +391,14 @@ artifacts automatically; datasets and other existing folders you publish:
 ```bash
 pixi run publish data/crops datasets/crops               # a dataset (models the same way: models/<name>)
 pixi run publish data/crops datasets/crops --alias paper # and point an alias at it
-pixi run cairn versions <name>                           # number, status, label, created, size
+pixi run cairn versions <name>                           # number, short id, status, label, created, size
 pixi run cairn show <name>@latest                        # metadata, files, inputs, run, consumers
 pixi run pull datasets/crops@v3                          # print a read-only local copy's path
 ```
 
 Do not publish experiment outputs by hand: a folder published with
 `cairn publish` has no run behind it. Whatever an experiment produces goes
-through `cairn.draft` (or, for per-step series, `run.add`) so that it carries
+through `cairn.draft` (or, for per-step series, `cairn.run.add`) so that it carries
 its run. `cairn publish <folder> <name> --watch -- <command>` exists for
 following a job that is not a Cairn run; it is not the experiment flow.
 
@@ -391,7 +406,7 @@ following a job that is not a Cairn run; it is not the experiment flow.
 
 A run's inputs are every version the process used (`cairn.use`, `cairn.pull`,
 also in plain subprocesses via `$CAIRN_INPUTS`). Every draft it publishes has
-exactly one input, the run. So the store records
+exactly one input, the run. So the repo records
 `datasets/crops@v3 -> runs/train@v7 -> models/student@v2`, and a report version
 lists the artifacts it read, so the chain dataset → run → result → report is
 recorded without any extra code (`cairn show`, the UI's lineage graph, `cairn.lineage(ref)`). A multirun sweep is one run per trial plus a summary run whose inputs
@@ -409,7 +424,7 @@ pixi run publish <skill-directory>/assets/sample-run sample-run
 ```
 
 The sample report declares it as `run: sample-run@latest`. When the sample
-report is replaced, the artifact may stay in a local store, but no project
+report is replaced, the artifact may stay in the repo, but no project
 report may declare it.
 
 ## Running on a cluster
@@ -436,37 +451,32 @@ folder>` on the cluster (the folder `cairn drafts` lists for the sweep; the same
 rule as `StudyCompletion`). Commit before submitting runs a report will cite;
 uncommitted changes are recorded as a patch.
 
-**Getting cluster runs into the store.** The safe setup, when the user runs a
-shared store:
+**Getting cluster runs out.** The project lives on the cluster's persistent
+project filesystem, and so does its `.cairn/`. That is a network filesystem
+(NFS, Lustre, GPFS), where a repo has no database: Cairn refuses it without a
+remote, so a cluster project needs the user's server:
 
-- **One store server on a machine with a local disk.** The user runs `cairn
-  server <folder>` (which also starts the UI) on a workstation or service
-  host, behind HTTPS, and creates a write token for the project (`cairn token
-  create <folder> --project <p> --write --name cluster`). Never point several
-  machines or jobs at one store *folder* on NFS or another shared filesystem:
-  only the server writes the store.
-- **Jobs publish over HTTP.** The project's `cairn.toml` names the server
-  (`[store] url`, `project`); the token reaches jobs only as
-  `CAIRN_STORE_TOKEN` in the environment (or a chmod-600 `token_file` in the
-  user's home), put there by the user, never in files, configs, or job
-  scripts in the repository.
-- **Persistent pending data, local cache.** The project's `.cairn/pending/`
-  sits with the project on the cluster's persistent project filesystem, so a
-  version queued by a job that ends is not lost (move it with `CAIRN_DATA_DIR`
-  if the project filesystem lacks space). Point `CAIRN_CACHE_DIR` at
-  node-local scratch (for example `export CAIRN_CACHE_DIR=$TMPDIR/cairn` in
-  the job), so pulls read from a local disk, and run `cairn sync` at the end of
-  each job.
-- **Flush at the end.** A run and its drafts are published by the process
-  itself when it ends; the job (or the step after it) then runs `cairn sync`,
-  so nothing stays queued on the node; `cairn status` on the login node shows
-  anything still waiting. With a store server a running run is also synced while
-  it runs, so the UI shows it live.
+- **One server on a machine with a local disk.** The user runs `cairn
+  server` (which also starts the UI) on a workstation or service host, never on
+  a compute node or with its repo on a shared filesystem, behind HTTPS or a VPN.
+  It serves each project at `<server>/<project>`, prints its token and the
+  `cairn remote set ...` line for other machines, and moves to the next free
+  port when its port is taken (use the port it prints).
+- **The project names it.** On the cluster, `cairn init` and `cairn remote set
+  https://<host>/<project>` in the project folder; the token goes to
+  `.cairn/token` (asked for by `cairn remote set`) or `~/.config/cairn/token`,
+  put there by the user, never in files, configs, or job scripts in the
+  repository.
+- **Jobs write the outbox.** A job keeps each version it makes (its run, its
+  drafts) in its own outbox entry in `.cairn/outbox/` and sends it when it can
+  reach the server (a run is synced while it runs, so the UI shows it live).
+  What a job could not send waits there; `pixi run cairn sync --watch` on the
+  login node sends it as jobs leave it, and `cairn status` there shows anything
+  still waiting, from which host, and why.
 
-Without a store server, the runs are versions in the local store of the
-project on the cluster (`.cairn/store`); to read them elsewhere, serve that
-folder (`cairn server`) or use the cluster's project directory directly. Reports
-are always built where they are written, from the store, never on the server.
+`[repo] allow_network_fs = true` (the owner's word that one process on one host
+is the repo's only writer) is the exception, not the setup for jobs. Reports
+are always built where they are written, from the repo, never on the server.
 
 ## Parameter studies
 

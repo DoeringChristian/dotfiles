@@ -5,9 +5,9 @@
 
 The job is a Cairn run (`cairn.init` is called by `run_experiment`): set
 `hydra.run.dir` and `hydra.sweep.dir` to `${cairn.run:${run.name}}` and register the
-callbacks in configs/config.yaml (see project-setup.md). The experiment gets the run
-with `cairn.run()`, records inputs with `cairn.use(ref)`, and writes its results with
-`with cairn.draft("<name>") as result: result.add_*(...)`.
+callbacks in configs/config.yaml (see project-setup.md). The experiment logs to the
+run with `cairn.run.add({...})`, records inputs with `cairn.use(ref)`, and writes its
+results with `with cairn.draft("<name>") as result: result.add_*(...)`.
 """
 
 import sys
