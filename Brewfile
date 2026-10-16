@@ -83,4 +83,5 @@ brew "doeringc/local/resh", args: ["HEAD"]      # Rust SSH wrapper (development)
 # --- GUI apps + claude CLI (brew casks — these ship Linux variations, so
 #     `brew bundle` installs them on Linux too, not just macOS) ---
 cask "kitty"
+cask "localsend"     # AirDrop alternative (Linux: x86_64 AppImage)
 
