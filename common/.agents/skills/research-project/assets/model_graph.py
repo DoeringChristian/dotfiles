@@ -1,17 +1,21 @@
 """The architecture of a PyTorch model as Graphviz source, drawn from the model itself.
 
-Copy into the project as `tools/model_graph.py` (needs the `torchview` and `graphviz` PyPI
-packages). In a report, pass the result to the Cairn report builder's `graph(...)`, so the diagram is a figure
-card and always matches the code:
+Copy into the report's source folder as `model_graph.py` (needs the `torchview` and
+`graphviz` PyPI packages and the Graphviz executable). Capture the model's exact source
+there too, or import it from a declared source artifact. Display the graph explicitly
+so it is a figure card and always matches the code:
 
-    ```python exec hide
-    import hydra, yaml
-    from tools.model_graph import model_dot
-    config = yaml.safe_load(track(inputs.run / ".hydra" / "config.yaml").read_text())
+    ```{python}
+    #| echo: false
+    #| label: fig-architecture
+    #| fig-cap: "Tensor shapes for one 32×32 RGB image; the dashed block is what this direction adds."
+    import hydra
+    from graphviz import Source
+    from IPython.display import display
+    from model_graph import model_dot
+    config = inputs["run"].config
     model = hydra.utils.instantiate(config["experiment"]["model"])
-    graph(model_dot(model, input_size=(1, 3, 32, 32), depth=2),
-          id="fig-architecture", title="Architecture",
-          caption="Tensor shapes for one 32×32 RGB image; the dashed block is what this direction adds.")
+    display(Source(model_dot(model, input_size=(1, 3, 32, 32), depth=2)))
     ```
 
 `depth` sets how far nested modules are expanded: show the level a paper figure would, where each

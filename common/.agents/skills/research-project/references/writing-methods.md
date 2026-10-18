@@ -21,7 +21,7 @@ organized is in [reports.md](reports.md)):
 1. `## Abstract`: question, approach, principal result, important
    qualification, and current decision, self-contained.
 2. `## Introduction`: how this direction serves the project's shared target
-   (stated briefly, or linked with `report:<slug>#introduction` when another
+   (stated briefly, or linked to the published report's explicit `#introduction` anchor when another
    report defines it), its research question,
    scope, and why the comparison matters.
 3. `## Background and related work`: prior and related work, the baselines,
@@ -65,7 +65,7 @@ the order that suits the method:
 
 Use subsections where the method is large enough to need them, named for their
 content. State each setting the results depend on, and point to the run's
-configs (`configs/experiment/<name>.yaml`, recorded in every run's `.hydra/`)
+configs (`configs/experiment/<name>.yaml`, captured with the resolved config in the run's provenance artifact)
 for the rest instead of listing every value. One definition per method: if the
 method changed, rewrite the section rather than describing both versions.
 
@@ -76,7 +76,7 @@ would have one, and refer to it where its concept is introduced, saying what to
 see in it:
 
 - **A neural network's architecture**, drawn from the model with
-  `tools/model_graph.py` and `graph(...)` (see Diagrams in
+  the captured `model_graph.py` helper and `display(graphviz.Source(...))` (see Diagrams in
   [reports.md](reports.md)), at the depth a paper figure would show: each box
   is a component the text names. Mark what this direction adds or changes.
 - **The model as a graph** when it has several interacting parts: its inputs,
@@ -85,8 +85,8 @@ see in it:
   single equation needs no graph.
 - **A toy example of a key operation**: before and after on a small input, a
   one-dimensional slice, a small grid, the geometry of a constraint. Compute it
-  with the project's own code (a `python exec` block importing the project's
-  functions, or an illustration experiment whose result is added with `add_figure`), never with
+  with the project's own code (a `{python}` block importing captured project
+  functions, or an illustration experiment whose figure is logged as an artifact), never with
   a separate reimplementation or a hand-drawn approximation, so the figure
   shows what the code does.
 
@@ -117,12 +117,15 @@ sources, and cross-reference the project's other direction reports on related
 ideas. Flag prior art where the reader needs it:
 
 ```markdown
-!!! prior-art "Close prior work: <short name>"
-    <Source, with link> already does <what>. This report differs only in
-    <difference>, so it is a replication or an extension, not a new idea.
+::: {.callout}
+**Close prior work: <short name>**
+
+<Source, with link> already does <what>. This report differs only in
+<difference>, so it is a replication or an extension, not a new idea.
+:::
 ```
 
-Use `prior-art` whenever the idea, or a close variant, already exists. Name what
+Use an explicit prior-art callout whenever the idea, or a close variant, already exists. Name what
 remains new, if anything, and let it change the plan (replicate first, reuse
 the reference implementation, or narrow the claim). Never omit a discovered
 overlap because it weakens the novelty of the work.
@@ -160,3 +163,8 @@ the built report as its reader would, decide each item, fix what fails in the
 sources, and rebuild. Fix the problem, not the wording that revealed it: never
 pad a section to make an item pass, and tell the user which items you left
 open and why.
+
+On a host that does not execute Stop hooks, run the gate explicitly with the
+project root as its `cwd`, carry out the same whole-report review, then run it
+with `stop_hook_active: true` only after that review. A successful build does
+not substitute for deciding R1–R9.

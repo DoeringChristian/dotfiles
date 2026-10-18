@@ -6,6 +6,12 @@ hand-set smoothness weight with one predicted by a small network. It shows the
 standard the review expects; do not copy its content, sections, or length into
 another project.
 
+The executable examples assume `model_graph.py` and the exact `priors/` source
+used by the experiment are captured under this report's folder, or imported
+from a declared, pinned source artifact. Declare `prior` as the completed,
+validated model artifact. Replace the example report URLs with the actual
+published version URL and verify its explicit section anchors.
+
 What it does well:
 
 - the problem and the notation come first, and every later equation uses them;
@@ -34,7 +40,7 @@ $$
 
 where $D$ takes forward differences between neighbouring grid points (one row
 per edge $e$) and $w_e \ge 0$ is the smoothness weight on edge $e$. The
-[boundary-aware direction](report:boundary-aware#methods) sets $w_e = 0$ on the
+[boundary-aware direction](https://cairn.example/p/study/reports/REPORT_ID?version=VERSION_ID#user-content-methods) sets $w_e = 0$ on the
 edges that cross a known boundary and $w_e = \lambda$ elsewhere. Real
 observations come without boundaries, so here the weights are predicted from
 the observation: $w = f_\phi(y)$.
@@ -47,12 +53,15 @@ of each edge, enough to tell a boundary (a jump much larger than $\sigma$) from
 noise, and its softplus output keeps every weight non-negative, so the
 objective stays convex and $\hat\theta(w)$ is unique.
 
-```python exec hide
-from tools.model_graph import model_dot
+```{python}
+#| echo: false
+#| label: fig-architecture
+#| fig-cap: "Three 3×3 convolutions (receptive field 9×9) and a 1×1 head with two outputs per grid point: the weights of its right and lower edges."
+from IPython.display import display
+from graphviz import Source
+from model_graph import model_dot
 from priors.network import WeightNet
-graph(model_dot(WeightNet(channels=16), input_size=(1, 1, 64, 64), depth=1),
-      id="fig-architecture", title="Architecture of the weight network",
-      caption="Three 3×3 convolutions (receptive field 9×9) and a 1×1 head with two outputs per grid point: the weights of its right and lower edges.")
+display(Source(model_dot(WeightNet(channels=16), input_size=(1, 1, 64, 64), depth=1)))
 ```
 
 Because the objective is quadratic in $\theta$, the estimate is one linear
@@ -73,9 +82,15 @@ The network is never told where the boundaries are: it learns weights that
 lead to good reconstructions, and Figure [weights](#fig-weight-slice) shows that
 these are small across jumps and large on flat regions.
 
-```python exec hide
+```{python}
+#| echo: false
+#| label: fig-weight-slice
+import matplotlib.pyplot as plt
+from priors.checkpoints import load_checkpoint
 from priors.illustrate import weight_slice_figure
-weight_slice_figure(load_checkpoint(inputs.prior / "files" / "model.pt"), num="weight-slice")
+figure = weight_slice_figure(load_checkpoint(inputs["prior"] / "model.pt"), num="weight-slice")
+display(figure)
+plt.close(figure)
 ```
 
 ### Why it should work
@@ -107,7 +122,7 @@ Training uses 2,000 synthetic lattices of $64 \times 64$ points with
 $\sigma = 0.1$ from the generator in `data/lattices.py`; validation and test
 use 200 lattices each from disjoint seeds, plus a held-out family with curved
 boundaries that training never sees. All methods are evaluated on the same test
-lattices with the boundary residual of the [project target](report:boundary-aware#introduction).
+lattices with the boundary residual of the [project target](https://cairn.example/p/study/reports/REPORT_ID?version=VERSION_ID#user-content-introduction).
 $\lambda$ of the baselines is chosen on the validation set
 by the same grid search, so each baseline is at its best setting. The network
 trains for 20 epochs with batch size 16 and learning rate $10^{-3}$; the

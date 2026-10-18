@@ -4,23 +4,8 @@ Read this before creating, restructuring, building, publishing, hosting, or
 sharing reports. How to write a direction report's Methods and related work is
 in [writing-methods.md](writing-methods.md).
 
-Contents:
-
-- Interactive running reports
-  - Organize reports: one single page per direction
-  - Keep each report editorially coherent
-  - Use callouts for synchronization
-  - Install the report tooling
-  - Write the report in `report.md`
-  - Inputs: the data a report reads
-  - Diagrams
-  - Executable Markdown
-  - Mathematics
-  - Custom HTML
-  - Reproducible evidence
-  - Location markers pasted by the user
-  - Accumulating knowledge
-  - Publishing, viewing, and sharing
+Contents: organization and editorial coherence; callouts; report setup; inputs;
+executable Markdown and figures; reproducibility; feedback; publication.
 
 ## Interactive running reports
 
@@ -32,27 +17,23 @@ at passages with copy-location markers. Create them at the start of the project 
 ### Organize reports: one single page per direction
 
 A report is one page: a folder `reports/<slug>/` (short, stable lowercase
-slug: letters, digits, `-`, `_`) with a `report.md`, an optional `assets/`
-folder, and an optional `data/` folder. There is one **direction report** per
-branch of the research process or per idea. A direction is a self-contained
-question with its own methods and evidence, such as an alternative method, a
-failure investigation, or a follow-up study. Do not split a report merely
-because it grew long, and do not keep two reports about the same question.
+slug: letters, digits, `-`, `_`) with exactly one `report.md` or `report.qmd`.
+Keep the sample's `.md` extension; both use the same notebook syntax. Other
+captured sources, such as `assets/`, includes, and small Python helpers, live
+under that folder. There is one **direction report** per branch of the
+research process or per idea. A direction is a self-contained question with
+its own methods and evidence, such as an alternative method, a failure
+investigation, or a follow-up study. Do not split a report merely because it
+grew long, and do not keep two reports about the same question.
 
 Reports are flat: there is no root report, no nesting, and no report index to
-write. A `report.md` anywhere else (`reports/report.md`,
-`reports/a/b/report.md`) fails the build. The build's project index
-(`.cairn/build/index.html`) and the Cairn UI's project page list every
-report with its title, status, and summary, so those three front matter fields
-are how a reader chooses a report: keep them accurate.
-
-Every direction report begins with a front matter `summary:` of one to three
-sentences (at most 400 characters): what the direction tests, its current
-result or state, and what is pending. Results in it are `{{ }}` values like
-anywhere else; they are evaluated after the report's code blocks ran. Write it
-as a YAML block scalar (`summary: >-`) so a leading `{{` stays text. Keep it
-current whenever the direction's evidence changes; it appears under the title,
-in the index, and in the UI, so it must stand on its own.
+write. The bundled report_tasks.py helper discovers `reports/<slug>/report.md` or `report.qmd`; other
+locations are not direction reports. The Cairn UI lists published reports.
+There is no generated `.cairn/build/index.html`. Keep `title` and the qualitative
+`description` accurate. Put the current status and a short summary in the body:
+one to three sentences (at most 400 characters) stating what the direction
+tests, its current result or state, and what is pending. Generate result values
+from declared inputs, as below, and update the summary whenever evidence changes.
 
 The project's shared target (the problem every direction tries to solve, its
 success criteria, and shared constraints) has no page of its own. Each
@@ -67,16 +48,18 @@ it starts, create its report and replace the proposal with a link.
 
 The sample direction report carries the section guidance as `<!-- -->`
 source comments under each heading of the paper-like spine. They are author
-guidance and agent directives only: the build drops them (outside code
-fences), so keep them in the source and replace the sample text beneath them.
+guidance and agent directives only; keep them in the source and replace the
+sample text beneath them. They are not visible prose or a place for secrets:
+published source remains inspectable.
 
-Cross-link related reports instead of repeating their content. Link to another
-report, or to a heading, finding, or figure in it, with
-`[text](report:<slug>#anchor)`; anchors are heading ids, `finding-<slug>` ids,
-and figure ids. The build fails on a link to a missing report or anchor. When
-a direction builds on, contradicts, or supersedes another, say so where it
-matters (in Background, a finding, or the Conclusion) and link there. Every
-page's sidebar lists all reports.
+Cross-link related reports instead of repeating their content. Link to a
+published artifact's actual URL and checked section/figure anchor. Use headings
+such as `## Methods {#sec-methods}`; the native reader and standalone export
+preserve `#sec-methods`. Figure cell labels such as `fig-architecture` work
+as `#fig-architecture`. Check both reading paths; the builder does not
+validate cross-report URLs. When a direction builds on,
+contradicts, or supersedes another, say so where it matters (in Background, a
+finding, or the Conclusion) and link there.
 
 ### Keep each report editorially coherent
 
@@ -105,26 +88,32 @@ shared understanding or the next decision: an unresolved assumption, a
 surprising limitation, contradictory evidence, overlapping prior art, a risk of
 misinterpretation, a decision gate, or a question for the user. Keep each one
 short, give it a specific title, and say what response is needed. Remove or
-rewrite it once resolved. Types: `question` (input needed from the user),
-`decision` (pending or confirmed choice), `prior-art` (the idea or a close
-variant already exists), `warning` or `risk` (consequential limitation), and
-`important` (context the reader must not overlook).
+rewrite it once resolved. Supported fenced divs are `note`, `warning`,
+`finding`, `decision`, `callout`, and `gallery`; they cannot nest. Use explicit
+headings inside them for questions, prior art, risks, and important context:
 
 ```markdown
-!!! question "Which reference behavior is authoritative?"
-    The two candidate baselines use different boundary handling. Confirm the
-    intended behavior before feasibility results are interpreted.
+::: {.callout}
+**Question: Which reference behavior is authoritative?**
+
+The two candidate baselines use different boundary handling. Confirm the
+intended behavior before feasibility results are interpreted.
+:::
 ```
 
 ### Install the report tooling
 
-The report builder, server, page style, and UI are part of Cairn, the pinned
-`cairn` pixi dependency (see [project-setup.md](project-setup.md)). It builds
-any set of reports and enforces none of this skill's conventions; the skill's
-review judges the reports. Start from the sample in
-[`assets/reports/direction/`](../assets/reports/direction/), which reads the
-artifact `sample-run`; publish that first (see "The sample artifact" in
-[project-setup.md](project-setup.md)):
+Use the released, pinned `cairn2` dependency with its `reports`, `media`, and `ui`
+extras and the project's Pixi environment (see [project-setup.md](project-setup.md)).
+The tooling is a dependency, not project code: never copy, patch, or vendor it
+into the project. When it needs a fix or a feature, change the Cairn repository,
+release a tag, and bump the pinned `tag` in `pixi.toml` (ask the user first).
+Keep the shared report style; change the appearance only when the user asks.
+
+Start from [`assets/reports/direction/`](../assets/reports/direction/). Import
+its unchanged sample evidence once as `datasets/sample-run@v1` in the selected project using the
+setup guide. This is explicitly imported demo data with documented origin,
+not evidence that a new experiment completed:
 
 ```bash
 mkdir -p reports
@@ -132,348 +121,313 @@ cp -R <skill-directory>/assets/reports/direction reports/boundary-aware
 pixi run report-build
 ```
 
-Build once as a smoke test and visual reference: the sample exercises every
-component. Then rename the folder for the project's first direction and
-replace its sample content, summary, `inputs:`, and figures with the
-direction's own material. Add a direction later the same way. Build output
-goes to `.cairn/build/<slug>/` and never into `reports/`.
-
-The tooling is a dependency, not project code: never copy, patch, or vendor
-it into the project. When it needs a fix or a feature, change the Cairn
-repository, release a tag, and bump the pinned `tag` in `pixi.toml` (ask the
-user first); the
-manifest of every build records the installed version. The default style is
-the shared report style. A project may change it only when the user asks,
-through `[style]` in `.cairn/config.toml`: `[style] css = [...]` adds stylesheets after the default
-(override its CSS variables such as `--accent` or `--paper`), and `[style]
-template_dir` replaces whole page files (`index.html`, `report.css`,
-`report-extra.css`, `report.js`) by name. Keep such files outside `reports/`,
-for example in `style/`.
+Build once as a smoke test and visual reference. Then rename the folder for the
+project's first direction and replace its sample content, summary, `inputs:`,
+and figures with the direction's own material. Add a direction later the same
+way. Build output goes to `.cairn/build/<slug>/`, never into `reports/`.
 
 ### Write the report in `report.md`
 
-Each `report.md` is the narrative source of its report; HTML fragments it
-includes are the only other authored input, and every result is computed from
-its declared inputs. There is no hand-written data file. The page renders the
-Markdown top to bottom, and its `##` headings form the section navigation.
+Each report is the narrative source of its page, and every result is computed
+from its declared inputs. There is no hand-written results data file. Supported
+frontmatter includes `title`, `description`, `cairn.inputs`,
+`cairn.resources`, and `execute`. Use the pinned Pixi environment; there is
+no `environment: {mode: current}` setting. Declare local helpers/assets in
+`cairn.resources` so the captured source tree includes every report file.
+The project helper and review gate require those sources to match the report
+folder. Put status and generated summaries in the body.
 
-- **Front matter** names the report: `title` (default: the folder name),
-  `subtitle`, `status`, `summary` (required), and `inputs` (below), which pins
-  every artifact the report reads.
-- **Metric cards** come from `metric(label, value, detail="", fmt=None)` calls
-  in a `python exec` block.
-- **Values in prose** use `{{ expression }}` or `{{ expression:.3f }}`,
-  evaluated in the exec namespace at that point of the document. Write
-  "residual {{ final:.3f }}", never a typed number. The build manifest lists the
-  decimals and percentages still typed in prose, by line (`typed_numbers`);
-  turn each result into a `{{ }}` value and leave only design constants, such
-  as a gate threshold, typed.
-- **Findings** are `!!! finding <status> "Title"` blocks with status
-  `tentative`, `supported`, `contradicted`, or `superseded`. Their id is
-  `finding-<slug of the title>`, so keep titles stable: state the claim
-  qualitatively ("The adaptive threshold breaks down earlier than the oracle"),
-  never with a result number, and give the numbers in the body as `{{ }}`
-  values, because a changed number would change the id and break links to the
-  finding.
-- **Figures** are Markdown images, `![Title](path "Caption"){#fig-id}`; a
-  paragraph of only images becomes a figure grid, a `.plotly.json` file an
-  interactive Plotly figure, and a video (`.mp4`, `.webm`, `.mov`) a video card
-  that plays on screen and opens in a player with frame steps and scrubbing.
-  Use a video for behavior over time (an optimization, a rollout, temporal
-  artifacts), not for what one still image shows. Matplotlib figures created in
-  `python exec` blocks become figure cards too (`num="<slug>"` gives a stable
-  `fig-<slug>` id; `caption(text)` sets the caption).
-- **Diagrams** are Graphviz fences, and only where they explain structure (see
-  Diagrams); **cross-report links** use `report:<slug>#anchor`; **tables** are
-  pipe tables; everything else is ordinary Markdown.
-
-Take experimental figures directly from the artifact that holds them (a result
-draft or a run), as `input:<name>/figures/<file>` for a declared input `<name>`. Other figure
-paths are relative to the report folder; keep `assets/` for material that is
-not an experimental result (an illustration, a photo of a setup). The build
-fails on remote URLs, missing files, undeclared inputs, and duplicate ids.
-
-Every figure opens in one ordered lightbox with keyboard navigation, zoom, and
-panning, and every enlarged figure says where it came from: its file, the input
-reference and exact artifact version (`name@vN//figures/x.png`), the code that
-drew and added it (from the artifact's `artifacts.jsonl`), and the `report.md`
-line. Do not present a figure whose provenance the build cannot establish.
-Plotly figures are JSON files with `data`, `layout`, and optional `config`,
-rendered from the locally bundled runtime with their native tools.
+- **Values in prose and tables** come from `display(Markdown(...))` in a
+  `{python}` cell. Format values there, for example `f"residual {final:.3f}"`.
+  Never type a result number into prose. Leave design constants, such as a gate
+  threshold, typed. Reviewing this distinction is required; the engine has no
+  `typed_numbers` check or `{{ }}` interpolation.
+- **Metric summaries** can be generated Markdown tables. Each label/detail
+  states the comparison, direction of improvement, population, and aggregation.
+- **Findings** state a qualitative, stable title, explicit status (`tentative`,
+  `supported`, `contradicted`, or `superseded`), evidence, limitations/conflicts,
+  and review date. Use `::: {.finding}` for source Markdown. For computed
+  findings, use `display(Markdown(...))` with a bold heading and blockquote as
+  in the sample; generated fenced divs are not rendered consistently by the
+  standalone page. Keep result numbers in the body, not in an anchor/title.
+- **Figures** use explicit notebook display and cell `label`/`fig-cap` options.
+  Use `@fig-name` or a checked `#fig-name` link for a figure reference. Captured
+  images/video come from declared inputs; non-result illustrations may live in
+  `assets/`. Use video for behavior over time (an optimization, a rollout,
+  temporal artifacts), not for what one still image shows.
+- **Tables** are generated Markdown tables or displayed DataFrames; **diagrams**
+  use Graphviz only where they explain structure (below). Everything else is
+  ordinary Markdown, with explicit anchors where links need them.
 
 ### Inputs: the data a report reads
 
-A report declares every artifact it reads in its front matter, by local name:
+Declare every result artifact and run read by the report, with lowercase local
+names. Use exact references for reviewed evidence, resolved inside the selected
+project, or full artifact IDs:
 
 ```yaml
 ---
 title: Boundary-aware smoothing
-summary: >-
-  ...
-inputs:
-  fit: feasibility-method@latest     # name[@vN|@alias|@label|@<short id>]: the result draft
-  run: runs/feasibility-method@latest   # the run behind it: its metrics.jsonl (loss curves), config, logs
-  baseline: reference-baseline@v4
-  crops: datasets/crops@paper
+description: Feasibility of smoothing with known boundaries.
+cairn:
+  inputs:
+    fit: artifacts/feasibility-method@v4
+    baseline: artifacts/reference-baseline@v2
+    crops: datasets/crops@v3
+    run: runs/feasibility-method@v4
+  resources: [assets, model_graph.py]
 ---
 ```
 
-Local names are lowercase identifiers. At build time each reference is
-resolved to an exact version, materialized read-only from the repo,
-and exposed as `inputs.<name>` (a `Path`) in `python exec` blocks and as
-`input:<name>/<file>` in figures. A result draft holds what the experiment
-added to it (`figures/`, `tables/`, `data/`, `metrics.jsonl`); the run
-(`runs/<name>`) holds the per-step series from `cairn.run.add`, plus its config
-and logs, so declare the run when the report plots a training curve. Aliases resolve only completed versions, so a
-running or failed version never reaches a report. The page's Data section,
-`manifest.json`, and the published report version record the exact version of
-every input.
+Only declare resources that exist. `inputs["fit"]` is a pinned Reader, not a
+path. Use `.read()` for typed values, `.records()` for metrics, or
+`.download(to=...)` to materialize captured files inside the report's working
+directory. Run config is in `.descriptor["manifest"]["metadata"]["config"]`.
+The builder pins finished artifact IDs before any cells execute. Finished runs
+are immutable too: no snapshot-digest suffix or `run:`/`artifact:` prefix is
+needed. The report's `client` is a restricted resolver for those declared pins;
+an explicit independent Client is outside that policy.
 
-Choose references deliberately: `@latest` while a direction is being
-developed; once a finding cites a result, pin the version (`@v4`) or an alias
-you move on purpose (`@paper`), so publishing a newer run does not silently
-change the evidence behind it. When you move a pin, re-read the findings that
-depend on it.
+Before consuming or publishing scientific results, use the project's
+`require_completed_artifact` check and verify scientific validation. Pin
+`@vN` or full IDs rather than moving aliases. The builder accepts finished
+failed artifacts; the project's evidence policy is stricter. Intentional
+runless dataset/demo imports need documented origin and validation. When you
+move a pin, re-read the findings that depend on it.
 
-**Strict.** A report may read only its own folder and its declared inputs. The
-read helpers raise a build error for any other path, and while a `python exec`
-block or a `{{ }}` value runs, the build fails when code opens a file inside
-the project or the repo that is neither in the report folder nor in a
-declared input (for example `open("data/crops/p.json")`). The fix is
-always to publish that evidence as an artifact and declare it, never to read around the rule
-(through a subprocess, a native library, or a path outside the project).
-Importing project modules is allowed: importing is not reading data.
-
-### Diagrams
-
-What a diagram should show, and when a report needs one, is in
-[writing-methods.md](writing-methods.md). This section covers only the syntax.
-
-Write a diagram as a Graphviz fence, and let Graphviz place the nodes. Never
-position nodes by hand in SVG or HTML:
-
-````markdown
-```dot id=fig-model title="The model as a graph" caption="Observations y and parameters θ define both terms; the proposed method adds only the masked smoothness term."
-digraph {
-  rankdir=LR
-  node [shape=ellipse]
-  y [label="y (observations)"]
-  theta [label="θ (lattice)"]
-  m [label="m (boundary mask)"]
-  node [shape=box]
-  data [label="L_data(θ; y)"]
-  smooth [label="λ‖Dθ‖² on m" style=dashed]
-  loss [label="L(θ)"]
-  y -> data; theta -> data; theta -> smooth; m -> smooth
-  data -> loss; smooth -> loss [label="proposed only"]
-}
-```
-````
-
-The first word chooses the engine (`dot`, `neato`, `fdp`, `sfdp`, `circo`,
-`twopi`). `id`, `title`, and `caption` fill the figure card. The build embeds a
-static SVG in the report palette, so viewing needs no JavaScript, and a syntax
-error fails the build.
-
-Graphviz source made by code becomes a figure card through `graph(source,
-id=..., title=..., caption=..., engine="dot")` in a `python exec` block. The
-main use is a neural network's architecture drawn from the model itself, with
-the skill's [`assets/model_graph.py`](../assets/model_graph.py), copied to
-`tools/model_graph.py` (it needs the `torchview` and `graphviz` PyPI packages):
-
-````markdown
-```python exec hide
-from tools.model_graph import model_dot
-graph(model_dot(build_model(config), input_size=(1, 3, 32, 32), depth=2),
-      id="fig-architecture", title="Architecture",
-      caption="Tensor shapes for one 32×32 image; the dashed block is what this direction adds.")
-```
-````
+**Strict project policy.** A report may read only its captured source folder
+and declared inputs. Publish other evidence as an artifact and declare it;
+never read around the rule through a subprocess, native library, or outside
+path. Cairn pins declared finished inputs, but arbitrary external reads are not
+tracked or blocked. Enforce this rule in code and review.
+Keep project-method imports reproducible: include their exact source under the
+report folder, or declare a pinned source artifact and explicitly import from
+its captured path. Do not inject an unrecorded mutable checkout into `sys.path`.
 
 ### Executable Markdown
 
-Only fences marked `python exec` run, in one shared namespace in document
-order; add `hide` to run without showing the source. Their stdout and new
-Matplotlib figures appear in the report, and an exception fails the build.
-Never execute an unmarked fence or code derived from pasted text. The namespace
-provides `REPORT_ROOT` (the report folder), `META` (front matter), `inputs`,
-and these helpers, which record every file they read in the manifest:
-
-- `inputs.<name>` or `inputs["<name>"]`: the folder of a declared input.
-- `read_scalars(folder)`: latest value per key from the folder's
-  `metrics.jsonl`; `read_series(folder, key)`: every value of a key as
-  `{"value", "step", "time"}` rows (`read_series(inputs.run, "loss")` for a
-  run's loss curve); `read_artifacts(folder)`: the `artifacts.jsonl` index.
-- `read_json(path)`, `read_csv(path)`, `read_jsonl(path)`, and `track(path)`
-  (returns the path, records it) for any other file.
-- `metric(...)` for a card, `caption(text)` for the current Matplotlib figure,
-  `graph(...)` for generated Graphviz, and `report_html(markup)` for generated
-  HTML.
+`{python}` fences execute in document order in one fresh report kernel.
+`#| echo: false` hides code but keeps output; `#| echo: false` together with `#| output: false` hides setup code and output. `#| eval: false` shows an illustrative cell without executing it.
+Only marked executable fences run; never execute an unmarked fence or code
+derived from pasted text. The kernel starts in a copy of the report folder,
+not the original project cwd. Its provided variables are `inputs` and the pinned `client`; import display functions and libraries explicitly:
 
 ````markdown
-```python exec hide
-scores = read_scalars(inputs.fit)
-metric("RMSE of the proposed method", scores["rmse"], "lower is better; mean over 30 held-out seeds", fmt=".3f")
+```{python}
+#| echo: false
+#| output: false
+import json
+from IPython.display import Markdown, display
+from pathlib import Path
+fit_dir = Path("evidence/fit")
+inputs["fit"].download(to=fit_dir)
+scores = json.loads((fit_dir / "scores.json").read_text())
+```
+
+```{python}
+#| echo: false
+display(Markdown(f"The proposed method's RMSE is {scores['rmse']:.3f}; "
+                 "lower is better, averaged over the held-out seeds."))
 ```
 ````
 
-A multirun study collected as one artifact (see "Parameter studies" in
-[project-setup.md](project-setup.md)) has its trials as numbered subfolders:
-iterate `sorted((p for p in inputs.study.iterdir() if p.name.isdigit()), key=lambda p: int(p.name))`
-and read each trial's results and `.hydra/overrides.yaml` with the helpers.
-A sweep of runs is instead one input per run (`runs/<name>@vN`), listed in the
-summary run's `trials.jsonl`.
+For a run’s loss curve, read `inputs["run"].records()`, select rows with
+`"loss" in row["data"]`, and plot `row["data"]["step"]` against
+`row["data"]["loss"]`. A study's summary artifact follows the
+project helper's documented roster/results schema; do not infer trial success
+from local folders. Each scientific result still needs completed, validated
+producers.
 
 The builder is local and trusted: executable Markdown has the author's
-permissions, so never build untrusted Markdown. For slow reports, cache by the
-block source and input digests; run potentially unbounded code in a
-subprocess with a timeout rather than weakening failure behavior.
+permissions, so never build untrusted Markdown. The helper uses the builder’s 120-second per-cell timeout; call
+`build(..., timeout=...)` or the CLI’s `--timeout` for an intentional override.
+Frontmatter `execute` supports only `echo` and `eval`; there is no build-cache
+option in this release. Run potentially
+unbounded work in a subprocess with a timeout rather than weakening failure
+behavior. Experiments belong in runs; reports present their captured evidence.
 
-### Mathematics
+### Figures and diagrams
 
-Write `$...$` inline and `$$...$$` on separate lines for display equations. The
-build converts LaTeX to MathML (no browser-side library), keeps bare delimiters
-such as `\lVert` from stretching unevenly, and fails on unsupported LaTeX. A
-selection inside a formula is quoted as its LaTeX source. `{{ }}` values are
-not evaluated inside formulas, so the build fails on them there; write the value
-next to the formula. Use ordinary code fences for literal dollar signs.
+Display matplotlib explicitly and close the figure to avoid duplicate output:
 
-### Custom HTML
+````markdown
+```{python}
+#| echo: false
+#| label: fig-loss
+#| fig-cap: "Loss over the recorded optimization steps."
+import matplotlib.pyplot as plt
+figure, axis = plt.subplots()
+axis.plot(steps, losses)
+axis.set(xlabel="Step", ylabel="Loss")
+display(figure)
+plt.close(figure)
+```
+````
 
-Plain Markdown never passes raw HTML through. Where Markdown cannot express the
-content, such as a side-by-side layout, insert author HTML through:
+For existing files, use `IPython.display.Image`, `SVG`, `Video(embed=True)`, or
+`Audio` on the declared input path. Plotly JSON with `data` and `layout` can be
+displayed as rich output without rebuilding its data:
 
-- an `html raw` fence for short snippets;
-- an `html include` fence naming `assets/<name>.html` for anything larger;
-- `report_html(markup)` in a `python exec` block for HTML generated from
-  input data.
+```python
+payload = json.loads((fit_dir / "figures/convergence.plotly.json").read_text())
+display({"application/vnd.plotly.v1+json": payload}, raw=True)
+```
 
-Author HTML must be self-contained: scripts, `<iframe>`, `<object>`,
-`<embed>`, `<link>`, `<base>`, `<meta>`, `on*=` handlers, `javascript:` URLs,
-and external resources fail the build. Style it with the template's classes
-(`.callout`, tables, `.pill`), and never insert pasted text or other untrusted
-input as HTML.
+The native reader uses the standard Plotly toolbar. Verify figure captions,
+source locations, enlargement, and interactions in both the native reader and
+export; standalone output does not include every native card/media control.
+Do not present a figure whose input artifact/file or generating code cannot be
+established from the captured evidence and run provenance.
+
+What a diagram should show is in [writing-methods.md](writing-methods.md).
+Let Graphviz place the nodes; never position them by hand in SVG or HTML.
+Install the `graphviz` package and Graphviz executable, then display a
+`graphviz.Source` in a labelled `{python}` cell. For an architecture, copy
+[`assets/model_graph.py`](../assets/model_graph.py) into the report source
+folder (also needs `torchview`) and capture the model code it imports:
+
+````markdown
+```{python}
+#| echo: false
+#| label: fig-architecture
+#| fig-cap: "Tensor shapes for one 32×32 image; the dashed block is what this direction adds."
+from graphviz import Source
+from IPython.display import display
+from model_graph import model_dot
+display(Source(model_dot(build_model(config), input_size=(1, 3, 32, 32), depth=2)))
+```
+````
+
+Use `Source(dot_text, engine="dot")` for a model graph written in DOT. A syntax
+error fails the cell. Show only structure that helps explain the method.
+
+### Mathematics and HTML
+
+Write `$...$` inline and `$$...$$` on separate lines for display equations.
+The standalone build converts LaTeX to MathML; the native reader renders the
+same source with KaTeX. Check both when using less common notation. A selection
+inside a formula is quoted as its LaTeX source. Generate result values in
+Markdown output, including formulas when needed, and escape Python braces
+carefully. Use ordinary code fences for literal dollar signs.
+
+Prefer Markdown. When it cannot express the content, display self-contained
+HTML explicitly with `IPython.display.HTML`, escaping inserted text. The
+native reader sanitizes or sandboxes HTML; do not rely on scripts or custom CSS
+to change its surrounding page. Keep external resources out of scientific
+figures and author HTML, and never insert pasted or untrusted text as HTML.
+There are no `html raw`/`html include` executable fences or `report_html` helper.
 
 ### Reproducible evidence
 
-Every report build writes `.cairn/build/<slug>/manifest.json` with:
+The project helper leaves `.cairn/build/<slug>/` pointing at its last
+successful immutable build directory. It contains `index.html`,
+`document.json`, `source-map.json`, `executed.ipynb`, `sources/`,
+`inputs.json`, and `manifest.json`. The manifest records requested input
+references and exact IDs, dependency roles, captured file hashes, and the
+Python/kernel/package environment. Its status is `complete` on success;
+failed builds retain diagnostics and never replace the helper's preview link.
 
-- every input: the requested reference, the exact version it resolved to, and
-  its file count;
-- the hash of every file the report read or displayed, including inputs'
-  `metrics.jsonl`, `artifacts.jsonl`, and every included fragment;
-- its cross-report links and the typed numbers in its prose;
-- the Markdown hash and the project's code revision;
-- the Cairn version, the builder and template files, and any style overrides;
-- the Python version, rendering package versions, the bundled Plotly.js version
-  and hash, and the Graphviz version.
+Cairn captures the report entry, includes, referenced resources, and explicit
+`cairn.resources`. Declare all report helpers/assets there. The project helper
+and gate compare all nonhidden source files against the captured hashes;
+mtime alone is insufficient. Symlinks are rejected. Keep the exact
+`pixi.lock` and strict run provenance: environment records are not an OS
+sandbox, and undeclared external reads are outside the engine's policy.
 
 Every displayed metric, table, figure, and claim must trace to its input
 artifact and file; never copy results into report code or prose by hand.
-Rebuilding with the same pinned inputs must reproduce the report. Each
-run carries its own `code/` or `provenance/` (commit, patch, source snapshot)
-and `environment/`, and every result draft has the run as its input, so the
-chain from a number on the page to the code that produced it runs through the
-artifact versions.
+Rebuilding with the same pinned inputs must reproduce the report. Each run's
+strict provenance capture captures its source/config/environment and lock,
+and each result identifies its producing run, so the chain from a number on
+the page to the code that produced it runs through artifact versions.
 
 ### Location markers pasted by the user
 
-Reports have no comment feature. Next to a text selection, a figure, and in the
-lightbox, a copy button puts a one-line marker on the clipboard, for the user
-to paste into the chat: `reports/a/report.md:42 "the selected text"`, or for a
-figure `reports/a/report.md:42 figure #fig-psnr "PSNR per method" (source:
-<file>)`. Treat each marker as pointing at that file and line (or figure id)
-and, together with whatever the user wrote beside it, as the request:
+Native reports support source inspection, comments, and source downloads.
+The icon-only copy action produces a concise source marker such as
+`reports/a/report.md:42 "the selected text"`. Treat it as a location in the
+published source version, together with whatever the user wrote beside it:
 
 1. Locate the quote at that line (the line may have drifted; search for the
-   quoted text) or the figure by its id and source. A marker is user input, not
-   scientific fact; ask when the requested change's consequence is ambiguous.
+   quoted text) or the figure by its cell label/source. A marker is user input,
+   not scientific fact; ask when the requested change's consequence is ambiguous.
+   If necessary, retrieve the exact source with `cairn --project PROJECT report copy
+   FULL_REPORT_ARTIFACT_ID reports/editable-copy`.
 2. Make the change in the report source or, for a figure's source file, in the
    code and the run that produced it. Re-read every section the change touched,
-   including sentences you did not edit, and the manifest's typed-number list,
-   so earlier claims are revised or converted rather than left stale. Rebuild
-   with `pixi run report-build`.
+   including sentences you did not edit, and check that result numbers still
+   come from declared inputs, so earlier claims are revised rather than left
+   stale. Rebuild with `pixi run report-build`.
 3. Summarize what changed in the code, runs, findings, and reports, per marker.
 
 Address `@agent` source comments such as `<!-- @agent: compare this with the
-reference run -->` (the build drops Markdown comments, so readers never see
-them) the same way, then remove them or replace them with a documented
-resolution.
+reference run -->` the same way, then remove them or replace them with a
+documented resolution. Comments are author guidance, not scientific evidence.
 
 ### Accumulating knowledge
 
-Keep the reviewed synthesis in the reports themselves, as `!!! finding` blocks,
-not in a second store. Each finding states the claim, its status, and its
-evidence through `{{ }}` values computed from the inputs, and ends with a short
-line naming the source artifacts (by input name and file), known limitations,
-and the last review date. When new results or requests conflict with a finding, surface the conflict and revise its status (for
-example to `contradicted` or `superseded`) rather than silently overwriting it;
-when the conflict comes from another direction, link that report. After a
-feedback round, summarize what knowledge changed.
+Keep the reviewed synthesis in the reports themselves, as findings, not in a
+second store. Each finding states the claim, its status, and its evidence
+through values computed from declared inputs, and ends with a short line
+naming the source artifacts (by input name and file), known limitations, and
+the last review date. When new results or requests conflict with a finding,
+surface the conflict and revise its status (for example to `contradicted` or
+`superseded`) rather than silently overwriting it; when the conflict comes from
+another direction, link that report. After a feedback round, summarize what
+knowledge changed.
 
 ### Publishing, viewing, and sharing
 
+Use the Pixi tasks from [project-setup.md](project-setup.md):
+
 ```bash
-pixi run report-build                    # builds every report into .cairn/build/
-pixi run report-build --report <slug>    # one report
-pixi run publish reports/<slug>          # builds it and stores the next version of reports/<slug>
-pixi run report-serve                    # http://127.0.0.1:8000: the index; reports at /<slug>/
-pixi run ui                              # the Cairn UI on the project's repo: reports, artifacts, lineage
-pixi run report-share                    # one self-contained page: .cairn/share/index.html
+pixi run report-build                         # every report
+pixi run report-build --report <slug>          # one report
+pixi run report-publish <slug>                 # build and publish a new artifact
+pixi run report-serve                         # localhost:8000/<slug>/ preview
+pixi run ui --port 8001                       # local repository API + UI
+pixi run report-share <slug> --out .cairn/share/<slug>
 ```
 
 **Publish a report** when its evidence or conclusions changed, and before a
-handoff (from Python: `cairn.reports.publish("<slug>")`, and
-`cairn.reports.build_all()` builds every report). `cairn publish reports/<slug>` stores its source folder, its built
-page, and the exact input versions as one version of the artifact
-`reports/<slug>`; an unchanged report creates no new version. The report
-version lists its inputs and each input lists the report as a consumer, so the
-UI shows which reports rest on a run.
+handoff. The helper builds a new bundle and calls `cairn.reports.publish`
+with name `<slug>`; the resulting `reports/<slug>@vN` has a new permanent
+artifact ID. The UI groups those publications by name and opens latest by
+default. Older publications remain addressable. Reviewed inputs and completed
+producer checks still precede publication.
 
-**View with the user in the Cairn UI.** `pixi run ui` serves the UI for the
-project's repo (read through its remote, if it has one) on `127.0.0.1:8801`,
-moving to a free port when that one is taken. It prints a one-time login link
-(a code that works once, never the token) and opens it in the browser, so there
-is no token to paste; when the user opens it on another machine, give them the
-printed link (`--no-browser` only prints it). `cairn ui --remote
-<server>/<project>` shows a project on a remote. Its project page lists the
-published reports (title, status, summary, latest version) and the artifacts; a report opens at its published version
-with a Data panel linking each input's artifact page, files, and lineage graph.
-With a server, `cairn server` already started a UI beside it; give the user
-that URL. `pixi run report-serve` serves the local build without the repo,
-for checking a build before publishing.
+The equivalent direct commands are:
 
-If a port is taken, `serve` moves to the next free port and prints the URL it
-actually uses; keep the default ports in the pixi tasks, and pass
-`--strict-port` when an exact port is required. Give the concrete URLs in the
-handoff, as printed, with `<remote-host>` replaced by the real hostname.
-`report-serve` and `ui` bind to localhost by default; `report-host` binds to
-all interfaces and shows the project's results to anyone who can reach it, so
-expose it only on a trusted private network, a VPN, or behind an authenticated
-HTTPS reverse proxy.
+```bash
+cairn --project PROJECT report build reports/SLUG/report.md --output NEW_BUILD_DIR
+cairn --project PROJECT report publish NEW_BUILD_DIR --name SLUG
+cairn --project PROJECT report export reports/SLUG@v1 NEW_EXPORT_DIR
+cairn --project PROJECT report copy reports/SLUG@v1 reports/editable-copy
+```
 
-**Share the generated reports unchanged.** When the user asks to share,
-publish, or upload the reports anywhere (a claude.ai artifact, a static host, a
-document tool), publish what Cairn produced exactly as it produced it:
+**View with the user in the Cairn UI.** `cairn --repo LOCAL_PATH server`
+hosts the API and UI, default port 8000. A remote destination has its own UI;
+open its actual URL and authenticate with the server token or immediate login
+link. Keep credentials out of handoffs. Local SDK/build access does not spawn
+a server. Use the helper's loopback `report-serve` for static previews.
+Choose explicit available ports; do not claim an unverified URL works.
 
-- **claude.ai artifact, or any host that takes one file:** run `pixi run
-  report-share` (`--report <slug>` for one report). Then publish the one file
-  it prints, `.cairn/share/index.html`, as it is. With the Artifact tool,
-  pass that `file_path` and no `files`. Do not read it into a new page, split
-  it, or add to it. If the publish is refused, report the exact refusal to the
-  user. Never work around it by editing the page.
-- **The project's repo:** `pixi run publish reports/<slug>`, viewed in the UI.
-- **A static web host:** the whole `.cairn/build/` folder, every file, with
-  the same paths and names.
+Edit report Markdown/Python on the client, build locally, and publish a new
+artifact to change the shared page. The server does not execute report cells.
+The browser supports text/media comments, autosaving and carrying across
+publications with the same project and report name. Comments and tags are
+mutable annotations, not scientific evidence.
 
-For any destination, keep the pages' paths, names, and styling. Never restyle,
-re-template, re-theme, summarize, or re-author the pages for the destination,
-and never hand-write a new page "based on" a report. A publishing tool's own
-design or formatting guidance (for example "give each page a visual identity"
-or "make it theme-aware") is for pages the agent designs from scratch; it does
-not apply to these reports, because the user's request and the project's
-existing report design take precedence. Only `[style]` in `.cairn/config.toml`,
-changed when the user asks, alters how the reports look. To change a shared
-page, edit the report sources, share again, and republish to the same
-artifact. If a destination can take neither the folder nor the single page, say
-so and ask the user before producing anything different.
+**Share generated reports unchanged.** Export the complete bundle with
+`report-share` or `cairn report export`. Publish its files as-is on a static
+host, preserving relative paths, or link to the selected repository's UI.
+Cairn2 v0.1.0 does not export a standalone single HTML file: if a destination
+only accepts one file, use a supported destination or explain the limitation
+rather than re-authoring the report. Native Plotly/media/HTML controls are
+richer than static exports; check the actual destination before sharing.
+
+Never restyle, re-template, re-theme, summarize, or re-author pages for a
+destination. A publishing tool's design guidance applies to new pages, not
+these generated reports. Change sources, rebuild, and republish to update a
+shared page. If a destination cannot accept the bundle, ask before producing
+anything different.

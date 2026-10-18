@@ -1,41 +1,42 @@
 ---
 title: Boundary-aware smoothing
-subtitle: Feasibility study
-status: Feasibility in progress
-# summary: one to three sentences (at most 400 characters) for the project page
-# in the Cairn UI and the report index. Quote results as {{ }} values; they are
-# computed after the report's code ran.
-summary: >-
-  With the true boundaries known, smoothing that skips boundary edges ends at a
-  boundary residual of {{ proposed:.3f }}, {{ gain:.0%}} below global
-  smoothing; {{ unstable }} of {{ len(cases) }} sequences still flicker, so
-  tuning waits for a calibrated flicker score.
-# inputs: every artifact the report reads, by local name. The build pins each
-# reference to an exact version and fails on any read outside this report
-# folder and these inputs. The sample reads the skill's assets/sample-run,
-# published once as the artifact `sample-run` (see project-setup.md). In a
-# project, the result is the draft an experiment wrote (`feasibility-method@latest`)
-# and, for per-step curves, the run behind it is a second input:
-#   run: runs/feasibility-method@latest   then read_series(inputs.run, "loss")
-inputs:
-  result: sample-run@latest
+description: Feasibility study of smoothing with known boundaries.
+# Imported, unchanged teaching data from this skill's assets/sample-run.
+# This is demo evidence, not the output of a new completed experiment.
+# For real results, verify a completed, validated producer and pin its version.
+cairn:
+  inputs:
+    result: datasets/sample-run@v1
 ---
 
 <!--
-This sample direction exercises every report component. Replace its content,
+This sample direction exercises the report workflow. Replace its content,
 summary, inputs, and assets/ with the direction's own material; keep the spine
 (Abstract first, Conclusion last). How to write each section is in the skill's
 references/writing-methods.md, with a worked Methods example in
 references/example-methods.md.
 -->
 
-```python exec hide
+```{python}
+#| echo: false
+#| output: false
+import csv
+import json
 import statistics
+from IPython.display import Markdown, SVG, display
+from pathlib import Path
+result_dir = Path("evidence")
+inputs["result"].download(to=result_dir)
 
-scores = read_scalars(inputs.result)
+# The imported sample's metrics are a mapping per row, not a run metric stream.
+# Actual run curves come from inputs["run"].records(), with values in each row["data"].
+scores = {}
+for line in (result_dir / "metrics.jsonl").read_text().splitlines():
+    scores.update(json.loads(line))
 proposed = scores["boundary_residual_proposed"]
 baseline = scores["boundary_residual_global"]
-cases = read_csv(inputs.result / "tables" / "cases.csv")
+with (result_dir / "tables" / "cases.csv").open(newline="") as handle:
+    cases = list(csv.DictReader(handle))
 ours = [float(row["boundary_residual"]) for row in cases]
 theirs = [float(row["global_residual"]) for row in cases]
 stable = sum(row["stable"] == "true" for row in cases)
@@ -49,29 +50,43 @@ quartiles = statistics.quantiles(ours, n=4)
 
 <!--
 Abstract: a self-contained summary of the question, approach, principal result,
-important qualification, and current decision. The front matter `summary` is a
-shorter version of this for the project page; update both together.
+important qualification, and current decision. Keep the short body summary and current status in sync with this abstract;
+frontmatter description remains qualitative.
 -->
+
+Status: Feasibility in progress.
+
+```{python}
+#| echo: false
+display(Markdown(f"""With the true boundaries known, smoothing that skips boundary edges ends at a
+boundary residual of {proposed:.3f}, {gain:.0%} below global
+smoothing; {unstable} of {len(cases)} sequences still flicker, so
+tuning waits for a calibrated flicker score.
 
 Smoothing a noisy lattice removes noise but blurs its boundaries. This
 feasibility study tests the classic remedy, a smoothness penalty that skips the
 neighbour pairs crossing a boundary, against smoothing everywhere. With the
 boundaries taken from the ground truth, it lowers the reconstruction error near
-boundaries in {{ wins }} of {{ len(cases) }} synthetic sequences, but
-{{ unstable }} sequences flicker in a way the evaluation cannot yet score
+boundaries in {wins} of {len(cases)} synthetic sequences, but
+{unstable} sequences flicker in a way the evaluation cannot yet score
 reliably, so the method is not ready for tuning. Whether the gain survives
-estimated boundaries is untested.
-
-```python exec hide
-metric("Boundary residual, boundary-aware smoothing", proposed, f"{gain:.0%} lower than global smoothing; lower is better; mean over {len(cases)} sequences", fmt=".3f")
-metric("Sequences without flicker", f"{stable} / {len(cases)}", "flicker-band energy at most that of global smoothing")
+estimated boundaries is untested."""))
 ```
 
-## Introduction
+```{python}
+#| echo: false
+display(Markdown(f"""| Measure | Value | Interpretation |
+| --- | ---: | --- |
+| Boundary residual, boundary-aware smoothing | {proposed:.3f} | {gain:.0%} lower than global smoothing; lower is better; mean over {len(cases)} sequences |
+| Sequences without flicker | {stable} / {len(cases)} | flicker-band energy at most that of global smoothing |
+"""))
+```
+
+## Introduction {#sec-introduction}
 
 <!--
 Introduction: state the project's shared target in one or two sentences (or
-link the report that defines it, report:<slug>#introduction), then what this
+link the published report's checked Introduction anchor), then what this
 direction contributes to it: its research question, scope, motivation, and why
 this comparison matters for the target.
 -->
@@ -90,7 +105,7 @@ study.
 <!--
 Background and related work: fill from a literature and prior-art search (a
 research subagent when available), with linked sources and links to related
-direction reports. Flag any existing version of the idea in a `prior-art`
+direction reports. Flag any existing version of the idea in an explicit prior-art
 callout and say what remains new. Then define every method, baseline, and
 variant in a table whose first column is `Method` before results use their
 names.
@@ -104,18 +119,21 @@ the anisotropic diffusion of
 [Perona and Malik (1990)](https://doi.org/10.1109/34.56205), which lowers the
 diffusion coefficient where the gradient is large.
 
-!!! prior-art "Close prior work: line processes and edge-stopping diffusion"
-    Both papers already smooth within regions and not across boundaries. This
-    direction is a replication on lattice sequences with known boundaries; what
-    it adds is the measurement of flicker, which per-image methods do not
-    consider.
+::: {.callout}
+**Close prior work: line processes and edge-stopping diffusion**
+
+Both papers already smooth within regions and not across boundaries. This
+direction is a replication on lattice sequences with known boundaries; what
+it adds is the measurement of flicker, which per-image methods do not
+consider.
+:::
 
 | Method | What it does | Difference from global smoothing | Held constant |
 | --- | --- | --- | --- |
 | Global smoothing | Penalizes the difference across every neighbour pair | Baseline | Observations, $\lambda$, solver, evaluation |
 | Boundary-aware smoothing (proposed) | Penalizes the difference across every neighbour pair except those crossing a boundary | Boundary pairs unpenalized | Observations, $\lambda$, solver, evaluation |
 
-## Methods
+## Methods {#sec-methods}
 
 <!--
 Methods: the method as implemented, then the experimental design, to the
@@ -155,9 +173,13 @@ solves $(I + \lambda D^{\top} M D)\,\theta = y$, a symmetric positive definite
 system, by conjugate gradients from $\theta = y$ until the relative residual is
 below $10^{-6}$.
 
-```python exec hide
+```{python}
+#| echo: false
+#| label: fig-boundary-aware-smoothing
+#| fig-cap: "With the same λ, global smoothing spreads the step over many sites; skipping the one pair that crosses the boundary keeps it sharp while removing the noise on both sides."
 # In a project, import the method from its own code here (for example
-# `from reconstruction.smoothing import solve`) instead of re-implementing it,
+# `from reconstruction.smoothing import solve`) from captured report sources
+# or a declared source artifact, instead of re-implementing it,
 # so the figure shows what the code does. The sample has no project code.
 import numpy as np
 import matplotlib.pyplot as plt
@@ -177,7 +199,8 @@ axis.plot(x, solve((~crossing).astype(float)), color="#176b5b", linewidth=2, lab
 axis.plot(x, clean, "--", color="#202621", linewidth=1, label="ground truth θ*")
 axis.set(xlabel="site position", ylabel="value", title="Smoothing across a boundary on a 1-D slice")
 axis.legend(fontsize=7, loc="upper left", frameon=False)
-caption("With the same λ, global smoothing spreads the step over many sites; skipping the one pair that crosses the boundary keeps it sharp while removing the noise on both sides.")
+display(figure)
+plt.close(figure)
 ```
 
 The figure shows the difference on a one-dimensional slice with a single
@@ -199,7 +222,9 @@ is the possible source of flicker, measured below.
 
 ### Experimental design
 
-The {{ len(cases) }} evaluated sequences come from one synthetic generator:
+```{python}
+#| echo: false
+display(Markdown("The " + str(len(cases)) + r""" evaluated sequences come from one synthetic generator:
 $64 \times 64$ frames, $T = 32$ frames per sequence, two to five polygonal
 regions per sequence, each with a linear ramp inside, whose boundaries move by
 at most one site per frame, and noise with $\sigma = 0.06$; every sequence has
@@ -215,48 +240,80 @@ each sequence:
 2. **Flicker**: the energy of the temporal spectrum of $\theta_t -
    \theta^\star_t$ in the upper quarter of temporal frequencies, averaged over
    sites. A sequence counts as stable when this energy is at most that of global
-   smoothing.
+   smoothing."""))
+```
 
 ## Findings
 
 <!--
 Results and discussion sections (Findings, Diagnostics, ... as the question
-needs): `!!! finding <status>` blocks for decision-relevant claims only, with
-a qualitative title (no result numbers: the finding id comes from the title) and
-numbers from the inputs via {{ }} in the body; supporting figures taken from
-the artifacts that hold them (input:<name>/...); contradictions and limitations stated plainly.
+needs): findings for decision-relevant claims only, with explicit status,
+a qualitative title, and numbers generated from declared inputs in the body;
+supporting figures taken from the artifacts that hold them; contradictions and
+limitations stated plainly. Generated Markdown blockquotes render consistently
+in the native reader and standalone export.
 -->
 
-!!! finding supported "Boundary-aware smoothing lowers the boundary residual"
-    With the true boundaries, the mean boundary residual is
-    {{ proposed:.3f }} against {{ baseline:.3f }} for global smoothing,
-    {{ gain:.0% }} lower; per sequence it is lower in {{ wins }} of
-    {{ len(cases) }} sequences, with an interquartile range of
-    {{ quartiles[0]:.3f }}–{{ quartiles[2]:.3f }} (scatter plot in
-    [Diagnostics](#diagnostics)).
+```{python}
+#| echo: false
+display(Markdown(f"""> **Supported: Boundary-aware smoothing lowers the boundary residual**
+>
+> With the true boundaries, the mean boundary residual is
+> {proposed:.3f} against {baseline:.3f} for global smoothing,
+> {gain:.0%} lower; per sequence it is lower in {wins} of
+> {len(cases)} sequences, with an interquartile range of
+> {quartiles[0]:.3f}–{quartiles[2]:.3f} (scatter plot in
+> [Diagnostics](#fig-boundary-residual)).
+>
+> Sources: `sample-run` (`tables/cases.csv`, `metrics.jsonl`) · Reviewed 2026-10-14"""))
+```
 
-    Sources: `sample-run` (`tables/cases.csv`, `metrics.jsonl`) · Reviewed 2026-10-14
+```{python}
+#| echo: false
+display(Markdown(f"""> **Tentative: Flicker remains in some sequences**
+>
+> {unstable} sequences have more flicker-band energy than global
+> smoothing. Whether that energy is visible has not been calibrated against
+> viewers, so the stability count may over- or understate the problem.
+>
+> Sources: `sample-run` (`figures/spectrum.svg`, `tables/cases.csv`) · Reviewed 2026-10-14"""))
+```
 
-!!! finding tentative "Flicker remains in some sequences"
-    {{ unstable }} sequences have more flicker-band energy than global
-    smoothing. Whether that energy is visible has not been calibrated against
-    viewers, so the stability count may over- or understate the problem.
+::: {.callout}
+**Question: Is the remaining flicker acceptable?**
 
-    Sources: `sample-run` (`figures/spectrum.svg`, `tables/cases.csv`) · Reviewed 2026-10-14
-
-!!! question "Is the remaining flicker acceptable?"
-    Confirm whether the flicker in the unstable sequences is acceptable before
-    the project moves from feasibility to parameter tuning.
+Confirm whether the flicker in the unstable sequences is acceptable before
+the project moves from feasibility to parameter tuning.
+:::
 
 ## Diagnostics
 
 The scatter plot backs the first finding and the temporal spectrum the second.
 
-![Representative frame](input:result/figures/grid.svg "Observation, boundary-aware smoothing, ground truth, and the amplified residual of one frame."){#fig-grid}
-![Temporal spectrum of the residual](input:result/figures/spectrum.svg "The marked band is the flicker band of the stability measure."){#fig-spectrum}
-![Convergence](input:result/figures/convergence.plotly.json "Mean boundary residual over the first conjugate-gradient iterations of both methods."){#fig-convergence}
+```{python}
+#| echo: false
+#| label: fig-grid
+#| fig-cap: "Representative frame. Observation, boundary-aware smoothing, ground truth, and the amplified residual of one frame."
+display(SVG(filename=str(result_dir / "figures/grid.svg")))
+```
+```{python}
+#| echo: false
+#| label: fig-spectrum
+#| fig-cap: "Temporal spectrum of the residual. The marked band is the flicker band of the stability measure."
+display(SVG(filename=str(result_dir / "figures/spectrum.svg")))
+```
+```{python}
+#| echo: false
+#| label: fig-convergence
+#| fig-cap: "Convergence. Mean boundary residual over the first conjugate-gradient iterations of both methods."
+payload = json.loads((result_dir / "figures/convergence.plotly.json").read_text())
+display({"application/vnd.plotly.v1+json": payload}, raw=True)
+```
 
-```python exec hide
+```{python}
+#| echo: false
+#| label: fig-boundary-residual
+#| fig-cap: "Points below the diagonal gain from skipping boundary pairs; orange points flicker."
 import matplotlib.pyplot as plt
 
 figure = plt.figure(figsize=(7.2, 3.2), num="boundary-residual")
@@ -266,28 +323,32 @@ plt.plot([0, limit], [0, limit], color="#9aa59e", linewidth=1)
 plt.xlabel("Boundary residual, global smoothing")
 plt.ylabel("Boundary residual, boundary-aware")
 plt.title("Boundary residual per sequence")
-caption("Points below the diagonal gain from skipping boundary pairs; orange points flicker.")
+display(figure)
+plt.close(figure)
 ```
 
 ## Limitations
 
 The boundaries are taken from the ground truth, which a real application does
 not have, so the measured gain is an upper bound; an estimated mask fails in
-the two ways described in [Why it should work](#why-it-should-work).
+the two ways described in *Why it should work*.
 
 ## Conclusion
 
 <!--
 Conclusion: the answer the current evidence supports, its limits, and the next
-decision or experiment. Mirror it in the front matter `summary`, and update
-the related direction reports it changes, with `report:` links.
+decision or experiment. Mirror it in the short body summary, and update
+the related direction reports it changes, linking their checked publication URLs.
 -->
 
 Skipping the neighbour pairs that cross a boundary lowers the boundary residual
 compared with global smoothing when the boundaries are known. Two questions
 remain before tuning:
 
-1. Calibrate the flicker score with pairwise judgments, and inspect the
-   {{ unstable }} unstable sequences for a shared cause.
+```{python}
+#| echo: false
+display(Markdown(f"""1. Calibrate the flicker score with pairwise judgments, and inspect the
+   {unstable} unstable sequences for a shared cause.
 2. Measure the gain with boundaries estimated from the observations, which
-   decides whether the direction is worth pursuing.
+   decides whether the direction is worth pursuing."""))
+```

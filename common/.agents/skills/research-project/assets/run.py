@@ -1,30 +1,25 @@
-"""Hydra entry point. Copy into a project as experiments/run.py.
-
-    python experiments/run.py [overrides]            # one run
-    python experiments/run.py -m key=a,b [overrides] # a study (Hydra multirun)
-
-The job is a Cairn run (`cairn.init` is called by `run_experiment`): set
-`hydra.run.dir` and `hydra.sweep.dir` to `${cairn.run:${run.name}}` and register the
-callbacks in configs/config.yaml (see project-setup.md). The experiment logs to the
-run with `cairn.run.add({...})`, records inputs with `cairn.use(ref)`, and writes its
-results with `with cairn.draft("<name>") as result: result.add_*(...)`.
-"""
+"""Hydra entry point; copy beside research_cairn.py as experiments/run.py."""
 
 import sys
 from pathlib import Path
 
 import hydra
+from hydra.core.hydra_config import HydraConfig
+from hydra.utils import get_original_cwd
 from omegaconf import DictConfig
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # flat imports from the project root
 
-from cairn.runs.hydra import run_experiment  # noqa: E402
 from experiments.base import Experiment  # noqa: E402
+from experiments.research_cairn import run_experiment  # noqa: E402
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
-    run_experiment(cfg, Experiment)
+    run_experiment(
+        cfg, Experiment, project_root=Path(get_original_cwd()),
+        output_dir=Path(HydraConfig.get().runtime.output_dir),
+    )
 
 
 if __name__ == "__main__":

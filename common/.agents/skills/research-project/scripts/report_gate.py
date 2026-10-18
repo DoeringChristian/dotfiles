@@ -1,22 +1,16 @@
 #!/usr/bin/env python3
-"""Stop hook of the research-project skill: a report change is done only when it is built and the
-agent has reviewed it against the rubric.
+"""Require a current successful report build and one whole-report self-review.
 
-Registered by the skill's frontmatter, so it runs whenever the agent tries to finish a turn in a
-session that used the skill. It costs nothing unless a report's sources changed since the gate last
-passed. Reports are single pages, `reports/<slug>/report.md` (with `assets/` and `data/`); Cairn
-builds each into `<output_dir>/<slug>/` (default `.cairn/build/<slug>/`). Then it:
+The Stop hook accepts JSON on stdin with cwd (or explicit project_dir) and
+stop_hook_active. Hosts without hooks run it explicitly before finishing and,
+after carrying out the requested R1–R9 review, with stop_hook_active=true.
+Reports are reports/<slug>/report.md or report.qmd. Their complete captured
+source hashes must match .cairn/build/<slug>/manifest.json in a completed build.
+Backend destinations and CAIRN_DIR client journals do not locate report state.
 
-1. blocks when a changed report was not rebuilt (`pixi run report-build`);
-2. once per stop, sends the agent back to review each changed report itself against
-   references/review.md, fix what fails, and rebuild. When the agent finishes after that review
-   (`stop_hook_active`), only the build check runs again, so the review never loops.
-
-It blocks at most MAX_BLOCKS times in a row; after that it lets the agent stop and tells the user
-what is still open. State lives in `<repo>/reviews/gate.json` (the repo is `$CAIRN_DIR`, else the
-nearest `.cairn/` upward; its `config.toml` places reports). Stdlib only (Python 3.8+).
+Blocks at most MAX_BLOCKS times in a row, then reports what remains open without
+marking it passed. State is project-local .cairn/reviews/gate.json. Stdlib only.
 """
-
 from __future__ import annotations
 
 import hashlib
@@ -28,167 +22,170 @@ from pathlib import Path
 
 SKILL = Path(__file__).resolve().parent.parent
 RUBRIC = SKILL / "references" / "review.md"
-SAMPLE = SKILL / "assets" / "reports" / "direction"  # a fresh scaffold's report, replaced later
+SAMPLE = SKILL / "assets" / "reports" / "direction"
 MAX_BLOCKS = 3
-# Set by a host (e.g. cairn-agents) that gates reports itself; the second name is the older one.
 QUIET_ENVS = ("RESEARCH_REPORT_REVIEWER", "STANDALONE_REPORT_REVIEWER")
-CONFIG = "config.toml"  # inside the repo, .cairn/config.toml (Cairn 0.14)
-SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,62}")  # Cairn's report folder names
-
-
-def locate(start: Path) -> tuple[Path, Path] | None:
-    """(project root, repo) by Cairn's rule: the repo is $CAIRN_DIR, else the nearest `.cairn/` upward that
-    holds `repo.json`; the project root is the folder holding that `.cairn/` (with $CAIRN_DIR and no such
-    folder, the working directory). None when there is no repo."""
-    root = next((folder for folder in [start, *start.parents] if (folder / ".cairn" / "repo.json").is_file()), None)
-    if os.environ.get("CAIRN_DIR"):
-        return (root or start), Path(os.environ["CAIRN_DIR"]).expanduser().resolve()
-    return (root, root / ".cairn") if root else None
-
-
-def config(repo: Path) -> dict:
-    """The [reports] table of <repo>/config.toml (tomllib when available)."""
-    path = repo / CONFIG
-    if not path.is_file():
-        return {}
-    text = path.read_text()
-    try:
-        import tomllib  # Python 3.11+
-
-        table = tomllib.loads(text).get("reports")
-        return table if isinstance(table, dict) else {}
-    except ImportError:
-        pass
-    except ValueError:
-        return {}
-    found = {}
-    table = re.search(r"^\[reports\]\s*$(.*?)(?=^\s*\[|\Z)", text, re.M | re.S)
-    if table:
-        for match in re.finditer(r"^\s*(dir|output_dir)\s*=\s*[\"']([^\"']+)[\"']", table.group(1), re.M):
-            found[match.group(1)] = match.group(2)
-    return found
+SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,62}")
+ENTRIES = ("report.md", "report.qmd")
+OUTPUTS = ("index.html", "document.json", "source-map.json", "manifest.json", "executed.ipynb")
+MARKERS = ("pixi.toml", "pyproject.toml", ".git")
 
 
 class Project:
-    """Where a project's reports and builds are: paths in config.toml are relative to the root."""
-
-    def __init__(self, root: Path, repo: Path):
-        self.root, self.repo = root, repo
-        settings = config(repo)
-        self.reports_dir = root / settings.get("dir", "reports")
-        self.output_dir = (root / settings["output_dir"]) if settings.get("output_dir") else repo / "build"
+    def __init__(self, root: Path):
+        self.root = root
+        self.reports_dir = root / "reports"
+        self.state_dir = root / ".cairn"
+        self.output_dir = self.state_dir / "build"
 
 
-def project(start: Path) -> Project | None:
-    """The project around `start` when it has a repo and at least one report."""
-    found = locate(start)
-    if found is None:
-        return None
-    found_project = Project(*found)
-    return found_project if reports(found_project) else None
+def project(start: Path, explicit: str | None = None) -> Project | None:
+    """Find the nearest report project, without crossing another project root."""
+    if explicit is not None:
+        root = Path(explicit).expanduser()
+        candidate = Project((root if root.is_absolute() else start / root).resolve())
+        return candidate if reports(candidate) else None
+    for root in (start, *start.parents):
+        candidate = Project(root)
+        if reports(candidate):
+            return candidate
+        if any((root / marker).exists() for marker in MARKERS):
+            break
+    return None
 
 
 def reports(proj: Project) -> dict[str, Path]:
-    """Report slug -> its source folder (flat: reports/<slug>/report.md)."""
-    folder = proj.reports_dir
-    if not folder.is_dir():
+    """Discover flat reports, including invalid double entries so they cannot pass."""
+    if not proj.reports_dir.is_dir():
         return {}
-    return {child.name: child for child in sorted(folder.iterdir())
-            if child.is_dir() and SLUG.fullmatch(child.name) and (child / "report.md").is_file()}
+    return {
+        child.name: child for child in sorted(proj.reports_dir.iterdir())
+        if child.is_dir() and SLUG.fullmatch(child.name)
+        and any((child / entry).exists() or (child / entry).is_symlink() for entry in ENTRIES)
+    }
 
 
-def source_files(folder: Path) -> list[Path]:
-    """A report's own sources: report.md, assets/, and data/."""
-    files = [folder / "report.md"]
-    for part in ("assets", "data"):
-        if (folder / part).is_dir():
-            files += sorted(path for path in (folder / part).rglob("*") if path.is_file())
-    return files
+def source_hashes(folder: Path) -> dict[str, str]:
+    """Match Cairn's captured tree, including helpers/includes and added/deleted files."""
+    if folder.is_symlink():
+        raise ValueError("report source folder is a symlink")
+    entries = [name for name in ENTRIES if (folder / name).is_file()]
+    if len(entries) != 1:
+        raise ValueError("a report needs exactly one report.md or report.qmd")
+    hashes = {}
+    for path in sorted(folder.rglob("*")):
+        relative = path.relative_to(folder)
+        if any(part.startswith(".") or part == "__pycache__" for part in relative.parts):
+            continue
+        if path.is_symlink():
+            raise ValueError(f"report source is a symlink: {relative.as_posix()}")
+        if path.is_file():
+            hashes[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes
+
+
+def fingerprint(hashes: dict[str, str]) -> str:
+    return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
 
 
 def source_hash(folder: Path) -> str:
-    digest = hashlib.sha256()
-    for path in source_files(folder):
-        digest.update(path.relative_to(folder).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
-    return digest.hexdigest()
+    return fingerprint(source_hashes(folder))
 
 
-def built_is_current(proj: Project, slug: str, folder: Path) -> bool:
-    data = proj.output_dir / slug / "report-data.json"
-    if not data.is_file():
+def built_is_current(proj: Project, slug: str, hashes: dict[str, str]) -> bool:
+    try:
+        output = (proj.output_dir / slug).resolve(strict=True)
+        if not all((output / name).is_file() for name in OUTPUTS):
+            return False
+        manifest = json.loads((output / "manifest.json").read_text())
+        captured = {
+            entry["path"].removeprefix("sources/"): entry["digest"]
+            for entry in manifest.get("files", [])
+            if entry["path"].startswith("sources/")
+        }
+        return manifest.get("status") == "complete" and captured == hashes and all(
+            (output / "sources" / path).is_file()
+            and hashlib.sha256((output / "sources" / path).read_bytes()).hexdigest() == digest
+            for path, digest in captured.items()
+        )
+    except (OSError, RuntimeError, ValueError):
         return False
-    built = data.stat().st_mtime
-    return all(path.stat().st_mtime <= built for path in source_files(folder))
 
 
 def gate(event: dict) -> dict | None:
-    """The hook's answer: None to let the agent stop, or a JSON reply."""
     if any(os.environ.get(name) for name in QUIET_ENVS):
         return None
-    proj = project(Path(event.get("cwd") or os.getcwd()).resolve())
+    start = Path(event.get("cwd") or os.getcwd()).expanduser().resolve()
+    proj = project(start, event.get("project_dir"))
     if proj is None:
         return None
     found = reports(proj)
-    state_file = proj.repo / "reviews" / "gate.json"
+    state_file = proj.state_dir / "reviews" / "gate.json"
     try:
         state = json.loads(state_file.read_text())
+        if not isinstance(state, dict):
+            state = {}
     except (OSError, ValueError):
         state = {}
-    current = {slug: source_hash(folder) for slug, folder in found.items()}
-    passed = state.get("passed", {})
-    changed = [slug for slug in found if passed.get(slug) != current[slug]]
-    if not changed:
-        return None
-
-    problems: list[str] = []
-    stale = [slug for slug in changed if not built_is_current(proj, slug, found[slug])]
-    if stale:
-        problems.append("These reports changed after their last build: "
-                        + ", ".join(f"reports/{slug}/report.md" for slug in stale)
-                        + ". Run `pixi run report-build`.")
+    passed = state.get("passed")
+    if not isinstance(passed, dict):
+        passed = {}
+    current, problems, changed = {}, [], []
+    for slug, folder in found.items():
+        try:
+            hashes = source_hashes(folder)
+        except (OSError, ValueError) as exc:
+            problems.append(f"reports/{slug}: {exc}.")
+            continue
+        current[slug] = fingerprint(hashes)
+        if passed.get(slug) != current[slug]:
+            changed.append(slug)
+        if not built_is_current(proj, slug, hashes):
+            problems.append(f"reports/{slug}: no successful build matches all current sources. "
+                            f"Run `pixi run report-build --report {slug}`.")
     review = []
     if not problems and not event.get("stop_hook_active"):
-        sample = source_hash(SAMPLE) if (SAMPLE / "report.md").is_file() else None
-        review = [slug for slug in changed if current[slug] != sample]  # an unchanged sample needs no review
-    if review:
-        state["blocks"] = 0
-        save(state_file, state)
-        return {"decision": "block", "reason": self_review(review)}
-    if not problems:
-        state["passed"] = current
-        state["blocks"] = 0
-        save(state_file, state)
+        try:
+            sample = source_hash(SAMPLE)
+        except (OSError, ValueError):
+            sample = None
+        review = [slug for slug in changed if current[slug] != sample]
+    if not problems and not review:
+        if changed or state.get("blocks"):
+            state.update(passed=current, blocks=0)
+            save(state_file, state)
         return None
-    state["blocks"] = state.get("blocks", 0) + 1
-    save(state_file, state)
+    if problems:
+        reason = ("The report change is not done yet (research-project report gate).\n\n"
+                  + "\n\n".join(problems) + "\n\nRebuild, and finish again.")
+    else:
+        reason = self_review([found[slug].relative_to(proj.root).as_posix() for slug in review])
+    blocks = state.get("blocks", 0)
+    state["blocks"] = (blocks if isinstance(blocks, int) else 0) + 1
     if state["blocks"] > MAX_BLOCKS:
         state["blocks"] = 0
         save(state_file, state)
-        return {"systemMessage": "The report gate stopped blocking after "
-                                 f"{MAX_BLOCKS} attempts; still open:\n" + "\n\n".join(problems)}
-    return {"decision": "block", "reason": (
-        "The report change is not done yet (research-project report gate).\n\n"
-        + "\n\n".join(problems)
-        + "\n\nRebuild, and finish again."
-    )}
+        return {"systemMessage": f"The report gate stopped blocking after {MAX_BLOCKS} attempts; "
+                                 "still open:\n" + reason}
+    save(state_file, state)
+    return {"decision": "block", "reason": reason}
 
 
-def self_review(slugs: list[str]) -> str:
-    names = ", ".join(f"reports/{slug}/report.md" for slug in slugs)
+def self_review(names: list[str]) -> str:
     return (
-        f"Before finishing, review the report(s) you changed ({names}) as a demanding reviewer at a good"
+        f"Before finishing, review the report(s) you changed ({', '.join(names)}) as a demanding reviewer at a good"
         f" venue would, using the rubric in {RUBRIC}. Re-read each whole report as its reader sees it"
         " (the built page under .cairn/build/<slug>/), and open every figure the Methods section"
         " relies on. Decide each item R1-R9. Fix every failed item in the report sources and rebuild"
         " (`pixi run report-build`); do not pad sections to satisfy an item. When the report's evidence"
-        " or conclusions changed, publish it (`pixi run publish reports/<slug>`). Then finish, and tell"
+        " or conclusions changed, publish it (`pixi run report-publish <slug>`). Then finish, and tell"
         " the user which items, if any, you left open and why."
     )
 
 
 def save(path: Path, state: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    ignore = path.parent.parent / ".gitignore"  # <repo>/.gitignore, as Cairn writes it: never committed
+    ignore = path.parent.parent / ".gitignore"
     if not ignore.exists():
         try:
             with open(ignore, "x") as handle:
@@ -203,6 +200,8 @@ def save(path: Path, state: dict) -> None:
 def main() -> int:
     try:
         event = json.load(sys.stdin)
+        if not isinstance(event, dict):
+            event = {}
     except ValueError:
         event = {}
     reply = gate(event)
