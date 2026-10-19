@@ -55,7 +55,7 @@ def test_provenance_is_exact_and_excludes_credentials_libraries_and_symlinks(pro
         c.resolve(run.id).download("provenance", to=target)
         entries = {p.relative_to(target).as_posix(): p.read_bytes() for p in target.rglob("*") if p.is_file()}
     assert entries["source/method.py"] == (project / "method.py").read_bytes()
-    assert b"cairn2==0.1.0" in entries["environment/packages.txt"]
+    assert b"cairn2==0.1.1" in entries["environment/packages.txt"]
     assert not any(b"DO_NOT_CAPTURE" in content for content in entries.values())
     runtime = json.loads(entries["environment/runtime.json"])
     assert runtime["environment"]["OMP_NUM_THREADS"] == "2"
@@ -101,6 +101,7 @@ class Example(Experiment):
 
     def run(self, run, output_dir):
         run.log(loss=0.1)
+        run.capture(b'{"loss":0.1}', name="scores.json")
         folder = output_dir / "result"
         folder.mkdir(parents=True)
         (folder / "result.json").write_text('{"loss":0.1}')
@@ -109,7 +110,7 @@ class Example(Experiment):
 
 
 @pytest.mark.parametrize("fail", [False, True])
-def test_runner_provenance_precedes_compute_and_results_follow_completion(project, fail):
+def test_runner_records_directly_without_implicit_staging_or_publication(project, fail):
     cfg = OmegaConf.create(config(project, experiment={"_target_": __name__ + ".Example", "root": str(project), "fail": fail}))
     output = project / "outputs/job"
     if fail:
@@ -129,10 +130,13 @@ def test_runner_provenance_precedes_compute_and_results_follow_completion(projec
             with pytest.raises(ValueError, match="completed producer"):
                 helper.require_completed_artifact(c, ident)
         else:
-            result = helper.require_completed_artifact(c, "artifacts/trial@v1")
-            assert result.descriptor["manifest"]["dependencies"] == [{"artifact_id": ident, "role": "producer"}]
-            result.download(to=output / "verified")
-            assert json.loads((output / "verified/result.json").read_text()) == {"loss": 0.1}
+            result = helper.require_completed_artifact(c, ident)
+            assert result.records()[0]["data"]["loss"] == 0.1
+            result.download("scores.json", to=output / "verified.json")
+            assert json.loads((output / "verified.json").read_text()) == {"loss": 0.1}
+            assert "result" not in result.descriptor["manifest"]["captures"]
+            assert not list(c.find(namespace="artifacts"))
+            assert not (output / "cairn-result.json").exists()
 
 
 def test_missing_lock_prevents_constructor(project):
@@ -200,3 +204,20 @@ def test_study_summary_preserves_every_trial_and_public_lineage(project):
         assert json.loads((project / "outputs/summary/roster.json").read_text()) == roster(*ids)
         producer = c.resolve(result.descriptor["manifest"]["dependencies"][0]["artifact_id"])
         assert {d["artifact_id"] for d in producer.descriptor["manifest"]["dependencies"]} == set(ids)
+
+
+def test_separate_result_publication_is_explicit(project):
+    with client(project) as c:
+        folder = project / "outputs/staged"
+        folder.mkdir(parents=True)
+        (folder / "scores.json").write_text('{"loss":0.1}')
+        with c.run("trial", provenance=False) as run:
+            run.capture(folder, name="result")
+        assert not list(c.find(namespace="artifacts"))
+        result = helper.publish_result(c, c.resolve(run.id))
+        checked = helper.require_completed_artifact(c, result.id)
+        assert checked.descriptor["manifest"]["dependencies"] == [
+            {"artifact_id": run.id, "role": "producer"}
+        ]
+        checked.download(to=project / "outputs/verified")
+        assert json.loads((project / "outputs/verified/scores.json").read_text()) == {"loss": 0.1}

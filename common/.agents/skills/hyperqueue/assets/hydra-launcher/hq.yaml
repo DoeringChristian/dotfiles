@@ -1,0 +1,12 @@
+# @package hydra.launcher
+# HyperQueue launcher (the lab cluster, `hqc`): one HQ task per trial, on whichever node is free. Copy into
+# configs/hydra/launcher/hq.yaml; `pixi run hq submit <overrides>` selects it. Override per study, e.g.
+# hydra.launcher.time_limit=2h hydra.launcher.cpus=16.
+_target_: hydra_plugins.hq_launcher.HQLauncher
+name: ${oc.select:run.name,${hydra.job.name}}   # the HQ job's name: the run name when the config has one
+cpus: 8             # cores per trial (nodes: fermat 32, kerr 64, gabor 32, arago 32)
+gpus: 1             # GPUs per trial (every node has one); 0 for CPU-only trials, which then share nodes
+gpu_mem_gb: 0       # > 0: only GPUs with at least this much memory (fermat 31, kerr 24, gabor and arago 23)
+time_limit: 1h      # set from a measured trial: about 1.3x its wall time
+priority: 0         # higher runs first
+crash_limit: 1      # a trial whose node vanished is not retried (it would start again from scratch)

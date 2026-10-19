@@ -225,13 +225,8 @@ def run_experiment(cfg, experiment_type, *, project_root: Path, output_dir: Path
             if not isinstance(experiment, experiment_type):
                 raise TypeError("Configured experiment must implement experiments.base.Experiment")
             experiment.run(run, output_dir)
-            if (output_dir / "result").is_dir():
-                run.capture(output_dir / "result", name="result")
         producer = client.resolve(run.id)
         require_completed_run(producer)
-        if "result" in producer.descriptor["manifest"]["captures"]:
-            result = publish_result(client, producer)
-            _write_json(output_dir / "cairn-result.json", {"artifact_id": result.id, "ref": exact_ref(result)})
     print(f"Cairn run: {run.id}")
     return run.id
 
@@ -249,7 +244,7 @@ def require_completed_run(reader):
 
 
 def publish_result(client, producer, *, name=None):
-    """Publish captured result bytes only after the producing run completes."""
+    """Opt in to a separate result artifact from a run’s named result capture."""
     require_completed_run(producer)
     with tempfile.TemporaryDirectory(prefix="research-result-") as temporary:
         folder = Path(temporary) / "result"

@@ -10,7 +10,7 @@ Environment and runs
 - [ ] `.pixi/`, `.cairn/`, `outputs/`, `artifacts/`, and `data/` are ignored and
       excluded from formatting and other source tooling.
 - [ ] `reports/` holds only report sources; Cairn is the pinned
-      `cairn2[reports,media,ui]` v0.1.0 dependency, imported as `cairn`.
+      `cairn2[reports,media,ui]` v0.1.1 dependency, imported as `cairn`.
       No Cairn internals are copied or patched; the bundled project adapter
       uses public APIs. No removed `.cairn/config.toml` style settings are assumed.
 - [ ] No experiment-tracking service or custom run database is used; Cairn's
@@ -18,7 +18,7 @@ Environment and runs
 - [ ] `experiments/run.py` and `experiments/research_cairn.py` come from the
       skill's assets; the experiment implements `run(run, output_dir)`.
       Hydra is installed separately; no removed resolver/callback is imported.
-- [ ] Hydra stages jobs under ignored `outputs/`; each job gets one full Cairn
+- [ ] Hydra keeps job bookkeeping and optional scratch files under ignored `outputs/`; each job gets one full Cairn
       run ID. Studies retain their expected roster and are finalized explicitly
       only when every expected trial is present and completed.
 - [ ] Every run records initial source, exact `pixi.lock`, resolved config,
@@ -28,7 +28,8 @@ Environment and runs
 - [ ] Run names are concise semantic slugs, and descriptions explain purpose
       and interpretation limits.
 - [ ] Evidence is recorded with `run.log`, `run.track`, and
-      the adapter’s post-completion result publication; scientific tables and arrays are retained completely,
+      `run.capture`. Separate result publication is optional. Scientific tables
+      and arrays are retained completely,
       and the producer's provenance identifies the source and environment.
 - [ ] `linux-64` is a locked platform; `experiments/cluster.sh` and other
       scheduler files come from the relevant skills, and their legacy Cairn
@@ -38,8 +39,9 @@ Environment and runs
       GPU-efficiency gate.
 
 Artifacts and repo
-- [ ] Every result a report cites was logged with the adapter’s post-completion result publication and has
-      a verified completed producer and scientific validation. `latest` is
+- [ ] Every result a report cites was recorded on a completed, scientifically
+      validated run. Any separately published result artifact has a verified
+      completed producer. `latest` is
       not a success filter; exact versions are pinned. No experiment output
       was published through the run-less explicit-project import API.
 - [ ] Datasets and models experiments read are artifacts, used with

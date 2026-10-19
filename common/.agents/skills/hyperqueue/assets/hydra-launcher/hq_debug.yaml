@@ -1,0 +1,9 @@
+# @package hydra.launcher
+# HyperQueue smoke-test launcher: like hq.yaml with a short limit and high priority, so a smoke test starts as
+# soon as a GPU is free. Copy into configs/hydra/launcher/hq_debug.yaml; `pixi run hq smoke <overrides>` selects it.
+defaults:
+  - hq
+
+time_limit: 15m
+cpus: 4
+priority: 10

@@ -2,16 +2,17 @@
 
 Cross-platform (macOS & Linux) dotfiles, managed with two tools:
 
-- **[GNU Stow](https://www.gnu.org/software/stow/)** — symlinks config files from
-  this repo into `~`.
+- **[GNU Stow](https://www.gnu.org/software/stow/)** — symlinks config files
+  from this repo into `~`.
 - **[Homebrew](https://brew.sh)** — installs **every** tool from a single
-  [`Brewfile`](Brewfile). Two source builds (`neovim`, `resh`) come
-  from an in-repo tap ([`Formula/`](Formula)); GUI apps are casks on macOS and official
+  [`Brewfile`](Brewfile). Two source builds (`neovim`, `resh`) come from an
+  in-repo tap ([`Formula/`](Formula)); GUI apps are casks on macOS and official
   builds on Linux.
 
 ## Quick start
 
-Fresh machine — one line (installs git+curl, clones, installs Homebrew + everything):
+Fresh machine — one line (installs git+curl, clones, installs Homebrew +
+everything):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/doeringchristian/dotfiles/main/bootstrap.sh | bash
@@ -37,8 +38,8 @@ After setup, **restart your terminal**.
 
 ## Profiles (per-machine package sets)
 
-The base `Brewfile` is installed everywhere. Extra packages for a machine type live
-in `Brewfile.<profile>` and are layered on top with `--type`:
+The base `Brewfile` is installed everywhere. Extra packages for a machine type
+live in `Brewfile.<profile>` and are layered on top with `--type`:
 
 ```bash
 ./bootstrap.sh --type workstation   # base + Brewfile.workstation; saves the choice
@@ -48,23 +49,23 @@ in `Brewfile.<profile>` and are layered on top with `--type`:
 ```
 
 The `--type` choice is saved to **`dotfiles.lock`** (repo root, gitignored,
-per-machine), so a bare `./update.sh` reuses it. Precedence:
-`--type` arg → `dotfiles.lock` → base.
+per-machine), so a bare `./update.sh` reuses it. Precedence: `--type` arg →
+`dotfiles.lock` → base.
 
-Add a profile = add a `Brewfile.<name>` (same DSL: `brew`/`cask`/`npm`/…). Servers
-just use the base.
+Add a profile = add a `Brewfile.<name>` (same DSL: `brew`/`cask`/`npm`/…).
+Servers just use the base.
 
 ## How it works
 
-| Concern | Mechanism |
-|---|---|
-| CLI tools + runtimes | Homebrew, one line each in [`Brewfile`](Brewfile) |
-| neovim (nightly) | in-repo formula based on core, with a consistent glibc sysroot on Linux |
-| From-source tools (`neovim`, `resh`) | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main |
-| GUI apps (kitty, tev) + the `claude` CLI | brew **casks** (macOS and Linux; `update.sh` adds Linux desktop fixups) |
-| Config files | GNU Stow (`common/` everywhere, `darwin/` on macOS) |
-| Fonts | `common/.local/share/fonts/` (plain git files); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
-| macOS services | LaunchAgents in `darwin/Library/LaunchAgents/` (e.g. the ollama server) |
+| Concern                                  | Mechanism                                                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| CLI tools + runtimes                     | Homebrew, one line each in [`Brewfile`](Brewfile)                                                          |
+| neovim (nightly)                         | in-repo formula based on core, with a consistent glibc sysroot on Linux                                    |
+| From-source tools (`neovim`, `resh`)     | in-repo tap `Formula/*.rb`, built with `brew --HEAD` from git main                                         |
+| GUI apps (kitty, tev) + the `claude` CLI | brew **casks** (macOS and Linux; `update.sh` adds Linux desktop fixups)                                    |
+| Config files                             | GNU Stow (`common/` everywhere, `darwin/` on macOS)                                                        |
+| Fonts                                    | `common/.local/share/fonts/` (plain git files); stow-linked on Linux, copied to `~/Library/Fonts` on macOS |
+| macOS services                           | LaunchAgents in `darwin/Library/LaunchAgents/` (e.g. the ollama server)                                    |
 
 `claude` is the `claude-code` cask with its self-updater disabled
 (`~/.claude/settings.json` `autoUpdates:false`), so Homebrew is the sole owner —
@@ -83,8 +84,8 @@ bootstrap.sh / update.sh
 
 ## Adding things
 
-- **A tool**: add a line to [`Brewfile`](Brewfile) (`brew "…"` / `cask "…" if OS.mac?`),
-  then `./update.sh` (or `brew bundle`).
+- **A tool**: add a line to [`Brewfile`](Brewfile) (`brew "…"` /
+  `cask "…" if OS.mac?`), then `./update.sh` (or `brew bundle`).
 - **A from-source tool**: add `Formula/<name>.rb` and a
   `brew "doeringc/local/<name>"` line to the Brewfile.
 - **A config file**: drop it under `common/` mirroring its `~` path, then

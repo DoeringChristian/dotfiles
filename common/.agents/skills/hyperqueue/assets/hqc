@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# hqc: the lab workstations as one HyperQueue cluster. The head (fermat) runs the HQ server and the Cairn hub;
+# every node in ~/.hq-cluster/nodes on the head (fermat, kerr, gabor, arago) runs a worker. Run it from anywhere
+# that reaches the head over ssh (it re-runs itself there; arago is reached only from the head).
+#
+#   hqc install          once, idempotent: hq on every node, the access files, the Cairn hub's environment
+#   hqc up [node...]     start the server and the hub when they are down, and workers (default: every node)
+#   hqc down [node...]   stop these workers (running tasks are requeued); with no node: every worker and the server
+#   hqc down --hub       ... and the Cairn hub too (it holds the projects' results, so it normally stays up)
+#   hqc status           server, workers with their resources, jobs, hub
+#   hqc hq <args...>     any hq command on the cluster, e.g. `hqc hq job list`, `hqc hq task list 4`
+#   hqc log [node]       the tail of the server's (or that node's worker's) log
+#
+# State lives in ~/.hq-cluster on every node: on the head the config (cluster.conf, nodes), the access files, the
+# server's journal and log; on each node the worker's access file and log. Workers export HQ_PROJECTS (the node's
+# project root from the nodes file) to their tasks, where `pixi run hq push` puts the project checkouts, and offer
+# the resource `vram` (their GPU's memory in GiB), so a task can ask for a GPU with enough memory.
+set -euo pipefail
+HEAD="${HQC_HEAD:-fermat}"
+case "${1:-status}" in
+    install | up | down | status | hq | log) ;;
+    *)
+        awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
+        exit 2
+        ;;
+esac
+if [ "$(hostname -s)" != "$HEAD" ]; then
+    # The script travels as an argument, not on stdin, which the commands it runs would read.
+    exec ssh -q "$HEAD" "bash -c $(printf '%q' "$(cat "${BASH_SOURCE[0]}")") hqc$(printf ' %q' "$@")"
+fi
+
+STATE="$HOME/.hq-cluster"
+HQ="$HOME/.local/bin/hq"
+HQ_VERSION=0.26.2
+CAIRN_TAG=v0.15.0
+mkdir -p "$STATE"
+
+if [ ! -f "$STATE/cluster.conf" ]; then
+    cat > "$STATE/cluster.conf" <<'EOF'
+# hqc cluster settings (sourced by bash). HEAD_ADDR is the head's address every worker reaches: its EPFL LAN
+# address (arago has no Tailscale), found at every `hqc up` because it comes from DHCP.
+HEAD_ADDR="$(ip -4 route get 128.178.122.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p')"
+CLIENT_PORT=6788
+WORKER_PORT=6789
+HUB_PORT=4320                                  # Cairn hub (the UI runs on HUB_PORT + 1)
+HUB_DIR=/media/data/doeringc/cairn-hub         # its pixi environment and its repo (repo/)
+EOF
+fi
+if [ ! -f "$STATE/nodes" ]; then
+    cat > "$STATE/nodes" <<'EOF'
+# node (ssh host from the head, and the worker's hostname)   project root on that node
+fermat  /media/data/doeringc/hq
+kerr    /home/doeringc/hq
+gabor   /home/doeringc/hq
+arago   /media/data/christian/hq
+EOF
+fi
+# shellcheck source=/dev/null
+source "$STATE/cluster.conf"
+
+nodes() { awk '!/^#/ && NF { print $1 }' "$STATE/nodes"; }
+root_of() { awk -v n="$1" '$1 == n { print $2 }' "$STATE/nodes"; }
+hq() { "$HQ" --server-dir "$STATE" "$@"; }
+server_up() { hq server info > /dev/null 2>&1; }
+hub_up() { curl -s -o /dev/null --max-time 3 "http://127.0.0.1:$HUB_PORT/" ; }
+
+# Run a bash snippet on a node (the head runs it locally).
+on() {
+    local node="$1"
+    shift
+    if [ "$node" = "$HEAD" ]; then bash -c "$1"; else ssh -q -o BatchMode=yes -o ConnectTimeout=10 "$node" "$1"; fi
+}
+
+access_host() { sed -n 's/.*"host": *"\([^"]*\)".*/\1/p' "$STATE/access.json" | head -1; }
+
+# The access files (fixed ports and keys, so the server can restart without redistributing them) and each worker's
+# copy; regenerated when the head's address changed (then every project needs `pixi run hq setup` again for the hub).
+ensure_access() {
+    if [ -f "$STATE/access.json" ] && [ "$(access_host)" = "$HEAD_ADDR" ]; then return; fi
+    if [ -f "$STATE/access.json" ]; then
+        echo "the head's address changed ($(access_host) -> $HEAD_ADDR): new access files; run \`pixi run hq setup\` in each project again" >&2
+        if server_up; then hq server stop > /dev/null || true; fi
+        rm -f "$STATE"/access.json "$STATE"/worker-access.json "$STATE"/client-access.json
+    fi
+    "$HQ" server generate-access "$STATE/access.json" --worker-file "$STATE/worker-access.json" \
+        --client-file "$STATE/client-access.json" --host "$HEAD_ADDR" \
+        --client-port "$CLIENT_PORT" --worker-port "$WORKER_PORT"
+    chmod 600 "$STATE"/*access.json
+    for node in $(nodes); do
+        [ "$node" = "$HEAD" ] && continue
+        on "$node" 'mkdir -p ~/.hq-cluster/hq-current && chmod 700 ~/.hq-cluster'
+        scp -q "$STATE/worker-access.json" "$node:.hq-cluster/hq-current/access.json"
+    done
+}
+
+install() {
+    if ! "$HQ" --version 2>/dev/null | grep -q "v$HQ_VERSION"; then
+        local tmp
+        tmp="$(mktemp -d)"
+        curl -fsSL "https://github.com/It4innovations/hyperqueue/releases/download/v$HQ_VERSION/hq-v$HQ_VERSION-linux-x64.tar.gz" |
+            tar -xz -C "$tmp"
+        mkdir -p "$HOME/.local/bin" && install -m 755 "$tmp/hq" "$HQ" && rm -rf "$tmp"
+    fi
+    for node in $(nodes); do
+        [ "$node" = "$HEAD" ] && continue
+        if ! on "$node" "~/.local/bin/hq --version 2>/dev/null | grep -q v$HQ_VERSION"; then
+            on "$node" 'mkdir -p ~/.local/bin'
+            scp -q "$HQ" "$node:.local/bin/hq"
+        fi
+        on "$node" "mkdir -p $(root_of "$node") && test -x ~/.pixi/bin/pixi" ||
+            echo "$node: no pixi in ~/.pixi/bin (curl -fsSL https://pixi.sh/install.sh | bash)" >&2
+        echo "$node: hq $(on "$node" '~/.local/bin/hq --version'), projects in $(root_of "$node")"
+    done
+    mkdir -p "$(root_of "$HEAD")"
+    ensure_access
+    mkdir -p "$HUB_DIR"
+    cat > "$HUB_DIR/pixi.toml" <<EOF
+# The Cairn hub of the HQ cluster (written by hqc): \`cairn server repo\`, the remote of every node's checkout.
+[workspace]
+channels = ["conda-forge"]
+name = "cairn-hub"
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+cairn = { git = "https://github.com/DoeringChristian/cairn.git", tag = "$CAIRN_TAG", extras = ["server"] }
+EOF
+    (cd "$HUB_DIR" && "$HOME/.pixi/bin/pixi" install | tail -1)
+    echo "head: hq $("$HQ" --version), server address $HEAD_ADDR, hub $HUB_DIR (cairn $CAIRN_TAG)"
+}
+
+start_server() {
+    if server_up; then return; fi
+    ensure_access
+    nohup setsid "$HQ" --server-dir "$STATE" server start --access-file "$STATE/access.json" \
+        --journal "$STATE/journal" >> "$STATE/server.log" 2>&1 < /dev/null &
+    for _ in $(seq 30); do server_up && break; sleep 1; done
+    server_up || { tail -5 "$STATE/server.log" >&2; exit 1; }
+    echo "server: up at $HEAD_ADDR (journal $STATE/journal)"
+}
+
+start_hub() {
+    if hub_up; then return; fi
+    [ -f "$HUB_DIR/pixi.toml" ] || { echo "no hub environment: run \`hqc install\`" >&2; exit 1; }
+    (cd "$HUB_DIR" && nohup setsid "$HOME/.pixi/bin/pixi" run --frozen cairn server repo --host 0.0.0.0 \
+        --port "$HUB_PORT" >> "$HUB_DIR/server.log" 2>&1 < /dev/null &)
+    for _ in $(seq 60); do hub_up && break; sleep 1; done
+    hub_up || { tail -5 "$HUB_DIR/server.log" >&2; exit 1; }
+    echo "hub: up at http://$HEAD_ADDR:$HUB_PORT (UI on port $((HUB_PORT + 1)))"
+}
+
+start_worker() {
+    local node="$1" root
+    root="$(root_of "$node")"
+    [ -n "$root" ] || { echo "$node is not in $STATE/nodes" >&2; return 1; }
+    on "$node" "mkdir -p $root
+        if pgrep -u \$USER -a -x hq | grep -q ' worker start'; then echo '$node: worker already running'; exit; fi
+        vram=\$(( \$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1) / 1024 ))
+        HQ_PROJECTS=$root nohup setsid ~/.local/bin/hq --server-dir ~/.hq-cluster worker start \
+            --resource \"vram=sum(\$vram)\" --on-server-lost finish-running >> ~/.hq-cluster/worker.log 2>&1 < /dev/null &
+        echo '$node: worker started'"
+}
+
+worker_ids() {  # the ids of the connected workers on these nodes
+    hq --output-mode json worker list | python3 -c '
+import json, sys
+nodes = set(sys.argv[1:])
+for worker in json.load(sys.stdin):
+    if worker["configuration"]["hostname"] in nodes:
+        print(worker["id"])' "$@"
+}
+
+command="${1:-status}"
+[ $# -gt 0 ] && shift
+case "$command" in
+    install)
+        install
+        ;;
+    up)
+        start_server
+        start_hub
+        selected=("$@")
+        [ ${#selected[@]} -gt 0 ] || mapfile -t selected < <(nodes)
+        for node in "${selected[@]}"; do start_worker "$node" & done
+        wait
+        sleep 3
+        hq worker list
+        ;;
+    down)
+        hub=false
+        selected=()
+        for arg in "$@"; do if [ "$arg" = --hub ]; then hub=true; else selected+=("$arg"); fi; done
+        if server_up; then
+            if [ ${#selected[@]} -gt 0 ]; then
+                ids="$(worker_ids "${selected[@]}" | paste -sd, -)"
+                [ -n "$ids" ] && hq worker stop "$ids"
+            else
+                hq worker stop all || true
+                hq server stop
+                echo "server: stopped (unfinished jobs return from the journal at the next \`hqc up\`)"
+            fi
+        fi
+        if $hub && hub_up; then
+            pkill -u "$USER" -f "cairn server repo --host 0.0.0.0 --port $HUB_PORT" && echo "hub: stopped"
+        fi
+        ;;
+    status)
+        if server_up; then
+            echo "server: up at $HEAD_ADDR:$CLIENT_PORT/$WORKER_PORT"
+            hq worker list
+            hq job list
+        else
+            echo "server: down (\`hqc up\`)"
+        fi
+        if hub_up; then echo "hub: up at http://$HEAD_ADDR:$HUB_PORT (UI :$((HUB_PORT + 1)))"; else echo "hub: down"; fi
+        ;;
+    hq)
+        hq "$@"
+        ;;
+    log)
+        if [ $# -eq 0 ]; then tail -n 30 "$STATE/server.log"; else on "$1" 'tail -n 30 ~/.hq-cluster/worker.log'; fi
+        ;;
+esac

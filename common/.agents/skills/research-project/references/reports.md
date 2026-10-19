@@ -421,7 +421,7 @@ mutable annotations, not scientific evidence.
 **Share generated reports unchanged.** Export the complete bundle with
 `report-share` or `cairn report export`. Publish its files as-is on a static
 host, preserving relative paths, or link to the selected repository's UI.
-Cairn2 v0.1.0 does not export a standalone single HTML file: if a destination
+Cairn2 v0.1.1 does not export a standalone single HTML file: if a destination
 only accepts one file, use a supported destination or explain the limitation
 rather than re-authoring the report. Native Plotly/media/HTML controls are
 richer than static exports; check the actual destination before sharing.

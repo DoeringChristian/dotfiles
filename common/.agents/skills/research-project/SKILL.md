@@ -19,10 +19,10 @@ hooks:
 # Research Project
 
 Build research projects whose evidence is versioned artifacts. Every experiment
-process is a Cairn **run** (identified by its full run ID, recording its config,
-inputs, metrics, logs, code, and environment); its results become **artifact
-versions** (`artifacts/<name>@vN` in the selected project) with that run recorded
-as their producer. Runs themselves are artifacts with permanent IDs.
+process is a Cairn **run**: an artifact in the `runs` namespace that records its
+config, inputs, metrics, logs, code, environment, and results. All artifacts have
+permanent IDs. Write results directly to the run by default; create separately
+named result artifacts when they have an independent reuse or publication purpose.
 Datasets and models are artifacts too. One single-page report per research
 direction reads the evidence it declares, presents it as a paper would, and
 holds the reviewed findings.
@@ -36,13 +36,15 @@ holds the reviewed findings.
    Put configs under `configs/`, construct configurable objects with `_target_`
    and `hydra.utils.instantiate`. The bundled entry point starts one Cairn run
    per Hydra job, records its provenance before computation, and gives the
-   experiment an ordinary ignored `outputs/` folder for staging results.
+   experiment an ignored `outputs/` folder for Hydra bookkeeping and optional
+   scratch files. Recording evidence directly needs no staging directory.
 3. **The experiment is the executable boundary.** A config-selected
    `Experiment` is the highest-level behavior. The entry point composes config,
    prepares the run folder, instantiates the experiment, and invokes it.
 4. **Cairn holds the evidence; reports read only what they declare.** A
-   result becomes evidence when a completed, validated run produces an artifact
-   version. Verify its producer before pinning it in a report's `cairn.inputs:`.
+   result becomes evidence when its run completes and scientific validation
+   passes. Verify the completed run, or the producer of a separate result
+   artifact, before pinning it in a report's `cairn.inputs:`.
    Builds capture the declared inputs; reading undeclared experimental results
    is forbidden by this workflow, although the engine does not block external
    reads. Reports never become an independent source of experimental numbers.
@@ -87,7 +89,7 @@ project/
 │   ├── run.py, research_cairn.py # from assets/: public-API lifecycle, provenance and evidence checks
 │   ├── report_tasks.py         # flat report discovery, public build/publish/export API
 │   └── cluster.sh, clusters/<cluster>.sh # scheduler files; check their Cairn compatibility
-├── outputs/                    # ignored Hydra job folders; staging, not the evidence record
+├── outputs/                    # ignored Hydra job folders; bookkeeping and optional scratch, not the evidence record
 ├── data/                       # local datasets before they are published (git-ignored)
 ├── tools/model_graph.py        # from assets/model_graph.py, for neural-network projects
 ├── reports/<slug>/             # one single-page report per research direction
@@ -100,7 +102,7 @@ There is no overview report and no nesting: the Cairn UI's project page lists
 the reports. Copy bundled assets by content and make the
 copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (repo
 client, runs, artifacts, report builder, server, UI) is the pinned
-[`cairn2` v0.1.0](https://github.com/DoeringChristian/cairn2/releases/tag/v0.1.0), imported as `cairn`: import and run it, never copy or
+[`cairn2` v0.1.1](https://github.com/DoeringChristian/cairn2/releases/tag/v0.1.1), imported as `cairn`: import and run it, never copy or
 patch it. The skill's small Hydra adapter calls its public API. Initialize Git
 and commit the scaffold before the first run, and commit again before runs a
 report will cite.
@@ -112,7 +114,7 @@ Copy this checklist into your reply and tick it off:
 ```text
 Project setup:
 - [ ] Read references/project-setup.md and references/reports.md
-- [ ] pixi.toml pins cairn2 v0.1.0 (reports, media, ui), Hydra separately, and the tasks; pixi install
+- [ ] pixi.toml pins cairn2 v0.1.1 (reports, media, ui), Hydra separately, and the tasks; pixi install
 - [ ] One local repo (created on first access) OR the user's named server; explicit project namespace and protected login credentials
 - [ ] Hydra configs, experiments/run.py, research_cairn.py, report_tasks.py; Experiment.run(run, output_dir)
 - [ ] Cluster scheduler files from the relevant skills; verify tracking glue against the new API before submission
@@ -180,7 +182,8 @@ adaptation.
 explicit data and return a `Figure`, with units, labels, legends, and colorbars
 where needed, method colors and ordering centralized in one module. Add the
 figures to the experiment's run with `run.track(cairn.Figure(figure), key=...)`
-and to its result artifact as saved files, and reuse the same functions in the reports.
+and reuse the same functions in reports. Save files only when needed by a
+library or useful as a reusable capture.
 
 **Establish baselines and feasibility.** Agree with the user which baselines
 test the claimed advantage. Prefer faithful adaptations of authoritative
@@ -209,8 +212,8 @@ focused ratings or pairwise comparisons.
 ```text
 # Import datasets with Client.start("datasets", name).finish(value=Directory(...)).
 pixi run experiment experiment=<name>             # one run; run.use(...) records exact inputs
-# Inside: validate and stage output_dir/result; the adapter captures it and publishes after completion.
-pixi run evidence artifacts/<result>@vN           # require a completed producer
+# Inside: record directly with run.log/track/capture; validate before normal context exit.
+pixi run evidence runs/<name>@vN                 # require completed evidence
 # report.md frontmatter: cairn: {inputs: {fit: "artifacts/<result>@vN", run: "runs/<name>@vN"}}
 pixi run report-build
 pixi run report-publish <slug>
@@ -219,7 +222,8 @@ pixi run report-publish <slug>
 The entry point records required initial provenance and encloses the experiment
 in a run context: a normal return completes the run; an exception fails it.
 Failed runs remain inspectable, and `latest` can point at failed artifacts.
-The adapter publishes result artifacts only after the producing run completes. Verify completed producers and pin exact versions before using
+The adapter finishes the run without automatically creating another result
+artifact. Verify completed runs/producers and pin exact versions before using
 results as evidence. Details in
 [project-setup.md](references/project-setup.md).
 
@@ -250,7 +254,7 @@ a direction's method. The rules that hold everywhere:
 - **Share the generated output unchanged.** `pixi run report-share <slug> --out
   .cairn/share/<slug>` exports the complete published bundle. Share that bundle
   on a static host or use the Cairn UI (`pixi run ui` locally, or the selected
-  remote server's UI). Cairn2 v0.1.0 does not offer a standalone single-file
+  remote server's UI). Cairn2 v0.1.1 does not offer a standalone single-file
   export: do not re-author the page to fit a single-file destination. Never
   restyle or re-template reports for a destination; publishing-tool design
   guidance does not apply to these pages.

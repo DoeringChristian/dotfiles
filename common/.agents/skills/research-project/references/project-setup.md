@@ -27,7 +27,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.1.0", extras = ["reports", "media", "ui"] }
+cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.1.1", extras = ["reports", "media", "ui"] }
 
 [tasks]
 experiment = "python experiments/run.py"
@@ -44,12 +44,14 @@ kuma = "bash experiments/cluster.sh kuma"
 lyra = "bash experiments/cluster.sh lyra"
 ```
 
-The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.1.0`
+The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.1.1`
 in pip or uv form. The import and command remain `cairn`. Hydra stays a separate
 dependency. `reports` supplies notebook execution; `media` supplies arrays,
 tables and figures; `ui` supplies the server dependencies for the bundled React UI.
 Deployment extras are `postgres` and `s3`; `server` provides the API dependencies
-without the UI session dependency. Bump the tag only when the user asks.
+without the UI session dependency. For every optional feature, use `extras = ["all"]` instead. The `all` extra
+lists dependencies directly; Cairn2 is the base package, not an extra.
+Bump the tag only when the user asks.
 
 Copy `assets/report_tasks.py` into `experiments/` alongside the run adapter.
 This small project helper discovers flat reports, calls the public builder,
@@ -149,7 +151,7 @@ hydra:
     subdir: ${hydra.job.num}
 ```
 
-These are ordinary staging directories. Do not use the removed
+These directories hold Hydra bookkeeping and optional scratch files. Do not use the removed
 `${cairn.run:}` or `${cairn.draft:}` resolvers or the old Cairn Hydra callbacks.
 Leave `hydra.job.chdir: false`: experiment code gets the job's folder as
 `output_dir`, and relative paths in config keep meaning "from the project
@@ -221,14 +223,14 @@ does not intercept them automatically.
 
 ### Where a run lives
 
-`outputs/` holds Hydra configs, staging files, and a `cairn-run.json` pointer
+`outputs/` holds Hydra configs, optional scratch files, and a `cairn-run.json` pointer
 with the full run ID. It is not the authoritative evidence/status store.
 Inspect the backend with `pixi run cairn --project <project> artifact list --namespace runs`,
 `pixi run cairn --project <project> artifact inspect <full-run-id>`, or the UI. Keep failed job folders for
 diagnosis; publish scientific results only from completed, validated producers.
 
 A finished artifact can have a failed outcome, and `latest` is a movable alias.
-The adapter publishes result artifacts only after their producer completes. A successful
+The adapter records results on the run itself by default. A successful
 log call is not a successful experiment. Use the completed-evidence check below
 and pin `@vN` before citing a result. Do not infer completion from a folder,
 alias, or local pointer file.
@@ -245,7 +247,7 @@ from cairn import Artifact
 class Experiment(ABC):
     @abstractmethod
     def run(self, run: Artifact, output_dir: Path) -> None:
-        """Use declared inputs, record metrics, validate, and stage result files."""
+        """Use declared inputs, record evidence directly, and validate the results."""
 ```
 
 The Hydra entry point opens a `Client`, starts `client.run(...)`, captures
@@ -271,23 +273,33 @@ for step in range(self.steps):
     run.log(loss=loss, step=step)
 
 # ... scientifically validate scores, cases, and errors ...
-result = output_dir / "result"
-result.mkdir(parents=True, exist_ok=True)
-(result / "scores.json").write_text(json.dumps(scores, allow_nan=False))
+run.log({"scores": scores})
+run.track(cairn.Table(cases), key="cases")
 figure = error_histogram(errors)
-figure.savefig(result / "error_histogram.png")
 run.track(cairn.Figure(figure), key="error_histogram")
 plt.close(figure)
 ```
 
-Keep complete tables, checkpoints, and figures under `output_dir/result/`.
-After the experiment returns, the adapter captures that directory on the run.
-Only after the run is confirmed completed does it publish `artifacts/<run-name>`
-from those captured bytes, with a `producer` dependency pointing to the run.
-The receipt `cairn-result.json` gives its ID and exact `@vN` reference.
-A failed run does not create a result through this adapter. A manual script
-can follow the same order with `publish_result(client, producer)`.
-A new or unfinished run cannot be an immutable input: finish before `use`.
+Write metrics, tables, figures, arrays, and captures directly to the run with
+`log`, `track`, and `capture`. For a library that requires a filesystem path,
+use `output_dir` as optional scratch space and explicitly capture the resulting
+file. Hydra still keeps its configuration and run receipt there; Cairn does not
+require evidence to pass through that directory. The adapter does not scan
+`output_dir/result` or automatically create a second artifact.
+
+A completed run can be declared directly as a report input. Create a separate
+result artifact only when its name, reuse, or lifecycle merits one. For example,
+explicitly capture a result directory with `run.capture(path, name="result")`,
+then after the run finishes call `publish_result(client, client.resolve(run_id))`.
+That optional helper publishes the captured bytes and records a `producer`
+dependency. There is no need to do this for every experiment.
+
+**Backend rule versus research policy:** Cairn2 accepts dependencies only on
+finished artifacts. Thus a separate artifact with its run as a dependency must
+wait until that run finishes. Recording results on the live run is unrestricted
+by that rule. Requiring the outcome to be `completed` and the science to be
+validated is this skill's evidence policy; Cairn2 also retains finished failed
+artifacts.
 
 ### Record evidence with the public API
 
@@ -318,8 +330,8 @@ Use stable file names, columns, and units across experiments. Record the
 generating module/function and material plotting settings beside each figure
 or in run metadata; strict provenance pins the generating source. Never hide
 important evidence through final-only output, excessive aggregation,
-cherry-picked examples, or presentation-only composites. Keep per-step series
-in the run and results a report cites in its result artifact.
+cherry-picked examples, or presentation-only composites. Keep per-step series and final results in the run; reports can read both
+directly. Separate result artifacts are optional.
 
 ## Artifacts: datasets, models, and results
 
@@ -354,13 +366,14 @@ pixi run cairn --project <project> artifact inspect datasets/crops@v1
 ```
 
 Download with `client.resolve(ref).download(to="artifacts/crops-v1")`.
-Do not manually publish experiment outputs as runless imports: results must
-carry a `producer` dependency on their completed run. Import external file
+Record experiment outputs on their run by default. If publishing a separate
+result artifact, retain a `producer` dependency on the completed run; do not
+disguise experiment results as runless dataset imports. Import external file
 URIs as real bytes before reports consume them.
 
 ### Completed evidence and lineage
 
-`pixi run evidence artifacts/<result>@vN` calls
+`pixi run evidence runs/<name>@vN` (or `artifacts/<result>@vN`) calls
 `require_completed_artifact(client, ref)`: require a finished completed result,
 exactly one completed producing run in the same project, or a completed run
 when the input itself is in `runs`. This is lifecycle validation, not proof
@@ -369,7 +382,8 @@ origin/validation and intentionally do not pass the scientific-results gate.
 
 Use `run.use(ref)` for exact input dependencies, `result.use(run.id,
 role="producer")` after run completion, and `summary.use(trial.id, role="trial")`
-for studies. The UI shows dataset → run → result → report lineage.
+for studies. The UI shows dataset → run → report lineage, with a separate
+result node when explicitly published.
 The report builder pins exact finished IDs, including failed outcomes; the
 project's completed-evidence policy is intentionally stricter.
 
@@ -416,14 +430,14 @@ own durable journal and protected credentials.
 **Legacy adapter compatibility is not automatic.** Existing Slurm assets may
 still use `cairn-report push` and folder `run.json` completion; HyperQueue
 assets may still use old Cairn distribution/extras, `remote set`,
-`${cairn.run:}`, or `finalize-study`. Those calls do not work with Cairn2 0.1.0.
+`${cairn.run:}`, or `finalize-study`. Those calls do not work with Cairn2 0.1.1.
 Preserve their scheduling, storage, and GPU-efficiency rules, but adapt and
 test the project's tracking glue with the current public helper/commands
 before submitting work. Do not silently edit the adjacent skills or claim
 that copying their old files produces a working integration.
 
 Each cluster trial uses the same run/provenance/completed-evidence contract as
-a local job, with its own `outputs/` staging folder. When a launcher dies,
+a local job, with its own `outputs/` bookkeeping/scratch folder. When a launcher dies,
 confirm its jobs have left the queue, sync their journals, and explicitly
 finalize the saved expected roster. Missing or non-completed trials prevent
 a successful summary. Commit before submitting runs a report will cite;
@@ -459,7 +473,7 @@ supported, and both must keep every configuration's result inspectable:
 - **Hydra multirun** (`python experiments/run.py -m key=a,b,c`) when the
   configurations are separate experiments to compare or select from: sweeps,
   ablations, or competing settings. Each trial is a complete Cairn run with
-  its own provenance, config, logs, and result artifacts. Save the expected
+  its own provenance, config, logs, and results recorded on the run. Save the expected
   trial roster when launching; fill in the full run IDs from each job's
   `cairn-run.json`. Do not infer the expected roster from only successful jobs.
   Finalize explicitly with the helper below; no automatic study callback is
