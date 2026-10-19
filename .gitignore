@@ -18,3 +18,7 @@ common/.config/sunshine/*.log
 
 # gh writes its token here on machines without a keyring (~/.config/gh is stowed)
 common/.config/gh/hosts.yml
+
+# Python bytecode caches (skills run their scripts/tests in place)
+common/.agents/**/__pycache__/
+common/.agents/**/*.py[cod]
