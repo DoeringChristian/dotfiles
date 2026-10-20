@@ -69,16 +69,22 @@ configs (`configs/experiment/<name>.yaml`, captured with the resolved config in 
 for the rest instead of listing every value. One definition per method: if the
 method changed, rewrite the section rather than describing both versions.
 
-### Figures that explain the method
+### Figures that explain the method and the setup
 
-A figure explains a mechanism, not a result. Add one where a paper in this field
-would have one, and refer to it where its concept is introduced, saying what to
-see in it:
+A figure explains a mechanism or a setup, not a result. Add one wherever a good
+paper in this field would have one (most method papers have at least an
+overview figure and a setup figure), and refer to it where its concept is
+introduced, saying what to see in it:
 
-- **A neural network's architecture**, drawn from the model with
-  the captured `model_graph.py` helper and `display(graphviz.Source(...))` (see Diagrams in
-  [reports.md](reports.md)), at the depth a paper figure would show: each box
-  is a component the text names. Mark what this direction adds or changes.
+- **An overview of the method**: the problem and the idea in one picture,
+  usually real inputs, the key intermediate quantity, and the output, connected
+  by the method's operators and labelled with its symbols. This is the figure a
+  reader looks at first; it is not a flow chart of boxes.
+
+- **A neural network's architecture** as a designed schematic (see Figures and
+  diagrams in [reports.md](reports.md)), at the depth a paper figure would
+  show: each block is a component the text names, checked against the model's
+  code. Mark what this direction adds or changes.
 - **The model as a graph** when it has several interacting parts: its inputs,
   parameters, latent variables, intermediate quantities, and outputs, and how
   each depends on the others, labelled with the symbols of the equations. A
@@ -89,9 +95,20 @@ see in it:
   functions, or an illustration experiment whose figure is logged as an artifact), never with
   a separate reimplementation or a hand-drawn approximation, so the figure
   shows what the code does.
+- **The experiment setup**: what the experiment physically or geometrically
+  consists of, as a paper's "experimental setup" figure shows it. For example
+  the scene with its camera, lights, and object poses; the sensor and emitter
+  layout; the sampling domain and where training and test points lie; the
+  test inputs as a grid of thumbnails; the perturbation or degradation applied;
+  what is held fixed and what is varied, with the varied parameter's range.
+  Draw geometry from the run's resolved config to scale (positions, angles,
+  extents, coordinate axes), and render or plot the real test data, so the
+  figure shows the setup the results came from. Do not hand-draw it from
+  memory.
 
 Do not draw the report or run tooling, a linear chain of protocol steps (write
-it as a numbered list), or a restatement of a table or of the text above it.
+it as a numbered list; show the setup the steps act on instead), or a
+restatement of a table or of the text above it.
 
 ## Terminology
 

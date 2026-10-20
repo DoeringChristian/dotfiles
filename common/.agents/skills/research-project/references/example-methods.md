@@ -6,8 +6,9 @@ hand-set smoothness weight with one predicted by a small network. It shows the
 standard the review expects; do not copy its content, sections, or length into
 another project.
 
-The executable examples assume `model_graph.py` and the exact `priors/` source
-used by the experiment are captured under this report's folder, or imported
+The executable examples assume the report's `assets/architecture.svg` and the
+exact `priors/` source used by the experiment are captured under this report's
+folder, or imported
 from a declared, pinned source artifact. Declare `prior` as the completed,
 validated model artifact. Replace the example report URLs with the actual
 published version URL and verify its explicit section anchors.
@@ -57,11 +58,8 @@ objective stays convex and $\hat\theta(w)$ is unique.
 #| echo: false
 #| label: fig-architecture
 #| fig-cap: "Three 3×3 convolutions (receptive field 9×9) and a 1×1 head with two outputs per grid point: the weights of its right and lower edges."
-from IPython.display import display
-from graphviz import Source
-from model_graph import model_dot
-from priors.network import WeightNet
-display(Source(model_dot(WeightNet(channels=16), input_size=(1, 1, 64, 64), depth=1)))
+from IPython.display import SVG, display
+display(SVG(filename="assets/architecture.svg"))
 ```
 
 Because the objective is quadratic in $\theta$, the estimate is one linear

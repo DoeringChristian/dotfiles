@@ -17,7 +17,6 @@ platforms = ["linux-64", "osx-arm64"]
 
 [dependencies]
 python = "3.12.*"
-graphviz = "*"
 
 [pypi-dependencies]
 numpy = "*"
@@ -59,8 +58,7 @@ Pixi appends extra arguments: `pixi run report-publish direction` builds and
 publishes that direction. `report-share direction --out .cairn/share/direction`
 exports the unchanged complete report bundle into a new directory.
 
-Graphviz comes from conda-forge because it is a native binary; ensure `dot`
-works before generating diagrams. List every platform the project runs on;
+List every platform the project runs on;
 `linux-64` is required for GPU clusters.
 
 Commit `pixi.lock`; ignore `.pixi/`, `.cairn/`, `outputs/`, `artifacts/`,

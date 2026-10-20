@@ -156,8 +156,10 @@ folder. Put status and generated summaries in the body.
   `assets/`. Use video for behavior over time (an optimization, a rollout,
   temporal artifacts), not for what one still image shows.
 - **Tables** are generated Markdown tables or displayed DataFrames; **diagrams**
-  use Graphviz only where they explain structure (below). Everything else is
-  ordinary Markdown, with explicit anchors where links need them.
+  and setup illustrations are designed figures, drawn where a paper would
+  have one (below).
+  Everything else is ordinary Markdown, with explicit anchors where links need
+  them.
 
 ### Inputs: the data a report reads
 
@@ -175,7 +177,7 @@ cairn:
     baseline: artifacts/reference-baseline@v2
     crops: datasets/crops@v3
     run: runs/feasibility-method@v4
-  resources: [assets, model_graph.py]
+  resources: [assets]
 ---
 ```
 
@@ -279,27 +281,70 @@ export; standalone output does not include every native card/media control.
 Do not present a figure whose input artifact/file or generating code cannot be
 established from the captured evidence and run provenance.
 
-What a diagram should show is in [writing-methods.md](writing-methods.md).
-Let Graphviz place the nodes; never position them by hand in SVG or HTML.
-Install the `graphviz` package and Graphviz executable, then display a
-`graphviz.Source` in a labelled `{python}` cell. For an architecture, copy
-[`assets/model_graph.py`](../assets/model_graph.py) into the report source
-folder (also needs `torchview`) and capture the model code it imports:
+Which method and setup figures a report needs is in
+[writing-methods.md](writing-methods.md). Make each one the way a paper figure
+is made, not with an automatic layout engine (Graphviz, torchview, Mermaid):
+those produce one node per operation, crossing edges, and no visual hierarchy,
+which explains nothing. Choose the medium by what the figure shows:
+
+- **Structure** (an architecture, the model's dependencies, an overview):
+  a self-contained SVG written by hand into the report's `assets/` (declared
+  under `resources`), displayed in a labelled cell as below.
+- **Geometry and setup** (a scene, camera and light placement, a sensor layout,
+  a sampling domain, the train/test split): drawn to scale by code from the
+  run's resolved config, with matplotlib (2D or `projection="3d"`) or a Python
+  function that writes the SVG from those values, in a `{python}` cell or an
+  illustration run logged as an artifact. Add schematic annotations (labelled
+  angles, distances, the varied parameter and its range) on top.
+- **Data** (the test inputs, a degradation, an intermediate state): the real
+  images or renders, computed by the project's code, arranged as a labelled
+  grid, optionally combined with schematic arrows and symbols.
 
 ````markdown
 ```{python}
 #| echo: false
 #| label: fig-architecture
-#| fig-cap: "Tensor shapes for one 32×32 image; the dashed block is what this direction adds."
-from graphviz import Source
-from IPython.display import display
-from model_graph import model_dot
-display(Source(model_dot(build_model(config), input_size=(1, 3, 32, 32), depth=2)))
+#| fig-cap: "The network predicts one weight per edge; the solve is fixed. Orange: what this direction adds."
+from IPython.display import SVG, display
+display(SVG(filename="assets/architecture.svg"))
 ```
 ````
 
-Use `Source(dot_text, engine="dot")` for a model graph written in DOT. A syntax
-error fails the cell. Show only structure that helps explain the method.
+A good method or setup figure:
+
+- has one reading direction (inputs left, outputs right, or top to bottom) and
+  places components on a shared grid, so parallel paths and stages align;
+  geometry keeps its true proportions and shows axes or a scale;
+- shows the few components the text names, at the depth a paper figure would.
+  Group sub-layers in one labelled block instead of drawing each layer;
+- labels quantities with the symbols of the equations, written in Unicode with
+  italic variables (`<tspan font-style="italic">y</tspan>`, sub/superscripts via
+  `baseline-shift`), and tensor shapes only where they explain the method;
+- encodes kinds of things consistently (data, learned operators, fixed
+  operators, losses) with one restrained palette, and uses a single accent
+  colour only for what this direction adds or changes; the caption says so;
+- where it helps, embeds small real images of the input, an intermediate state,
+  or the output (computed by the project's code, saved under `assets/`, and
+  referenced from the SVG) instead of abstract boxes;
+- has straight or orthogonal arrows that end at box edges, no crossings, text
+  that fits its box and stays at least 11 px at report width, a `viewBox`
+  without wasted margin, and a white or transparent background.
+
+**Look at it before you use it.** Render the figure to an image and open it
+(save matplotlib figures with `savefig`; rasterize an SVG with):
+
+```bash
+pixi exec --spec librsvg rsvg-convert -w 1600 reports/<slug>/assets/<name>.svg -o /tmp/<name>.png
+```
+
+Fix overlapping or clipped text, arrows that miss their targets, misalignment,
+uneven spacing, and wasted space, then render and look again. Repeat until it
+would pass in a published paper, and check it once more in the built report at
+its displayed width.
+
+For a neural network, keep the drawing faithful to the code: compare its
+blocks, connections, and shapes against `print(model)` and the shapes of one
+forward pass on the experiment's input size before you finish it.
 
 ### Mathematics and HTML
 

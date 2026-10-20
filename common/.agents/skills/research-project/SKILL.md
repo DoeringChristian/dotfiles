@@ -30,7 +30,7 @@ holds the reviewed findings.
 ## Core principles
 
 1. **pixi owns the environment.** Prefer `[pypi-dependencies]` for Python
-   packages; reserve conda-forge for the interpreter, compilers, CUDA, Graphviz,
+   packages; reserve conda-forge for the interpreter, compilers, CUDA,
    and packages PyPI does not provide reliably. Commit `pixi.lock`.
 2. **Hydra owns configuration and object construction; Cairn owns the run.**
    Put configs under `configs/`, construct configurable objects with `_target_`
@@ -91,7 +91,6 @@ project/
 │   └── cluster.sh, clusters/<cluster>.sh # scheduler files; check their Cairn compatibility
 ├── outputs/                    # ignored Hydra job folders; bookkeeping and optional scratch, not the evidence record
 ├── data/                       # local datasets before they are published (git-ignored)
-├── tools/model_graph.py        # from assets/model_graph.py, for neural-network projects
 ├── reports/<slug>/             # one single-page report per research direction
 │   ├── report.md
 │   └── assets/, data/          # non-result material kept with the report

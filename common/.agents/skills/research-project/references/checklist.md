@@ -102,10 +102,14 @@ Reports
       producers, and their exact source refs and input hashes are inspectable.
       The generating function and material plotting settings are recorded
       alongside the figure or in artifact metadata, with source provenance.
-- [ ] A diagram, where one is needed, shows the model as a graph (its
-      variables and terms, labelled as in the equations), is explained in the
-      text, and is rendered from Graphviz source in an executable Python cell;
-      no diagrams of the report or run tooling or of linear protocol steps.
+- [ ] Methods has the figures a good paper would: an overview of the method,
+      structure diagrams where the method has interacting parts, and the
+      experiment setup (geometry drawn to scale from the resolved config, the
+      real test data). Each is labelled with the symbols of the equations,
+      explained in the text, and was rendered and inspected (aligned, no
+      overlaps or clipped text, arrows reach their targets); no auto-laid-out
+      graphs, no diagrams of the report or run tooling or of linear protocol
+      steps.
 - [ ] `::: {.finding}` blocks state tentative/supported/contradicted/superseded
       explicitly, have a qualitative title (no result numbers), cite source
       artifacts, and expose conflicts.
