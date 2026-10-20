@@ -25,6 +25,6 @@ function fish_user_key_bindings
     bind Y fish_clipboard_copy
     bind p fish_clipboard_paste
 
-    # Accept auto suggestions with `l`
-    bind -M default l accept-autosuggestion
+    # `l` keeps the vi preset (forward-char), which also accepts the
+    # autosuggestion when the cursor is at the end of the line.
 end

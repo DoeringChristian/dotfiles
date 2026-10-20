@@ -91,4 +91,4 @@ bootstrap.sh / update.sh
 - **A config file**: drop it under `common/` mirroring its `~` path, then
   `stow -t ~ -R common`. macOS-only configs go in `darwin/`.
 
-See [`CLAUDE.md`](CLAUDE.md) for the detailed architecture.
+See [`AGENTS.md`](AGENTS.md) for the detailed architecture.
