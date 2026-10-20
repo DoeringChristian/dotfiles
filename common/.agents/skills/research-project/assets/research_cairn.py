@@ -1,4 +1,4 @@
-"""Small project adapter for Cairn2 0.1: initial provenance and completed evidence.
+"""Small project adapter for Cairn2 0.5: initial provenance and completed evidence.
 
 Copy beside experiments/run.py. This is project policy, not a Cairn plugin.
 Run "python experiments/research_cairn.py --help" for evidence/study checks.
@@ -52,15 +52,13 @@ def _name(value: Any) -> str:
     return value
 
 
-def _destination(options: Mapping[str, Any], root: Path) -> dict[str, Any]:
-    if set(options) - {"repo", "server"}:
-        raise ValueError("cairn config accepts only repo or server; credentials belong in token files")
-    target = {key: value for key, value in options.items() if value is not None}
-    if len(target) > 1:
-        raise ValueError("Select one Cairn repo or server")
-    if "repo" in target and "://" not in str(target["repo"]):
-        target["repo"] = str((root / Path(target["repo"]).expanduser()).resolve())
-    return {"destination": next(iter(target.values()), None)}
+def _repo(options: Mapping[str, Any], root: Path) -> str | None:
+    if set(options) - {"repo"}:
+        raise ValueError("cairn config accepts only repo (a path or URL); credentials belong in token files")
+    repo = options.get("repo")
+    if repo is not None and "://" not in str(repo):
+        repo = str((root / Path(repo).expanduser()).resolve())
+    return repo
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -187,14 +185,14 @@ def capture_provenance(run, *, project_root: Path, output_dir: Path, config: Map
         "kind": "initial-provenance", "source_mode": "current-tree", "skipped": skipped,
         "files": {path: {"sha256": hashlib.sha256(content).hexdigest(), "size": len(content)} for path, content in sorted(files.items())},
     }))
-    # A run is itself an artifact; strict provenance is a named immutable capture.
+    # A run is itself an artifact; strict provenance is a named immutable folder (Cairn reserves "provenance/").
     with tempfile.TemporaryDirectory(prefix="research-provenance-") as temporary:
         folder = Path(temporary)
         for path, content in files.items():
             destination = folder / path
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(content)
-        run.capture(folder, name="provenance")
+        run.add(folder, name="project-provenance")
     return run.id
 
 
@@ -211,12 +209,12 @@ def run_experiment(cfg, experiment_type, *, project_root: Path, output_dir: Path
         raise ValueError("Set a nonempty project namespace in config")
     _no_secret_settings(config)
     name = _name(config["run"]["name"])
-    target = _destination(config.get("cairn") or {}, root)
+    repo = _repo(config.get("cairn") or {}, root)
     output_dir = output_dir.resolve()
     receipt = output_dir / "cairn-run.json"
     if receipt.exists():
         raise FileExistsError("This Hydra output folder already has a Cairn run; choose a fresh output folder")
-    with cairn.Client(project=config["project"], **target) as client:
+    with cairn.Client(repo, project=config["project"]) as client:
         with client.run(name, config=config, metadata={"description": config["run"].get("description")}, provenance=False) as run:
             _write_json(receipt, {"project": config["project"], "run_id": run.id})
             capture_provenance(run, project_root=root, output_dir=output_dir, config=config,
@@ -244,13 +242,12 @@ def require_completed_run(reader):
 
 
 def publish_result(client, producer, *, name=None):
-    """Opt in to a separate result artifact from a run’s named result capture."""
+    """Opt in to a separate result artifact from a run’s added "result" folder."""
     require_completed_run(producer)
     with tempfile.TemporaryDirectory(prefix="research-result-") as temporary:
-        folder = Path(temporary) / "result"
-        producer.download("result", to=folder)
+        folder = producer.download("result", to=temporary)
         result = client.start("artifacts", name or producer.descriptor["name"])
-        result.use(producer.id, role="producer")
+        result.use(producer, role="producer")
         result.finish(value=cairn.Directory(folder))
     return client.resolve(result.id)
 
@@ -273,7 +270,7 @@ def require_completed_artifact(client, ref: str):
     return reader
 
 
-def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None, server=None):
+def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None):
     """Publish a summary only for an explicit, fully completed trial roster."""
     project, name = roster["project"], _name(roster["name"])
     expected, runs = roster["expected_trials"], roster["runs"]
@@ -284,16 +281,15 @@ def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None, 
     if any(not isinstance(ident, str) or not ident for ident in runs.values()) or len(set(runs.values())) != len(runs):
         raise ValueError("Every trial must name a distinct full Cairn run ID")
     root = project_root.resolve(strict=True)
-    target = _destination({"repo": repo, "server": server}, root)
     trials = []
-    with cairn.Client(project=project, **target) as client:
+    with cairn.Client(_repo({"repo": repo}, root), project=project) as client:
         for label in expected:
             trial = require_completed_run(client.resolve(runs[label]))
             if trial.id != runs[label] or trial.descriptor["project"] != project:
                 raise ValueError(f"Trial {label} is missing or belongs to another project")
             trials.append({"trial": label, "run_id": trial.id, "status": "completed"})
         config = {"project": project, "run": {"name": name}, "study": dict(roster),
-                  "cairn": {"repo": client.destination}}
+                  "cairn": {"repo": client.repo}}
         with client.run(name, config=config, metadata={"kind": "study"}, provenance=False) as run:
             output_dir = root / "outputs" / "studies" / run.id
             _write_json(output_dir / "cairn-run.json", {"project": project, "run_id": run.id})
@@ -303,7 +299,7 @@ def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None, 
             _write_json(result_dir / "trials.json", trials)
             for trial in trials:
                 run.use(trial["run_id"], role="trial")
-            run.capture(result_dir, name="result")
+            run.add(result_dir, name="result")
         result = publish_result(client, client.resolve(run.id), name=name + "-study")
         return result.descriptor
 
@@ -315,18 +311,15 @@ def main() -> None:
         sub = commands.add_parser(command)
         sub.add_argument(argument)
         sub.add_argument("--project", default="default")
-        destination = sub.add_mutually_exclusive_group()
-        destination.add_argument("--repo")
-        destination.add_argument("--server")
+        sub.add_argument("--repo", help="Repository path or server URL")
         if command == "finalize-study":
             sub.add_argument("--project-root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     if args.command == "check-artifact":
-        with cairn.Client(project=args.project, **_destination({"repo": args.repo, "server": args.server}, Path.cwd())) as client:
+        with cairn.Client(_repo({"repo": args.repo}, Path.cwd()), project=args.project) as client:
             descriptor = require_completed_artifact(client, args.ref).descriptor
     else:
-        descriptor = finalize_study(json.loads(Path(args.roster).read_text()), project_root=args.project_root,
-                                 repo=args.repo, server=args.server)
+        descriptor = finalize_study(json.loads(Path(args.roster).read_text()), project_root=args.project_root, repo=args.repo)
     print(f"{descriptor['namespace']}/{descriptor['name']}@v{descriptor['number']} ({descriptor['id']})")
 
 

@@ -10,9 +10,9 @@ Environment and runs
 - [ ] `.pixi/`, `.cairn/`, `outputs/`, `artifacts/`, and `data/` are ignored and
       excluded from formatting and other source tooling.
 - [ ] `reports/` holds only report sources; Cairn is the pinned
-      `cairn2[reports,media,ui]` v0.1.1 dependency, imported as `cairn`.
+      `cairn2[reports,media,ui]` v0.6.0 dependency, imported as `cairn`.
       No Cairn internals are copied or patched; the bundled project adapter
-      uses public APIs. No removed `.cairn/config.toml` style settings are assumed.
+      uses public APIs. Settings live in `.cairn.toml`; no JSON `.cairn` file is assumed.
 - [ ] No experiment-tracking service or custom run database is used; Cairn's
       repo (runs and artifacts) is the record.
 - [ ] `experiments/run.py` and `experiments/research_cairn.py` come from the
@@ -28,7 +28,7 @@ Environment and runs
 - [ ] Run names are concise semantic slugs, and descriptions explain purpose
       and interpretation limits.
 - [ ] Evidence is recorded with `run.log`, `run.track`, and
-      `run.capture`. Separate result publication is optional. Scientific tables
+      `run.add`. Separate result publication is optional. Scientific tables
       and arrays are retained completely,
       and the producer's provenance identifies the source and environment.
 - [ ] `linux-64` is a locked platform; `experiments/cluster.sh` and other
@@ -55,7 +55,7 @@ Artifacts and repo
 - [ ] On a cluster: one `cairn --repo <path> server` on a local disk (never
       on a compute node or a shared filesystem), jobs target its URL and
       project with protected credentials, and durable client journals are
-      retained until acknowledged. `cairn sync` retries them; backend reads
+      retained until acknowledged. `Client.recover()` retries them; backend reads
       confirm completion and exact artifact availability before evidence handoff.
 
 Method and evidence

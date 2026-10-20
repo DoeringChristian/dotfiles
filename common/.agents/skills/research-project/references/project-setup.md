@@ -27,7 +27,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.1.1", extras = ["reports", "media", "ui"] }
+cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.6.0", extras = ["reports", "media", "ui"] }
 
 [tasks]
 experiment = "python experiments/run.py"
@@ -38,13 +38,12 @@ report-serve = "python experiments/report_tasks.py --project <project> serve"
 report-publish = "python experiments/report_tasks.py --project <project> publish"
 report-share = "python experiments/report_tasks.py --project <project> share"
 ui = "cairn server"
-sync = "cairn sync"
 format = "black --extend-exclude '/([.]pixi|[.]cairn|data|outputs|artifacts)/' ."
 kuma = "bash experiments/cluster.sh kuma"
 lyra = "bash experiments/cluster.sh lyra"
 ```
 
-The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.1.1`
+The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.6.0`
 in pip or uv form. The import and command remain `cairn`. Hydra stays a separate
 dependency. `reports` supplies notebook execution; `media` supplies arrays,
 tables and figures; `ui` supplies the server dependencies for the bundled React UI.
@@ -70,10 +69,10 @@ formatter, linter, type checker, and test runner must skip environments and
 generated artifacts. Do not add MLflow, W&B, TensorBoard-as-a-tracker, or a
 custom run database: Cairn's selected backend is the project's one record.
 
-## Cairn destinations and credentials
+## Cairn repo and credentials
 
-Choose **one destination**: a local repository or the user's named remote
-server. A `cairn.Client(destination, project=...)` owns the connection; the
+Choose **one repo**: a local repository path or the user's named remote
+server URL. A `cairn.Client(repo, project=...)` owns the connection; the
 project namespace is separate. Runs and results share one artifact lifecycle.
 
 ```bash
@@ -83,14 +82,23 @@ pixi run ui                         # API + UI, default http://127.0.0.1:8000
 
 The repository is created on first access. `cairn init NAME` starts a run;
 it is not a repository-initialization command. `Client()` selects an explicit
-destination first, then `CAIRN_URL` or `CAIRN_REPO`, then the nearest ancestor
-`.cairn` config/directory (using its `repo/` subdirectory), then a local `.cairn/repo`. Keep an explicit environment
-setting shared by experiments and report tasks. The adapter accepts
-`cairn: {repo: ...}` or `cairn: {server: ...}`, never both; those are adapter
-settings translated to the public `destination` argument.
+repo first, then `CAIRN_REPO`, then the nearest ancestor `.cairn.toml` `repo`
+setting or `.cairn/` directory (using its `repo/` subdirectory), then a local
+`.cairn/repo`. The project resolves an explicit `project=`, then
+`CAIRN_PROJECT`, then `.cairn.toml`, then `"default"`. `.cairn.toml` files merge
+upward; the nearest file setting a key wins:
+
+```toml
+repo = "https://<user-named-host>"
+project = "<project>"
+token_file = "~/.config/cairn/<host>.token"
+```
+
+Keep one setting shared by experiments and report tasks. The adapter accepts
+`cairn: {repo: <path or URL>}`, passed to the public `repo` argument.
 
 Use a server only when the user runs one and names it; never invent a server
-or upload project data to an unrequested destination:
+or upload project data to an unrequested repo:
 
 ```bash
 export CAIRN_REPO="https://<user-named-host>"
@@ -98,8 +106,9 @@ export CAIRN_TOKEN_FILE="/private/path/to/existing-token"
 ```
 
 There is no `cairn login` command. Authentication resolves `CAIRN_TOKEN`,
-`CAIRN_TOKEN_FILE`, project `.cairn/token` or config, and
-`~/.config/cairn/token`. Prefer a protected token file, never a token in
+`CAIRN_TOKEN_FILE`, the token of the level that selected the repo (its
+`token_file`, or `.cairn/token` for a local repo), and
+`~/.config/cairn/token`. Inline tokens in `.cairn.toml` are rejected. Prefer a protected token file, never a token in
 tracked config, commands, logs, or handoffs. Use HTTPS, a VPN, or an SSH tunnel.
 
 For a user-authorized host, `cairn --repo <local-path> server --host <host>
@@ -107,16 +116,17 @@ For a user-authorized host, `cairn --repo <local-path> server --host <host>
 needed and prints an immediate login link. Browser authentication lasts 12 hours.
 Give the ordinary URL in handoffs. `--no-ui` disables UI hosting;
 `--no-auth` is for explicitly selected development access. To view a remote
-destination, open that server's UI; `cairn server` hosts a local backend,
+repo, open that server's UI; `cairn server` hosts a local backend,
 not a loopback proxy to another server.
 
 Remote writes use a durable outbox under
-`$XDG_STATE_HOME/cairn/outbox/<destination-hash>` (default
-`~/.local/state/cairn/outbox/...`), or an explicit `Client(outbox=...)`.
+`<state>/outbox/<repo-hash>`, where `<state>` is `$CAIRN_STATE_DIR`, else
+`$XDG_STATE_HOME/cairn` (default `~/.local/state/cairn`), or an explicit
+`Client(outbox=...)`.
 This is a retry journal, not a second queryable repository. Preserve it until
-the selected server acknowledges completion. `cairn sync` retries delivery;
-`Client.recover()` recovers writers. Do not assume old `CAIRN_DIR`,
-`CAIRN_CACHE_DIR`, `CAIRN_SERVER`, `sync --clean`, or run-folder APIs.
+the selected server acknowledges completion. `flush(timeout=...)` waits for
+delivery; `Client.recover()` recovers writers. Do not assume old `CAIRN_DIR`,
+`CAIRN_URL`, `CAIRN_SERVER`, `cairn sync`, or run-folder APIs.
 A disconnected finish raises Pending; it does not prove completed evidence.
 
 ## Hydra configuration and run identity
@@ -197,11 +207,12 @@ from read-only plugin caches, shared installations, or dotfiles mounts.
 
 The adapter captures the current eligible source tree and runtime state
 synchronously before constructing the Experiment. It requires `pixi.lock`,
-includes the resolved config and Hydra files, and records the capture as the
-run’s named `provenance` directory capture. A missing required file or a
-source/total size limit violation fails the run before experiment work. This
-strict project capture is separate from Cairn's optional, best-effort source
-capture; do not claim the automatic capture guarantees a complete snapshot.
+includes the resolved config and Hydra files, and adds them as the run’s
+`project-provenance` folder. A missing required file or a source/total size
+limit violation fails the run before experiment work. This strict project
+capture is separate from Cairn's optional, best-effort source capture, which
+the adapter turns off and which Cairn keeps under the reserved `provenance/`
+names; do not claim the automatic capture guarantees a complete snapshot.
 
 The helper allowlists text source and project-definition files, respects Git
 ignores, and excludes symlinks, installed libraries, environments, caches,
@@ -280,18 +291,18 @@ run.track(cairn.Figure(figure), key="error_histogram")
 plt.close(figure)
 ```
 
-Write metrics, tables, figures, arrays, and captures directly to the run with
-`log`, `track`, and `capture`. For a library that requires a filesystem path,
-use `output_dir` as optional scratch space and explicitly capture the resulting
+Write metrics, tables, figures, arrays, and files directly to the run with
+`log`, `track`, and `add`. For a library that requires a filesystem path,
+use `output_dir` as optional scratch space and explicitly add the resulting
 file. Hydra still keeps its configuration and run receipt there; Cairn does not
 require evidence to pass through that directory. The adapter does not scan
 `output_dir/result` or automatically create a second artifact.
 
 A completed run can be declared directly as a report input. Create a separate
 result artifact only when its name, reuse, or lifecycle merits one. For example,
-explicitly capture a result directory with `run.capture(path, name="result")`,
+explicitly add a result directory with `run.add(path, name="result")`,
 then after the run finishes call `publish_result(client, client.resolve(run_id))`.
-That optional helper publishes the captured bytes and records a `producer`
+That optional helper publishes the added bytes and records a `producer`
 dependency. There is no need to do this for every experiment.
 
 **Backend rule versus research policy:** Cairn2 accepts dependencies only on
@@ -309,22 +320,22 @@ run.track(cairn.Figure(plotly_figure), {"step": step}, key="running_rmse")
 run.track(cairn.Image(array), {"step": step}, key="reconstruction")
 run.track(cairn.Table([{"condition": c, "rmse": r} for c, r in rows]), key="trials")
 run.track({"solver_log": solver_log})
-run.capture("checkpoints/best.pt", name="best-checkpoint")
-run.capture("optimization.mp4", name="optimization")
+run.add("checkpoints/best.pt", name="best-checkpoint")
+run.add("optimization.mp4", name="optimization")
 ```
 
 `track` uses `key=`, not `name=`; metadata such as step goes in its second
-argument. Audio/video/text can be captured as files; there are no `Video`,
+argument. Audio/video/text can be added as files; there are no `Video`,
 `Audio`, or `Text` wrapper classes in this release. Typed values select
 interpretation; ordinary dictionaries/lists are JSON, never implicit pickle.
 Preserve complete scientific tables and arrays, not just presentation subsets.
 
 Run records retain repeated steps. Read `client.resolve(run_id).records()`;
 each row contains `data`, including metrics and optional `step`. Config is
-`reader.descriptor["manifest"]["metadata"]["config"]`; named captures live
-in `manifest.captures`. There are no implicit `metrics.jsonl` or
-`summary.json` snapshot folders. Record logs explicitly with records or named
-file captures; do not assume automatic stdout/system-metric interception.
+`reader.descriptor["manifest"]["metadata"]["config"]`; `reader.files` lists
+added files and `reader.file(name)` returns one (`.load()`, `.open()`). There
+are no implicit `metrics.jsonl` or `summary.json` snapshot folders. Record logs
+explicitly with records or named added files; do not assume automatic stdout/system-metric interception.
 
 Use stable file names, columns, and units across experiments. Record the
 generating module/function and material plotting settings beside each figure
@@ -365,7 +376,13 @@ pixi run cairn --project <project> artifact versions datasets/crops@latest
 pixi run cairn --project <project> artifact inspect datasets/crops@v1
 ```
 
-Download with `client.resolve(ref).download(to="artifacts/crops-v1")`.
+Download with `client.resolve(ref).download(to="artifacts/crops-v1")`; it
+returns one path, the folder or the named file. Without `to`, downloads go to
+`<cache>/artifacts/<id>/` (`$CAIRN_CACHE_DIR`, default `~/.cache/cairn`).
+Remove an artifact only when the user asks: `pixi run cairn --project <project>
+remove <ref>` hides that exact version, `latest` falls back, and dependents keep
+it readable by ID; `pixi run cairn gc --apply` later reclaims storage, on the
+server when the repo is a URL.
 Record experiment outputs on their run by default. If publishing a separate
 result artifact, retain a `producer` dependency on the completed run; do not
 disguise experiment results as runless dataset imports. Import external file
@@ -430,7 +447,7 @@ own durable journal and protected credentials.
 **Legacy adapter compatibility is not automatic.** Existing Slurm assets may
 still use `cairn-report push` and folder `run.json` completion; HyperQueue
 assets may still use old Cairn distribution/extras, `remote set`,
-`${cairn.run:}`, or `finalize-study`. Those calls do not work with Cairn2 0.1.1.
+`${cairn.run:}`, or `finalize-study`. Those calls do not work with Cairn2 0.6.0.
 Preserve their scheduling, storage, and GPU-efficiency rules, but adapt and
 test the project's tracking glue with the current public helper/commands
 before submitting work. Do not silently edit the adjacent skills or claim
@@ -451,17 +468,17 @@ SQLite repository there:
 - **One server on a machine with a local disk.** The user runs `cairn --repo <path> server` on a workstation or service host, never on a compute node or
   with its local repository on a shared filesystem, behind HTTPS or a VPN.
   Use its actual configured port; the project is a separate namespace.
-- **The project names it.** Configure `CAIRN_URL` or `CAIRN_REPO` as the
-  server URL and authenticate with a protected token file.
+- **The project names it.** Configure `CAIRN_REPO` or the `.cairn.toml` `repo`
+  as the server URL and authenticate with a protected token file.
   Never put credentials in tracked configs or job scripts.
 - **Jobs retain durable journals.** Each job's uploader retries automatically.
-  Preserve the destination-specific outbox under `$XDG_STATE_HOME/cairn/outbox/`
-  until confirmed; `pixi run cairn sync` retries on a host that can reach the
-  server, using the same recovered outbox location. Verify the finished backend runs and exact artifacts before building
+  Preserve the repo-specific outbox under `<state>/outbox/`
+  until confirmed; `Client.recover()` and `flush()` retry on a host that can
+  reach the server, using the same recovered outbox location. Verify the finished backend runs and exact artifacts before building
   or publishing evidence. A node-local scratch journal must be recovered
   before the allocation deletes it.
 
-Build reports locally in the locked project environment; the server does not execute report cells. The evidence destination
+Build reports locally in the locked project environment; the server does not execute report cells. The evidence repo
 does not move report sources or local preview files.
 
 ## Parameter studies
@@ -496,7 +513,7 @@ For example, a roster for two planned trials is:
 ```
 
 Run `pixi run finalize-study outputs/<study>/roster.json` against the selected
-backend (or pass `--repo <path>` / `--server <url>`). Missing or extra trials,
+backend (or pass `--repo <path or URL>`). Missing or extra trials,
 duplicate run IDs, and non-completed backend runs fail the check. After the
 scientific validation passes, the helper creates a summary run, records each
 trial with `use(..., role="trial")`, and logs `<name>-study` with the roster and status table.

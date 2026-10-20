@@ -20,7 +20,7 @@ def project(tmp_path, monkeypatch):
     root.mkdir()
     (root / "method.py").write_text("def compute():\n    return 42\n")
     (root / "pixi.lock").write_text("version: 6\nenvironments: {}\n")
-    for key in ("CAIRN_URL", "CAIRN_REPO", "CAIRN_TOKEN", "CAIRN_TOKEN_FILE"):
+    for key in ("CAIRN_REPO", "CAIRN_TOKEN", "CAIRN_TOKEN_FILE"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.chdir(root)
     return root
@@ -51,11 +51,10 @@ def test_provenance_is_exact_and_excludes_credentials_libraries_and_symlinks(pro
     with client(project) as c:
         with c.run("trial", provenance=False) as run:
             helper.capture_provenance(run, project_root=project, output_dir=project / "outputs/job", config=config(project))
-        target = project / "outputs/provenance"
-        c.resolve(run.id).download("provenance", to=target)
+        target = c.resolve(run.id).download("project-provenance", to=project / "outputs")
         entries = {p.relative_to(target).as_posix(): p.read_bytes() for p in target.rglob("*") if p.is_file()}
     assert entries["source/method.py"] == (project / "method.py").read_bytes()
-    assert b"cairn2==0.1.1" in entries["environment/packages.txt"]
+    assert b"cairn2==0.6.0" in entries["environment/packages.txt"]
     assert not any(b"DO_NOT_CAPTURE" in content for content in entries.values())
     runtime = json.loads(entries["environment/runtime.json"])
     assert runtime["environment"]["OMP_NUM_THREADS"] == "2"
@@ -101,7 +100,7 @@ class Example(Experiment):
 
     def run(self, run, output_dir):
         run.log(loss=0.1)
-        run.capture(b'{"loss":0.1}', name="scores.json")
+        run.add(b'{"loss":0.1}', name="scores.json")
         folder = output_dir / "result"
         folder.mkdir(parents=True)
         (folder / "result.json").write_text('{"loss":0.1}')
@@ -122,8 +121,8 @@ def test_runner_records_directly_without_implicit_staging_or_publication(project
     with client(project) as c:
         producer = c.resolve(ident)
         assert producer.descriptor["manifest"]["outcome"] == ("failed" if fail else "completed")
-        producer.download("provenance", to=output / "provenance")
-        assert (output / "provenance/source/method.py").read_text() == "def compute():\n    return 42\n"
+        provenance = producer.download("project-provenance", to=output)
+        assert (provenance / "source/method.py").read_text() == "def compute():\n    return 42\n"
         if fail:
             with pytest.raises(cairn.NotFound):
                 c.resolve("artifacts/trial@latest")
@@ -132,8 +131,8 @@ def test_runner_records_directly_without_implicit_staging_or_publication(project
         else:
             result = helper.require_completed_artifact(c, ident)
             assert result.records()[0]["data"]["loss"] == 0.1
-            result.download("scores.json", to=output / "verified.json")
-            assert json.loads((output / "verified.json").read_text()) == {"loss": 0.1}
+            scores = result.download("scores.json", to=output)
+            assert json.loads(scores.read_text()) == {"loss": 0.1}
             assert "result" not in result.descriptor["manifest"]["captures"]
             assert not list(c.find(namespace="artifacts"))
             assert not (output / "cairn-result.json").exists()
@@ -188,7 +187,7 @@ def test_study_refuses_incomplete_or_ambiguous_roster(project, fault):
         elif fault == "missing_run":
             data["runs"]["1"] = "0" * 32
         with pytest.raises((ValueError, cairn.CairnError)):
-            helper.finalize_study(data, project_root=project, repo=c.destination)
+            helper.finalize_study(data, project_root=project, repo=c.repo)
         assert not list(c.find(namespace="artifacts"))
 
 
@@ -198,7 +197,7 @@ def test_study_summary_preserves_every_trial_and_public_lineage(project):
         for name in ("first", "second"):
             with c.run(name, provenance=False) as run:
                 ids.append(run.id)
-        descriptor = helper.finalize_study(roster(*ids), project_root=project, repo=c.destination)
+        descriptor = helper.finalize_study(roster(*ids), project_root=project, repo=c.repo)
         result = helper.require_completed_artifact(c, descriptor["id"])
         result.download(to=project / "outputs/summary")
         assert json.loads((project / "outputs/summary/roster.json").read_text()) == roster(*ids)
@@ -212,7 +211,7 @@ def test_separate_result_publication_is_explicit(project):
         folder.mkdir(parents=True)
         (folder / "scores.json").write_text('{"loss":0.1}')
         with c.run("trial", provenance=False) as run:
-            run.capture(folder, name="result")
+            run.add(folder, name="result")
         assert not list(c.find(namespace="artifacts"))
         result = helper.publish_result(c, c.resolve(run.id))
         checked = helper.require_completed_artifact(c, result.id)
