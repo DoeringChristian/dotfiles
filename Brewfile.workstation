@@ -17,6 +17,10 @@ brew "homebrew-zathura/zathura/zathura-pdf-mupdf" if OS.mac?
 brew "doeringc/local/zathura" if OS.linux?
 brew "doeringc/local/zathura-pdf-mupdf" if OS.linux?
 
+# TeX Live (full) for LaTeX writeups built with pdflatex/latexmk (latex-writeup skill);
+# conda-forge's texlive-core lacks the LaTeX packages.
+brew "texlive"
+
 cask "moonlight"
 
 tap "LizardByte/homebrew"
