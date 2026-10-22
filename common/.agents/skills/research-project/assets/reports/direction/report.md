@@ -14,7 +14,8 @@ This sample direction exercises the report workflow. Replace its content,
 summary, inputs, and assets/ with the direction's own material; keep the spine
 (Abstract first, Conclusion last). How to write each section is in the skill's
 references/writing-methods.md, with a worked Methods example in
-references/example-methods.md.
+references/example-methods.md. Write the Introduction, Background, and Methods
+and publish them before the experiments finish; results follow as runs complete.
 -->
 
 ```{python}
@@ -247,7 +248,9 @@ each sequence:
 
 <!--
 Results and discussion sections (Findings, Diagnostics, ... as the question
-needs): findings for decision-relevant claims only, with explicit status,
+needs). Until its runs complete, a section holds only a note callout naming the
+runs it waits for and the question it will answer. Then: findings for
+decision-relevant claims only, with explicit status,
 a qualitative title, and numbers generated from declared inputs in the body;
 supporting figures taken from the artifacts that hold them; contradictions and
 limitations stated plainly. Generated Markdown blockquotes render consistently

@@ -239,6 +239,12 @@ a direction's method. The rules that hold everywhere:
   executable Python cell from a declared input (`inputs["name"]`), and every
   figure of a result comes from its declared run or artifact snapshot.
   Only results from completed, validated producers count. Never type a result.
+- **Write the report before the evidence.** Once a direction is agreed, write
+  its Introduction, Background and related work, and Methods with the
+  experimental design, then build and publish the report before the experiments
+  finish, so the user can check the framing and method while they run. Fill in
+  the results section by section as runs complete
+  ([writing-methods.md](references/writing-methods.md)).
 - **Keep each report coherent.** A report is for a reader who needs the current
   method, evidence, and decisions quickly, not an activity log: integrate
   changes where they belong, remove what is stale, and re-read the whole report
@@ -266,6 +272,7 @@ Report change:
 - [ ] New evidence logged as artifacts, completed producers verified, exact refs declared under cairn.inputs:
 - [ ] Edited reports/<slug>/report.md (and its sources) only; result prose and figures computed from declared inputs
 - [ ] Methods still describes the method as implemented, with the figures a paper would have
+- [ ] Sections still waiting on runs say which runs and what they will answer
 - [ ] pixi run report-build succeeds
 - [ ] Looked at every figure I added or changed
 - [ ] Re-read the whole report: description, abstract, findings, and conclusion match the evidence

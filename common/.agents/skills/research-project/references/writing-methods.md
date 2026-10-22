@@ -34,6 +34,16 @@ organized is in [reports.md](reports.md)):
 6. `## Conclusion`: the answer the evidence supports, its limits, and the next
    decision or experiment.
 
+Write in two passes. Before or while the experiments run, write the
+Introduction, Background and related work, and Methods in full, give each
+planned result section its heading and a `note` callout naming the runs it waits
+for and the question it will answer, and let the Abstract, summary, and
+Conclusion state what is planned and pending. Build and publish this draft.
+Then, as each run completes and passes validation, declare it as an input,
+replace its pending note with the result, and rebuild and publish; revise the
+Abstract and Conclusion once the evidence supports an answer. Never fill a
+pending section with expected or typed results.
+
 Add Results, Discussion, Limitations, or Appendix sections when they help; keep
 the Abstract first and the Conclusion last. Put hidden loading code in a
 preamble and visible metrics inside a named section.
