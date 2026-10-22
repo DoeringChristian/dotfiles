@@ -39,9 +39,8 @@ Any pixi + Hydra project works. It needs:
 
 Copy the assets into the project:
 
-- [`assets/cluster.sh`](assets/cluster.sh) and
-  [`assets/finalize_study.py`](assets/finalize_study.py) into one folder, for
-  example `experiments/` (`finalize_study.py` must sit next to `cluster.sh`);
+- [`assets/cluster.sh`](assets/cluster.sh) into a folder, for example
+  `experiments/`;
 - from each cluster's skill, its profile into `<that folder>/clusters/<cluster>.sh`
   and its launchers `<cluster>.yaml` and `<cluster>_debug.yaml` into
   `configs/hydra/launcher/` (the folder of the project's Hydra config);
@@ -49,10 +48,7 @@ Copy the assets into the project:
 
 The launchers name each Slurm job after `run.name` when the config has one,
 otherwise after Hydra's job name, and keep submitit's files in
-`<sweep dir>/.submitit/`. `finalize` applies only to projects whose entry point
-records each run's completion in a `run.json` (`status` running, completed, or
-failed) and writes the study's `run.json` when a multirun ends; skip it
-otherwise.
+`<sweep dir>/.submitit/`.
 
 Take the CUDA version from the cluster's skill (its driver sets the maximum).
 Install PyTorch's CUDA wheels only on Linux, for example:
@@ -79,8 +75,10 @@ clusters only when they accept the same CUDA build.
 The local checkout stays the source of truth: `pixi run <cluster> ...` pushes
 the working tree (including `.git`, so a run can record the same revision;
 ignored files, `outputs/`, `generated/`, and `.pixi/` stay local), runs Hydra
-through a Slurm launcher, and pulls `outputs/` back so results are inspected
-locally.
+through a Slurm launcher, and `pull` copies `outputs/` back so results are
+inspected locally. A project that logs to a tracking server (Cairn, MLflow) gets
+its results from the server, reachable from the compute nodes, and needs no
+`pull`.
 
 ```bash
 pixi run <cluster> setup                       # once per account: pixi on the cluster, project directory
@@ -90,7 +88,6 @@ pixi run <cluster> pack -t 1:30:00 -- <sweep>  # small trials, one GPU job
 pixi run <cluster> status                      # queue and launcher logs
 pixi run <cluster> gpu <jobid>_<n>             # live GPU utilisation of a running trial
 pixi run <cluster> pull                        # outputs/ back to the local project
-pixi run <cluster> finalize <study-dir>        # complete a study whose launcher died (run.json projects)
 pixi run <cluster> storage                     # /home and /scratch use
 pixi run <cluster> ssh <command...>            # any command in the remote project
 ```
@@ -109,16 +106,12 @@ pixi run <cluster> ssh <command...>            # any command in the remote proje
 - Commit before pushing runs whose results matter; uncommitted changes are
   pushed too. Never edit files on the cluster, because the next push overwrites
   them.
-- When the project has a `cairn-report.toml` with a `[hub]`, `submit` and `pack`
-  also run `cairn-report push runs --watch` on the login node until the
-  project's jobs leave the queue; the hub token must exist on the cluster
-  (`CAIRN_HUB_TOKEN` or the configured chmod-600 `token_file`). A hub on a login
-  node at `127.0.0.1` is reachable only from that node, so pin the profile's
-  host to that node for the call (`CLUSTER_HOST=user@<login-node>`).
-- A launcher process that died leaves its study without its completion step
-  (for `run.json` projects, without the study's `run.json`). Check `status`;
-  once the study's jobs have left the queue, run `finalize <study-dir>`. The
-  launcher log name gives the login node it ran on.
+- A tracking server's token must exist on the cluster with mode 600, never in
+  the repository.
+- A launcher process that died leaves its study without its completion step.
+  Check `status`; once the study's jobs have left the queue, complete it as the
+  project or its skill says, through `ssh`. The launcher log name gives the
+  login node it ran on.
 
 ## Storage
 
@@ -127,7 +120,7 @@ the paths, quotas, and purge rules:
 
 | What | Where |
 |---|---|
-| Code, configs, `pixi.lock`, `outputs/` evidence (run records, metrics, tables, figures, logs) | the project directory under `/home`: small, backed up, never purged |
+| Code, configs, `pixi.lock`, `outputs/` (Hydra's runs and launcher logs) | the project directory under `/home`: small, backed up, never purged |
 | pixi environments (`.pixi/`) and pixi's cache (`~/.cache/rattler`) | `/home`, together: environments are hardlinked from the cache, so projects on the same versions share one copy. Never move only one of them: across filesystems every environment becomes a full copy. |
 | Kernel and model caches (Dr.Jit, Triton, TorchInductor, CUDA, torch hub, Hugging Face) | the profile's `CACHE_ROOT` on `/scratch`: `cluster.sh` exports their variables for every remote command, and Slurm passes them into every job |
 | Checkpoints, renders, intermediate arrays, datasets | `/scratch/$USER/<project>/`: bulky and re-creatable; record the path in the run |
@@ -202,11 +195,11 @@ measured numbers.
      moot (a bug found, a superseded config).
 7. **Audit afterwards.** Run `pixi run <cluster> ssh seff <jobid>_<n>` on a few
    trials and compare the elapsed time with the limit. Judge success by each
-   trial's own completion record (its `run.json`, logs, or outputs), never by
-   Slurm: submitit catches its timeout signal, so a timed-out trial can be
-   `COMPLETED 0:0` in `sacct` although it never finished. Report the GPU-hours
-   used (trials × GPUs × elapsed) and the observed utilisation. Fix poor
-   utilisation before the next study.
+   trial's own completion record (its run on the tracking server, or its logs
+   and outputs), never by Slurm: submitit catches its timeout signal, so a
+   timed-out trial can be `COMPLETED 0:0` in `sacct` although it never finished. Report the GPU-hours used (trials × GPUs ×
+   elapsed) and the observed utilisation. Fix poor utilisation before the next
+   study.
 
 ## Adding a cluster
 

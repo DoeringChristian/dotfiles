@@ -12,23 +12,18 @@
 #   pixi run <cluster> status                 # your jobs and the newest launcher logs
 #   pixi run <cluster> gpu <jobid>            # live GPU utilisation of a running job (or <jobid>_<n>)
 #   pixi run <cluster> pull                   # rsync outputs/ back (no deletion)
-#   pixi run <cluster> finalize <study-dir>   # complete a study whose launcher process died
 #   pixi run <cluster> storage                # /home and /scratch use
 #   pixi run <cluster> ssh <command...>       # any command in the remote project, pixi on PATH
 #
 # Overrides are Hydra overrides for the project's Hydra app, started through its pixi task
 # `experiment` (CLUSTER_ENTRY overrides the whole command). `smoke` and `submit` use the Hydra
 # launchers configs/hydra/launcher/<cluster>_debug.yaml and <cluster>.yaml, so nothing GPU-bound
-# runs on the login node. Runs are written under outputs/; finalize needs finalize_study.py
-# next to this script.
+# runs on the login node. Runs are written under outputs/; a project that logs to a tracking
+# server gets its results from there and needs no `pull`.
 #
 # Every remote command, and through Slurm's environment export every job, sends re-creatable
 # kernel and model caches to the profile's CACHE_ROOT (on /scratch), so they never fill /home.
 # pixi's own cache stays in /home on purpose: environments are hardlinked from it.
-#
-# When cairn-report.toml has a [hub], `submit` and `pack` also run `cairn-report push runs --watch`
-# on the login node until every Slurm job of this project has left the queue (also when the
-# launcher dies); the hub token must exist on the cluster, never in the repository.
 #
 # The profile (experiments/clusters/<cluster>.sh) is sourced and may set: HOST (ssh host),
 # DIR (remote project directory), ACCOUNT (Slurm account), PACK_ARGS (sbatch arguments of a
@@ -62,8 +57,6 @@ source "$PROFILE"
 HOST="${CLUSTER_HOST:-$HOST}"
 DIR="${CLUSTER_DIR:-$DIR}"
 ENTRY="${CLUSTER_ENTRY:-pixi run --frozen experiment}"  # the Hydra app; overrides are appended
-TOOLS="${SELF%/*}"
-TOOLS="${TOOLS#"$PWD"/}"                                # this script's folder, relative to the project
 LAUNCHER="$CLUSTER"
 DEBUG_LAUNCHER="${CLUSTER}_debug"
 SBATCH_ACCOUNT="${ACCOUNT:+-A $ACCOUNT}"
@@ -96,9 +89,6 @@ push() {
     fi
 }
 
-# Remote snippet: true while a Slurm job submitted from this project directory is queued.
-PROJECT_JOBS_QUEUED="squeue -h --me -o %Z | grep -qxF \"\$PWD\""
-
 launch_log() { echo "outputs/.launch/\$(date +%Y%m%d-%H%M%S)-\$(hostname -s)-$1.log"; }
 
 command="${1:-}"
@@ -125,14 +115,8 @@ case "$command" in
         ;;
     submit)
         push
-        study="$ENTRY -m hydra/launcher=$LAUNCHER$(quote "$@")"
         remote "mkdir -p outputs/.launch; log=$(launch_log submit)
-            if grep -qs '^\[hub\]' cairn-report.toml; then
-                set -- pixi run --frozen cairn-report push runs --watch -- bash -c $(printf '%q' "$study; rc=\$?; while $PROJECT_JOBS_QUEUED; do sleep 60; done; exit \$rc")
-            else
-                set -- $study
-            fi
-            nohup setsid \"\$@\" > \$log 2>&1 < /dev/null &
+            nohup setsid $ENTRY -m hydra/launcher=$LAUNCHER$(quote "$@") > \$log 2>&1 < /dev/null &
             sleep 15; echo \"launcher log: \$log\"; cat \"\$log\" < /dev/null; squeue --me"
         ;;
     pack)
@@ -147,12 +131,7 @@ case "$command" in
         remote "mkdir -p outputs/.launch && id=\$(sbatch --parsable $SBATCH_ACCOUNT $PACK_ARGS -J pack \
             -o outputs/.launch/pack-%j.out$(quote "${sbatch_args[@]}") \
             --wrap \"export PATH=\\\$HOME/.pixi/bin:\\\$PATH; $ENTRY -m$(quote "$@")\") &&
-            echo \"submitted job \$id, log outputs/.launch/pack-\$id.out\" &&
-            if grep -qs '^\[hub\]' cairn-report.toml; then
-                nohup setsid pixi run --frozen cairn-report push runs --watch -- \
-                    bash -c $(printf '%q' "while $PROJECT_JOBS_QUEUED; do sleep 60; done") \
-                    > outputs/.launch/pack-\$id-hub-\$(hostname -s).log 2>&1 < /dev/null &
-            fi"
+            echo \"submitted job \$id, log outputs/.launch/pack-\$id.out\""
         ;;
     status)
         remote "squeue --me -o '%.18i %.9P %.20j %.2t %.10M %.10l %.5D %R'; echo;
@@ -166,12 +145,6 @@ case "$command" in
     pull)
         mkdir -p outputs
         rsync -az --exclude '*.pkl' "$HOST:$DIR/outputs/" outputs/ 2> >(quiet)
-        ;;
-    finalize)
-        [ $# -eq 1 ] || { echo "usage: $CLUSTER finalize outputs/<run-name>/<timestamp>" >&2; exit 2; }
-        # The hub watcher has exited by now, so send the finalized run.json to the hub here.
-        remote "pixi run --frozen python $(printf '%q' "$TOOLS/finalize_study.py")$(quote "$1") &&
-            if grep -qs '^\[hub\]' cairn-report.toml; then pixi run --frozen cairn-report push runs; fi"
         ;;
     storage)
         remote "echo \"$HOME_NOTE: \$(du -sh \$HOME 2>/dev/null | cut -f1) in total\"

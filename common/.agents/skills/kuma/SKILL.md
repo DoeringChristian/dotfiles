@@ -56,10 +56,10 @@ Kuma paths and limits:
 
 | What | Where | Why |
 |---|---|---|
-| Code, configs, `pixi.lock`, `outputs/` evidence | `~/projects/<name>` (`/home`) | small, backed up, never purged |
+| Code, configs, `pixi.lock`, `outputs/` | `~/projects/<name>` (`/home`) | small, backed up, never purged |
 | pixi environments (`.pixi/`) and pixi's cache (`~/.cache/rattler`) | `/home`, together | hardlinked: one CUDA torch stack (~14 GB) is shared by all projects on the same versions |
 | Kernel and model caches | `/scratch/$USER/.cache/<tool>` | re-creatable; `cluster.sh` exports their variables for every command and job. `kuma setup` links `~/.drjit` there for Dr.Jit < 1.5. |
-| Checkpoints, renders, intermediate arrays, datasets | `/scratch/$USER/<project>/` | bulky and re-creatable. Pull or regenerate anything a report needs within 30 days. |
+| Checkpoints, renders, intermediate arrays, datasets | `/scratch/$USER/<project>/` | bulky and re-creatable. Pull, log to the tracking server, or regenerate anything a report needs within 30 days. |
 | Job-local temporaries and staged inputs | `/tmp` inside the job | node-local NVMe, fastest, gone after the job |
 | Large data that must outlive the purge | `/work/rgl/<user>` | paid lab storage, no purge. Only with the user's explicit consent. |
 
