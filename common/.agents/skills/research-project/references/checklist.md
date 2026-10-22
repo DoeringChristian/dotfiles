@@ -10,7 +10,7 @@ Environment and runs
 - [ ] `.pixi/`, `.cairn/`, `outputs/`, `artifacts/`, and `data/` are ignored and
       excluded from formatting and other source tooling.
 - [ ] `reports/` holds only report sources; Cairn is the pinned
-      `cairn2[reports,media,ui]` v0.6.0 dependency, imported as `cairn`.
+      `cairn2[reports,media,ui]` v0.11.0 dependency, imported as `cairn`.
       No Cairn internals are copied or patched; the bundled project adapter
       uses public APIs. Settings live in `.cairn.toml`; no JSON `.cairn` file is assumed.
 - [ ] No experiment-tracking service or custom run database is used; Cairn's

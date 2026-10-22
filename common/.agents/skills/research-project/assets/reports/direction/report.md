@@ -29,7 +29,7 @@ result_dir = Path("evidence")
 inputs["result"].download(to=result_dir)
 
 # The imported sample's metrics are a mapping per row, not a run metric stream.
-# Actual run curves come from inputs["run"].records(), with values in each row["data"].
+# Actual run curves come from inputs["run"].records(), one logged dictionary per row.
 scores = {}
 for line in (result_dir / "metrics.jsonl").read_text().splitlines():
     scores.update(json.loads(line))

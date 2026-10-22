@@ -51,10 +51,10 @@ def test_provenance_is_exact_and_excludes_credentials_libraries_and_symlinks(pro
     with client(project) as c:
         with c.run("trial", provenance=False) as run:
             helper.capture_provenance(run, project_root=project, output_dir=project / "outputs/job", config=config(project))
-        target = c.resolve(run.id).download("project-provenance", to=project / "outputs")
+        target = c.get(run.id).download("project-provenance", to=project / "outputs")
         entries = {p.relative_to(target).as_posix(): p.read_bytes() for p in target.rglob("*") if p.is_file()}
     assert entries["source/method.py"] == (project / "method.py").read_bytes()
-    assert b"cairn2==0.6.0" in entries["environment/packages.txt"]
+    assert b"cairn2==0.11.0" in entries["environment/packages.txt"]
     assert not any(b"DO_NOT_CAPTURE" in content for content in entries.values())
     runtime = json.loads(entries["environment/runtime.json"])
     assert runtime["environment"]["OMP_NUM_THREADS"] == "2"
@@ -85,7 +85,7 @@ def test_required_provenance_fails_closed(project, monkeypatch, fault):
         with pytest.raises((ValueError, FileNotFoundError)):
             with c.run("trial", provenance=False) as run:
                 helper.capture_provenance(run, project_root=project, output_dir=project / "outputs/job", config=cfg, **kwargs)
-        assert c.resolve(run.id).descriptor["manifest"]["outcome"] == "failed"
+        assert c.get(run.id).outcome == "failed"
 
 
 class Experiment:
@@ -119,22 +119,22 @@ def test_runner_records_directly_without_implicit_staging_or_publication(project
         helper.run_experiment(cfg, Experiment, project_root=project, output_dir=output)
     ident = json.loads((output / "cairn-run.json").read_text())["run_id"]
     with client(project) as c:
-        producer = c.resolve(ident)
-        assert producer.descriptor["manifest"]["outcome"] == ("failed" if fail else "completed")
+        producer = c.get(ident)
+        assert producer.outcome == ("failed" if fail else "completed")
         provenance = producer.download("project-provenance", to=output)
         assert (provenance / "source/method.py").read_text() == "def compute():\n    return 42\n"
         if fail:
             with pytest.raises(cairn.NotFound):
-                c.resolve("artifacts/trial@latest")
+                c.get("artifacts/trial@latest")
             with pytest.raises(ValueError, match="completed producer"):
                 helper.require_completed_artifact(c, ident)
         else:
             result = helper.require_completed_artifact(c, ident)
-            assert result.records()[0]["data"]["loss"] == 0.1
+            assert next(result.records())["loss"] == 0.1
             scores = result.download("scores.json", to=output)
             assert json.loads(scores.read_text()) == {"loss": 0.1}
-            assert "result" not in result.descriptor["manifest"]["captures"]
-            assert not list(c.find(namespace="artifacts"))
+            assert "result" not in result.files
+            assert not c.find("artifacts/*")
             assert not (output / "cairn-result.json").exists()
 
 
@@ -146,7 +146,7 @@ def test_missing_lock_prevents_constructor(project):
         helper.run_experiment(cfg, Experiment, project_root=project, output_dir=output)
     with client(project) as c:
         ident = json.loads((output / "cairn-run.json").read_text())["run_id"]
-        assert c.resolve(ident).descriptor["manifest"]["outcome"] == "failed"
+        assert c.get(ident).outcome == "failed"
 
 
 def test_runless_and_failed_producers_cannot_certify_evidence(project):
@@ -188,7 +188,7 @@ def test_study_refuses_incomplete_or_ambiguous_roster(project, fault):
             data["runs"]["1"] = "0" * 32
         with pytest.raises((ValueError, cairn.CairnError)):
             helper.finalize_study(data, project_root=project, repo=c.repo)
-        assert not list(c.find(namespace="artifacts"))
+        assert not c.find("artifacts/*")
 
 
 def test_study_summary_preserves_every_trial_and_public_lineage(project):
@@ -197,12 +197,12 @@ def test_study_summary_preserves_every_trial_and_public_lineage(project):
         for name in ("first", "second"):
             with c.run(name, provenance=False) as run:
                 ids.append(run.id)
-        descriptor = helper.finalize_study(roster(*ids), project_root=project, repo=c.repo)
-        result = helper.require_completed_artifact(c, descriptor["id"])
+        study = helper.finalize_study(roster(*ids), project_root=project, repo=c.repo)
+        result = helper.require_completed_artifact(c, study.id)
         result.download(to=project / "outputs/summary")
         assert json.loads((project / "outputs/summary/roster.json").read_text()) == roster(*ids)
-        producer = c.resolve(result.descriptor["manifest"]["dependencies"][0]["artifact_id"])
-        assert {d["artifact_id"] for d in producer.descriptor["manifest"]["dependencies"]} == set(ids)
+        (producer,) = result.inputs(role="producer")
+        assert {trial.id for trial in producer.inputs(role="trial")} == set(ids)
 
 
 def test_separate_result_publication_is_explicit(project):
@@ -212,11 +212,9 @@ def test_separate_result_publication_is_explicit(project):
         (folder / "scores.json").write_text('{"loss":0.1}')
         with c.run("trial", provenance=False) as run:
             run.add(folder, name="result")
-        assert not list(c.find(namespace="artifacts"))
-        result = helper.publish_result(c, c.resolve(run.id))
+        assert not c.find("artifacts/*")
+        result = helper.publish_result(c, c.get(run.id))
         checked = helper.require_completed_artifact(c, result.id)
-        assert checked.descriptor["manifest"]["dependencies"] == [
-            {"artifact_id": run.id, "role": "producer"}
-        ]
+        assert [producer.id for producer in checked.inputs(role="producer")] == [run.id]
         checked.download(to=project / "outputs/verified")
         assert json.loads((project / "outputs/verified/scores.json").read_text()) == {"loss": 0.1}

@@ -101,7 +101,7 @@ There is no overview report and no nesting: the Cairn UI's project page lists
 the reports. Copy bundled assets by content and make the
 copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (repo
 client, runs, artifacts, report builder, server, UI) is the pinned
-[`cairn2` v0.6.0](https://github.com/DoeringChristian/cairn2/releases/tag/v0.6.0), imported as `cairn`: import and run it, never copy or
+[`cairn2` v0.11.0](https://github.com/DoeringChristian/cairn2/releases/tag/v0.11.0), imported as `cairn`: import and run it, never copy or
 patch it. The skill's small Hydra adapter calls its public API. Initialize Git
 and commit the scaffold before the first run, and commit again before runs a
 report will cite.
@@ -113,7 +113,7 @@ Copy this checklist into your reply and tick it off:
 ```text
 Project setup:
 - [ ] Read references/project-setup.md and references/reports.md
-- [ ] pixi.toml pins cairn2 v0.6.0 (reports, media, ui), Hydra separately, and the tasks; pixi install
+- [ ] pixi.toml pins cairn2 v0.11.0 (reports, media, ui), Hydra separately, and the tasks; pixi install
 - [ ] One repo: a local path (created on first access) OR the user's named server URL; explicit project namespace and protected login credentials
 - [ ] Hydra configs, experiments/run.py, research_cairn.py, report_tasks.py; Experiment.run(run, output_dir)
 - [ ] Cluster scheduler files from the relevant skills; verify tracking glue against the new API before submission
@@ -253,7 +253,7 @@ a direction's method. The rules that hold everywhere:
 - **Share the generated output unchanged.** `pixi run report-share <slug> --out
   .cairn/share/<slug>` exports the complete published bundle. Share that bundle
   on a static host or use the Cairn UI (`pixi run ui` locally, or the selected
-  remote server's UI). Cairn2 v0.6.0 does not offer a standalone single-file
+  remote server's UI). Cairn2 v0.11.0 does not offer a standalone single-file
   export: do not re-author the page to fit a single-file destination. Never
   restyle or re-template reports for a destination; publishing-tool design
   guidance does not apply to these pages.

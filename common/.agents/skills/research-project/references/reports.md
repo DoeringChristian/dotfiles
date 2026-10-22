@@ -182,12 +182,14 @@ cairn:
 ```
 
 Only declare resources that exist. `inputs["fit"]` is a pinned Reader, not a
-path. Use `.read()` for typed values, `.records()` for metrics, or
+path. Use `.value` for typed values, `.records()` for metrics, or
 `.download(to=...)` to materialize captured files inside the report's working
-directory. Run config is in `.descriptor["manifest"]["metadata"]["config"]`.
+directory. Run config is `.config`; `.metadata`, `.outcome`, `.version` and
+`.inputs(role=...)` are fields too.
 The builder pins finished artifact IDs before any cells execute. Finished runs
 are immutable too: no snapshot-digest suffix or `run:`/`artifact:` prefix is
-needed. The report's `client` is a restricted resolver for those declared pins;
+needed. Cells may also call `cairn.use(ref)` and `cairn.find(pattern)`, which
+Cairn records as inputs, but this workflow declares everything under `inputs:`;
 an explicit independent Client is outside that policy.
 
 Before consuming or publishing scientific results, use the project's
@@ -212,7 +214,7 @@ its captured path. Do not inject an unrecorded mutable checkout into `sys.path`.
 `#| echo: false` hides code but keeps output; `#| echo: false` together with `#| output: false` hides setup code and output. `#| eval: false` shows an illustrative cell without executing it.
 Only marked executable fences run; never execute an unmarked fence or code
 derived from pasted text. The kernel starts in a copy of the report folder,
-not the original project cwd. Its provided variables are `inputs` and the pinned `client`; import display functions and libraries explicitly:
+not the original project cwd. Its provided variable is `inputs` (and `cfg` when the front matter has a `config`); import display functions and libraries explicitly:
 
 ````markdown
 ```{python}
@@ -233,9 +235,9 @@ display(Markdown(f"The proposed method's RMSE is {scores['rmse']:.3f}; "
 ```
 ````
 
-For a run’s loss curve, read `inputs["run"].records()`, select rows with
-`"loss" in row["data"]`, and plot `row["data"]["step"]` against
-`row["data"]["loss"]`. A study's summary artifact follows the
+For a run’s loss curve, read
+`inputs["run"].records(fields=["/step", "/loss"])` and plot each row's `"/step"`
+against its `"/loss"`; without `fields`, each row is the logged dictionary. A study's summary artifact follows the
 project helper's documented roster/results schema; do not infer trial success
 from local folders. Each scientific result still needs completed, validated
 producers.
@@ -466,7 +468,7 @@ mutable annotations, not scientific evidence.
 **Share generated reports unchanged.** Export the complete bundle with
 `report-share` or `cairn report export`. Publish its files as-is on a static
 host, preserving relative paths, or link to the selected repository's UI.
-Cairn2 v0.6.0 does not export a standalone single HTML file: if a destination
+Cairn2 v0.11.0 does not export a standalone single HTML file: if a destination
 only accepts one file, use a supported destination or explain the limitation
 rather than re-authoring the report. Native Plotly/media/HTML controls are
 richer than static exports; check the actual destination before sharing.

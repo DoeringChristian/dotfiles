@@ -26,7 +26,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.6.0", extras = ["reports", "media", "ui"] }
+cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.11.0", extras = ["reports", "media", "ui"] }
 
 [tasks]
 experiment = "python experiments/run.py"
@@ -42,7 +42,7 @@ kuma = "bash experiments/cluster.sh kuma"
 lyra = "bash experiments/cluster.sh lyra"
 ```
 
-The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.6.0`
+The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.11.0`
 in pip or uv form. The import and command remain `cairn`. Hydra stays a separate
 dependency. `reports` supplies notebook execution; `media` supplies arrays,
 tables and figures; `ui` supplies the server dependencies for the bundled React UI.
@@ -299,7 +299,7 @@ require evidence to pass through that directory. The adapter does not scan
 A completed run can be declared directly as a report input. Create a separate
 result artifact only when its name, reuse, or lifecycle merits one. For example,
 explicitly add a result directory with `run.add(path, name="result")`,
-then after the run finishes call `publish_result(client, client.resolve(run_id))`.
+then after the run finishes call `publish_result(client, client.get(run_id))`.
 That optional helper publishes the added bytes and records a `producer`
 dependency. There is no need to do this for every experiment.
 
@@ -328,9 +328,9 @@ argument. Audio/video/text can be added as files; there are no `Video`,
 interpretation; ordinary dictionaries/lists are JSON, never implicit pickle.
 Preserve complete scientific tables and arrays, not just presentation subsets.
 
-Run records retain repeated steps. Read `client.resolve(run_id).records()`;
-each row contains `data`, including metrics and optional `step`. Config is
-`reader.descriptor["manifest"]["metadata"]["config"]`; `reader.files` lists
+Run records retain repeated steps. Read `client.get(run_id).records()`; each
+row is the logged dictionary, including metrics and optional `step`. Config is
+`reader.config`; `reader.files` lists
 added files and `reader.file(name)` returns one (`.load()`, `.open()`). There
 are no implicit `metrics.jsonl` or `summary.json` snapshot folders. Record logs
 explicitly with records or named added files; do not assume automatic stdout/system-metric interception.
@@ -374,7 +374,7 @@ pixi run cairn --project <project> artifact versions datasets/crops@latest
 pixi run cairn --project <project> artifact inspect datasets/crops@v1
 ```
 
-Download with `client.resolve(ref).download(to="artifacts/crops-v1")`; it
+Download with `client.get(ref).download(to="artifacts/crops-v1")`; it
 returns one path, the folder or the named file. Without `to`, downloads go to
 `<cache>/artifacts/<id>/` (`$CAIRN_CACHE_DIR`, default `~/.cache/cairn`).
 Remove an artifact only when the user asks: `pixi run cairn --project <project>
@@ -442,10 +442,9 @@ supplies `pixi run hq ...` and a Hydra launcher in `hydra_plugins/`. Each
 checkout must target the same user-authorized Cairn server/project, with its
 own durable journal and protected credentials.
 
-**Legacy adapter compatibility is not automatic.** Existing Slurm assets may
-still use `cairn-report push` and folder `run.json` completion; HyperQueue
-assets may still use old Cairn distribution/extras, `remote set`,
-`${cairn.run:}`, or `finalize-study`. Those calls do not work with Cairn2 0.6.0.
+**Legacy adapter compatibility is not automatic.** HyperQueue assets may still
+use old Cairn distribution/extras, `remote set`, `${cairn.run:}`, or
+`finalize-study`. Those calls do not work with Cairn2 0.11.0.
 Preserve their scheduling, storage, and GPU-efficiency rules, but adapt and
 test the project's tracking glue with the current public helper/commands
 before submitting work. Do not silently edit the adjacent skills or claim

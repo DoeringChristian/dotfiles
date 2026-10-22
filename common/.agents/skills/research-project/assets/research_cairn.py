@@ -1,4 +1,4 @@
-"""Small project adapter for Cairn2 0.5: initial provenance and completed evidence.
+"""Small project adapter for Cairn2 0.11: initial provenance and completed evidence.
 
 Copy beside experiments/run.py. This is project policy, not a Cairn plugin.
 Run "python experiments/research_cairn.py --help" for evidence/study checks.
@@ -223,20 +223,17 @@ def run_experiment(cfg, experiment_type, *, project_root: Path, output_dir: Path
             if not isinstance(experiment, experiment_type):
                 raise TypeError("Configured experiment must implement experiments.base.Experiment")
             experiment.run(run, output_dir)
-        producer = client.resolve(run.id)
-        require_completed_run(producer)
+        require_completed_run(client.get(run.id))
     print(f"Cairn run: {run.id}")
     return run.id
 
 
 def exact_ref(reader):
-    descriptor = reader.descriptor
-    return f"{descriptor['namespace']}/{descriptor['name']}@v{descriptor['number']}"
+    return str(reader)
 
 
 def require_completed_run(reader):
-    descriptor = reader.descriptor
-    if descriptor["namespace"] != "runs" or descriptor["state"] != "finished" or descriptor["manifest"]["outcome"] != "completed":
+    if reader.namespace != "runs" or reader.outcome != "completed":
         raise ValueError(f"Run {reader.id} is not a completed producer")
     return reader
 
@@ -246,27 +243,25 @@ def publish_result(client, producer, *, name=None):
     require_completed_run(producer)
     with tempfile.TemporaryDirectory(prefix="research-result-") as temporary:
         folder = producer.download("result", to=temporary)
-        result = client.start("artifacts", name or producer.descriptor["name"])
+        result = client.start("artifacts", name or producer.name)
         result.use(producer, role="producer")
         result.finish(value=cairn.Directory(folder))
-    return client.resolve(result.id)
+    return client.get(result.id)
 
 
 def require_completed_artifact(client, ref: str):
     """Require immutable evidence with a completed run, not just an alias."""
-    reader = client.resolve(ref)
-    descriptor = reader.descriptor
-    if descriptor["manifest"]["outcome"] != "completed":
+    reader = client.get(ref)
+    if reader.outcome != "completed":
         raise ValueError(f"Artifact {reader.id} has no verifiable completed producer")
-    if descriptor["namespace"] == "runs":
+    if reader.namespace == "runs":
         return require_completed_run(reader)
-    producers = [item["artifact_id"] for item in descriptor["manifest"]["dependencies"] if item["role"] == "producer"]
+    producers = reader.inputs(role="producer")
     if len(producers) != 1:
         raise ValueError(f"Artifact {reader.id} has no verifiable completed producer")
-    producer = client.resolve(producers[0])
-    if producer.descriptor["project"] != descriptor["project"]:
+    if producers[0].project != reader.project:
         raise ValueError("Result and producer must belong to the same project")
-    require_completed_run(producer)
+    require_completed_run(producers[0])
     return reader
 
 
@@ -284,8 +279,8 @@ def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None):
     trials = []
     with cairn.Client(_repo({"repo": repo}, root), project=project) as client:
         for label in expected:
-            trial = require_completed_run(client.resolve(runs[label]))
-            if trial.id != runs[label] or trial.descriptor["project"] != project:
+            trial = require_completed_run(client.get(runs[label]))
+            if trial.id != runs[label] or trial.project != project:
                 raise ValueError(f"Trial {label} is missing or belongs to another project")
             trials.append({"trial": label, "run_id": trial.id, "status": "completed"})
         config = {"project": project, "run": {"name": name}, "study": dict(roster),
@@ -300,8 +295,7 @@ def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None):
             for trial in trials:
                 run.use(trial["run_id"], role="trial")
             run.add(result_dir, name="result")
-        result = publish_result(client, client.resolve(run.id), name=name + "-study")
-        return result.descriptor
+        return publish_result(client, client.get(run.id), name=name + "-study")
 
 
 def main() -> None:
@@ -317,10 +311,10 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "check-artifact":
         with cairn.Client(_repo({"repo": args.repo}, Path.cwd()), project=args.project) as client:
-            descriptor = require_completed_artifact(client, args.ref).descriptor
+            reader = require_completed_artifact(client, args.ref)
     else:
-        descriptor = finalize_study(json.loads(Path(args.roster).read_text()), project_root=args.project_root, repo=args.repo)
-    print(f"{descriptor['namespace']}/{descriptor['name']}@v{descriptor['number']} ({descriptor['id']})")
+        reader = finalize_study(json.loads(Path(args.roster).read_text()), project_root=args.project_root, repo=args.repo)
+    print(f"{reader} ({reader.id})")
 
 
 if __name__ == "__main__":
