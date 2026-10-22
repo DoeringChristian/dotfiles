@@ -1,0 +1,46 @@
+{
+ "skill_name": "mitsuba-drjit",
+ "evals": [
+  {
+   "id": 1,
+   "name": "drjit-loop-reverse-ad",
+   "prompt": "Using drjit (the build in our mitsuba3-debug pixi workspace at /Users/doeringc/workspace/mitsuba3-debug), write a vectorized function that runs Newton's method for sqrt(a) for 1M values of a in parallel, iterating per lane until |x*x - a| < 1e-6 (at most 20 iterations), and returns x plus the per-lane iteration count. Then get d(sum of x)/da with reverse-mode AD through the loop and check it against 1/(2 sqrt(a)). Save the script as newton.py and its output as result.txt.",
+   "expected_output": "Script with @dr.syntax/dr.while_loop, UInt32 counter, max_iterations hint for reverse mode, gradient matches analytic",
+   "files": [],
+   "assertions": [
+    "newton.py runs to completion and result.txt contains the gradient check",
+    "Loop is a device loop (@dr.syntax while or dr.while_loop), not an unrolled Python for-loop",
+    "Per-lane iteration counter is a Dr.Jit array type (e.g. UInt32), not a Python int",
+    "Reverse-mode AD through the loop works (max_iterations hint or equivalent), no LoopOp::backward error left unresolved",
+    "Reported gradient matches 1/(2 sqrt(a)) to a small relative error (<1e-3)"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "mitsuba-ao-integrator",
+   "prompt": "In our mitsuba3 source build (pixi workspace /Users/doeringc/workspace/mitsuba3-debug, already built), write a custom Python ambient-occlusion integrator (cosine-weighted hemisphere rays, configurable max distance, N samples per hit) registered as 'myao', and render mi.cornell_box() with it at 64 spp. Also move the small box up by 0.3 using mi.traverse before rendering. Save the script as ao.py and the image as ao.exr, and write a few lines in notes.txt about anything that tripped you up.",
+   "expected_output": "Runs on local variant (metal/llvm), sample() returns (Spectrum, Bool), keyword ray_mask/active usage, positions tensor edit + params.update, optimize=False or handles merged mesh keys",
+   "files": [],
+   "assertions": [
+    "ao.exr exists and is a valid non-black image",
+    "Integrator is registered as 'myao' via mi.register_integrator and its sample() returns (Spectrum, Bool)",
+    "Script picks a compiled variant (metal_ad_rgb/llvm_ad_rgb fallback) rather than failing on cuda",
+    "Small box is moved via mi.traverse on its positions tensor (or to_world) followed by params.update()",
+    "Agent handled mesh merging (optimize=False or correctly found merged key) so only the small box moved"
+   ]
+  },
+  {
+   "id": 3,
+   "name": "pixi-standalone-drjit-tests",
+   "prompt": "I'm editing drjit's loop code in the mitsuba3-debug pixi workspace (/Users/doeringc/workspace/mitsuba3-debug). How do I build drjit standalone (not the whole mitsuba) and run just the reverse-mode while-loop AD tests on the LLVM backend? Actually do it and report the pass/fail counts, plus the exact commands, in report.md. Also tell me how I'd run one of the drjit-core C++ tests.",
+   "expected_output": "Uses pixi run build-drjit / test-drjit with tests/test_while_loop_ad.py -k llvm (or equivalent), reports counts, mentions pixi run test-drjit-core <name>",
+   "files": [],
+   "assertions": [
+    "Report gives pixi run build-drjit (or equivalent standalone cmake on ext/drjit) as the build command",
+    "Actually ran tests/test_while_loop_ad.py restricted to LLVM (-k llvm) and reports pass/fail counts",
+    "Report explains running a drjit-core C++ test via pixi run test-drjit-core <name> (or build-drjit-core/tests/test_<name>)",
+    "Did not build the whole Mitsuba (no build-mitsuba) to accomplish the task"
+   ]
+  }
+ ]
+}

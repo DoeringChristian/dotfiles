@@ -1,0 +1,19 @@
+[workspace]
+name = "WRITEUP_NAME"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64"]
+
+# TeX itself is Homebrew's `texlive` (conda-forge's texlive-core has no LaTeX
+# packages); scripts/tex.sh puts it first on PATH and fails clearly if missing.
+[tasks]
+build = "bash scripts/tex.sh latexmk"
+watch = "bash scripts/tex.sh latexmk -pvc"
+clean = "bash scripts/tex.sh latexmk -C"
+check-tex = "bash scripts/tex.sh kpsewhich article.cls amsmath.sty hyperref.sty cleveref.sty natbib.sty"
+# latexindent with .latexindent.yaml: one sentence per line, wrapped at 80.
+# Backups and indent.log go to build/.
+fmt = "mkdir -p build && latexindent.pl -m -s -l=.latexindent.yaml -wd -c=build/ main.tex macros.tex"
+fmt-check = "mkdir -p build && latexindent.pl -m -s -l=.latexindent.yaml -k -c=build/ main.tex macros.tex"
+
+[dependencies]
+"latexindent.pl" = ">=4.0.3,<5"

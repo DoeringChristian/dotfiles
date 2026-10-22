@@ -1,0 +1,7 @@
+# latexmk: pdflatex only (no xelatex/lualatex), build artifacts in build/.
+@default_files = ('main.tex');
+$pdf_mode = 1;
+$pdflatex = 'pdflatex -interaction=nonstopmode -halt-on-error -file-line-error -synctex=1 %O %S';
+$out_dir = 'build';
+$bibtex_use = 2;
+if ($^O eq 'darwin') { $pdf_previewer = 'open %S'; } else { $pdf_previewer = 'xdg-open %S'; }

@@ -1,0 +1,56 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[colorlinks,allcolors=blue!60!black]{hyperref}
+\usepackage[capitalize,noabbrev]{cleveref}
+\usepackage{thmtools}
+\input{macros}
+
+\title{TITLE}
+\author{AUTHOR}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+	% One paragraph: the problem, why it matters, and where things stand.
+\end{abstract}
+
+\section{Problem}
+\label{sec:problem}
+% What exactly is unsolved, stated precisely enough that someone could tell
+% whether a proposed answer solves it. Inputs, outputs, success criteria.
+
+\section{Notation}
+\label{sec:notation}
+% Every symbol used later, defined once.
+
+\section{Background}
+\label{sec:background}
+% Prior work and why it does not already solve the problem. Cite with
+% \citet{key} or \citep{key}; entries go in refs.bib.
+
+\section{Approach}
+\label{sec:approach}
+% The proposed idea, its key equations, and why it should work.
+
+\section{Open questions}
+\label{sec:open}
+% What is unknown or risky, and how each question could be answered.
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\end{document}
