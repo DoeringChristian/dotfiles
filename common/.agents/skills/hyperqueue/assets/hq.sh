@@ -40,7 +40,7 @@ if [ "${1:-}" = --head ]; then
     # shellcheck source=/dev/null
     source "$STATE/cluster.conf"
     HUB="http://$HEAD_ADDR:$HUB_PORT/$PROJECT"
-    hq() { "$HOME/.local/bin/hq" --server-dir "$STATE" "$@"; }
+    hq() { "$HOME/.hq-cluster/bin/hq" --server-dir "$STATE" "$@"; }
     others() { awk -v h="$HEAD" '!/^#/ && NF && $1 != h { print $1, $2 }' "$STATE/nodes"; }
     root_of() { awk -v n="$1" '$1 == n { print $2 }' "$STATE/nodes"; }
     install_env() { pixi install --frozen 2>&1 | tail -1 | sed "s/^/$HEAD: /"; }

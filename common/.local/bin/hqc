@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # hqc: the lab workstations as one HyperQueue cluster. The head (fermat) runs the HQ server and the Cairn hub;
-# every node in ~/.hq-cluster/nodes on the head (fermat, kerr, gabor, arago) runs a worker. Run it from anywhere
-# that reaches the head over ssh (it re-runs itself there; arago is reached only from the head).
+# every node in ~/.hq-cluster/nodes on the head (fermat, kerr, gabor, arago, rayleigh) runs a worker. Run it from
+# anywhere that reaches the head over ssh (it re-runs itself there; arago is reached only from the head).
 #
-#   hqc install          once, idempotent: hq on every node, the access files, the Cairn hub's environment
+#   hqc install          once, idempotent: hq and pixi on every node, the access files, the Cairn hub's environment
+#   hqc add <node> <root>  a new node: trust its host key, list it in the nodes file, install it, start its worker
+#   hqc remove <node>    stop that node's worker and drop it from the nodes file (its checkouts stay)
 #   hqc up [node...]     start the server and the hub when they are down, and workers (default: every node)
 #   hqc down [node...]   stop these workers (running tasks are requeued); with no node: every worker and the server
 #   hqc down --hub       ... and the Cairn hub too (it holds the projects' results, so it normally stays up)
@@ -14,11 +16,13 @@
 # State lives in ~/.hq-cluster on every node: on the head the config (cluster.conf, nodes), the access files, the
 # server's journal and log; on each node the worker's access file and log. Workers export HQ_PROJECTS (the node's
 # project root from the nodes file) to their tasks, where `pixi run hq push` puts the project checkouts, and offer
-# the resource `vram` (their GPU's memory in GiB), so a task can ask for a GPU with enough memory.
+# the resource `vram` (their GPU's memory in GiB), so a task can ask for a GPU with enough memory. hqc owns the hq
+# binary: it installs one pinned version as ~/.hq-cluster/bin/hq on every node, outside PATH and Homebrew, because
+# the server and the workers must run the same version.
 set -euo pipefail
 HEAD="${HQC_HEAD:-fermat}"
 case "${1:-status}" in
-    install | up | down | status | hq | log) ;;
+    install | add | remove | up | down | status | hq | log) ;;
     *)
         awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
         exit 2
@@ -30,7 +34,7 @@ if [ "$(hostname -s)" != "$HEAD" ]; then
 fi
 
 STATE="$HOME/.hq-cluster"
-HQ="$HOME/.local/bin/hq"
+HQ="$STATE/bin/hq"
 HQ_VERSION=0.26.2
 CAIRN_TAG=v0.15.0
 mkdir -p "$STATE"
@@ -86,31 +90,48 @@ ensure_access() {
         --client-file "$STATE/client-access.json" --host "$HEAD_ADDR" \
         --client-port "$CLIENT_PORT" --worker-port "$WORKER_PORT"
     chmod 600 "$STATE"/*access.json
-    for node in $(nodes); do
-        [ "$node" = "$HEAD" ] && continue
-        on "$node" 'mkdir -p ~/.hq-cluster/hq-current && chmod 700 ~/.hq-cluster'
-        scp -q "$STATE/worker-access.json" "$node:.hq-cluster/hq-current/access.json"
-    done
+}
+
+# A worker's copy of the access file; copied before every worker start, so new nodes and a changed address need
+# no extra step.
+push_access() {
+    local node="$1"
+    [ "$node" = "$HEAD" ] && return
+    on "$node" 'mkdir -p ~/.hq-cluster/hq-current && chmod 700 ~/.hq-cluster'
+    scp -q -o BatchMode=yes "$STATE/worker-access.json" "$node:.hq-cluster/hq-current/access.json"
+}
+
+# hq (copied from the head) and pixi (the standalone installer, in ~/.pixi/bin, where the scripts call it) on a node.
+install_node() {
+    local node="$1" root
+    root="$(root_of "$node")"
+    if [ "$node" != "$HEAD" ] && ! on "$node" "~/.hq-cluster/bin/hq --version 2>/dev/null | grep -q v$HQ_VERSION"; then
+        on "$node" 'mkdir -p ~/.hq-cluster/bin && chmod 700 ~/.hq-cluster'
+        scp -q -o BatchMode=yes "$HQ" "$node:.hq-cluster/bin/hq"
+    fi
+    # The copy that hqc used to put in ~/.local/bin (a running worker keeps its file open, so removing it is safe).
+    on "$node" "f=~/.local/bin/hq; if [ -f \$f ] && [ ! -L \$f ] && \$f --version 2>/dev/null | grep -q v$HQ_VERSION; then rm \$f; fi"
+    if ! on "$node" 'test -x ~/.pixi/bin/pixi'; then
+        on "$node" 'curl -fsSL https://pixi.sh/install.sh | bash > /dev/null' || echo "$node: pixi install failed" >&2
+    fi
+    on "$node" "mkdir -p $root"
+    echo "$node: $(on "$node" '~/.hq-cluster/bin/hq --version; ~/.pixi/bin/pixi --version' | paste -sd, -), projects in $root"
 }
 
 install() {
+    mkdir -p "$STATE/bin"
+    if ! "$HQ" --version 2>/dev/null | grep -q "v$HQ_VERSION" &&
+        "$HOME/.local/bin/hq" --version 2>/dev/null | grep -q "v$HQ_VERSION"; then
+        command install -m 755 "$HOME/.local/bin/hq" "$HQ"  # where earlier versions of hqc put it
+    fi
     if ! "$HQ" --version 2>/dev/null | grep -q "v$HQ_VERSION"; then
         local tmp
         tmp="$(mktemp -d)"
-        curl -fsSL "https://github.com/It4innovations/hyperqueue/releases/download/v$HQ_VERSION/hq-v$HQ_VERSION-linux-x64.tar.gz" |
+        curl -fsSL --max-time 120 "https://github.com/It4innovations/hyperqueue/releases/download/v$HQ_VERSION/hq-v$HQ_VERSION-linux-x64.tar.gz" |
             tar -xz -C "$tmp"
-        mkdir -p "$HOME/.local/bin" && install -m 755 "$tmp/hq" "$HQ" && rm -rf "$tmp"
+        mkdir -p "$STATE/bin" && command install -m 755 "$tmp/hq" "$HQ" && rm -rf "$tmp"
     fi
-    for node in $(nodes); do
-        [ "$node" = "$HEAD" ] && continue
-        if ! on "$node" "~/.local/bin/hq --version 2>/dev/null | grep -q v$HQ_VERSION"; then
-            on "$node" 'mkdir -p ~/.local/bin'
-            scp -q "$HQ" "$node:.local/bin/hq"
-        fi
-        on "$node" "mkdir -p $(root_of "$node") && test -x ~/.pixi/bin/pixi" ||
-            echo "$node: no pixi in ~/.pixi/bin (curl -fsSL https://pixi.sh/install.sh | bash)" >&2
-        echo "$node: hq $(on "$node" '~/.local/bin/hq --version'), projects in $(root_of "$node")"
-    done
+    for node in $(nodes); do install_node "$node"; done
     mkdir -p "$(root_of "$HEAD")"
     ensure_access
     mkdir -p "$HUB_DIR"
@@ -155,10 +176,11 @@ start_worker() {
     local node="$1" root
     root="$(root_of "$node")"
     [ -n "$root" ] || { echo "$node is not in $STATE/nodes" >&2; return 1; }
+    push_access "$node"
     on "$node" "mkdir -p $root
         if pgrep -u \$USER -a -x hq | grep -q ' worker start'; then echo '$node: worker already running'; exit; fi
         vram=\$(( \$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1) / 1024 ))
-        HQ_PROJECTS=$root nohup setsid ~/.local/bin/hq --server-dir ~/.hq-cluster worker start \
+        HQ_PROJECTS=$root nohup setsid ~/.hq-cluster/bin/hq --server-dir ~/.hq-cluster worker start \
             --resource \"vram=sum(\$vram)\" --on-server-lost finish-running >> ~/.hq-cluster/worker.log 2>&1 < /dev/null &
         echo '$node: worker started'"
 }
@@ -177,6 +199,31 @@ command="${1:-status}"
 case "$command" in
     install)
         install
+        ;;
+    add)
+        [ $# -eq 2 ] || { echo "usage: hqc add <node> <project root on it>" >&2; exit 2; }
+        node="$1"
+        ssh -q -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=10 "$node" true ||
+            { echo "$node: the head cannot ssh to it (keys, or an ssh alias on $HEAD)" >&2; exit 1; }
+        # Workers are matched to nodes by hostname (hqc down, hq.sh), so the two must agree.
+        name="$(on "$node" 'hostname -s')"
+        [ "$name" = "$node" ] || { echo "$node: its hostname is $name; add it under that name" >&2; exit 1; }
+        if [ -z "$(root_of "$node")" ]; then printf '%-8s  %s\n' "$node" "$2" >> "$STATE/nodes"; fi
+        install_node "$node"
+        start_server
+        start_worker "$node"
+        sleep 3
+        hq worker list
+        echo "in each project: \`pixi run hq setup\` (a checkout, its environment and the hub on $node)"
+        ;;
+    remove)
+        [ $# -eq 1 ] || { echo "usage: hqc remove <node>" >&2; exit 2; }
+        if server_up; then
+            ids="$(worker_ids "$1" | paste -sd, -)"
+            [ -n "$ids" ] && hq worker stop "$ids"
+        fi
+        awk -v n="$1" '$1 != n' "$STATE/nodes" > "$STATE/nodes.tmp" && mv "$STATE/nodes.tmp" "$STATE/nodes"
+        echo "$1: removed from $STATE/nodes"
         ;;
     up)
         start_server

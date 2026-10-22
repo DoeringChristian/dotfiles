@@ -35,7 +35,7 @@ from typing import Any, Sequence
 log = logging.getLogger(__name__)
 
 STATE = Path.home() / ".hq-cluster"
-HQ = str(Path.home() / ".local/bin/hq")
+HQ = str(Path.home() / ".hq-cluster/bin/hq")  # installed by hqc
 TRIALS = "trials.jsonl"
 # Hydra overrides of the launching process that must not reach a trial (the trial is a single job in a given folder).
 LAUNCH_ONLY = ("hydra/launcher", "hydra.launcher", "hydra/sweeper", "hydra.sweeper", "hydra.sweep", "hydra.run",

@@ -2,14 +2,14 @@
 name: hyperqueue
 description:
   Run pixi + Hydra + Cairn projects on the lab's HyperQueue cluster of GPU workstations (head fermat; workers
-  fermat, kerr, gabor, arago) through `pixi run hq ...`, and start or stop the cluster with `hqc`. Use whenever work
-  should run on fermat, kerr, gabor, or arago, on "the HQ cluster" or HyperQueue, or when a sweep is too big for the
+  fermat, kerr, gabor, arago, rayleigh) through `pixi run hq ...`, and start or stop the cluster with `hqc`. Use whenever work
+  should run on fermat, kerr, gabor, arago, or rayleigh, on "the HQ cluster" or HyperQueue, or when a sweep is too big for the
   local machine but does not need Kuma or Lyra.
 ---
 
 # HyperQueue cluster
 
-Four lab workstations form one HyperQueue (HQ) cluster. The HQ server and the Cairn hub run on fermat (the head),
+Five lab workstations form one HyperQueue (HQ) cluster. The HQ server and the Cairn hub run on fermat (the head),
 and every node runs one worker. A Hydra multirun becomes one HQ job, and each trial is a task that runs on whichever
 GPU is free. Runs are ordinary Cairn runs and sweeps, recorded exactly as for a local or Slurm sweep. The machines
 are free to use, but people work on them too. Read the project skill (`research-project`) for how runs, drafts, and
@@ -21,6 +21,7 @@ reports work; this skill only adds how they get onto the cluster.
 | kerr | RTX 3090, 24 GB | 64, 60 GB | `/home/doeringc/hq` | ssh `kerr` (Tailscale) |
 | gabor | RTX 4090, 24 GB | 32, 61 GB | `/home/doeringc/hq` | ssh `gabor` (Tailscale) |
 | arago | RTX 4090, 24 GB | 32, 62 GB | `/media/data/christian/hq` (user `christian`) | only from fermat (`ssh arago` there) |
+| rayleigh | RTX 3090, 24 GB | 64, 60 GB | `/home/doeringc/hq` | ssh `rayleigh` (Tailscale) |
 
 All drivers are ≥ 595, so use CUDA 12.8+ PyTorch wheels (`cu128`), the oldest that supports the 5090. There is
 **no shared filesystem**: each node has its own checkout of a project and its own `.cairn/` repo, and every repo's
@@ -28,17 +29,19 @@ remote is the hub on fermat.
 
 ## The cluster: `hqc`
 
-[`assets/hqc`](assets/hqc) is linked as `~/.local/bin/hqc`. It runs on any machine that reaches fermat and runs
-everything from there:
+`hqc` is a dotfiles script (`common/.local/bin/hqc`, stowed into `~/.local/bin`). It runs on any machine that
+reaches fermat and runs everything from there:
 
 ```bash
 hqc status              # server, workers (with cpus, gpus, vram), unfinished jobs, hub
-hqc up [node...]        # start the server and the hub when down, and workers (default: all four)
+hqc up [node...]        # start the server and the hub when down, and workers (default: every node)
 hqc down [node...]      # stop these workers (their running tasks are requeued); no node: every worker and the server
 hqc down --hub          # ... and the hub (it holds every project's results: normally leave it up)
 hqc hq <args...>        # any hq command: hqc hq job list --all, hqc hq task list <job>, hqc hq job cancel <job>
 hqc log [node]          # tail of the server's (or that node's worker's) log
-hqc install             # one-time setup, idempotent (hq on every node, access files, the hub's environment)
+hqc install             # one-time setup, idempotent (hq and pixi on every node, access files, the hub's environment)
+hqc add <node> <root>   # a new node: trusts its host key, lists it, installs hq and pixi, starts its worker
+hqc remove <node>       # stop its worker and drop it from the node list (its checkouts stay)
 ```
 
 Before submitting, run `hqc status`. If the server is down, run `hqc up`. Starting workers is cheap and
@@ -46,7 +49,9 @@ harmless. Never stop workers or the server while someone else's jobs run, and ne
 user's word. The server's journal restores unfinished jobs after `hqc down` and `hqc up`.
 
 State: `~/.hq-cluster/` on fermat (`cluster.conf`, `nodes`, the access files, the journal, `server.log`), and the
-worker's access file and `worker.log` on each node. The hub is `cairn server` on fermat port 4320 (UI on 4321). Its
+worker's access file and `worker.log` on each node. `hqc` owns the `hq` binary: one pinned version in
+`~/.hq-cluster/bin/hq` on every node, outside PATH and Homebrew, since server and workers must match. Call it as
+`hqc hq ...`. The hub is `cairn server` on fermat port 4320 (UI on 4321). Its
 pixi environment and repo are in `/media/data/doeringc/cairn-hub`. fermat's EPFL address comes from DHCP: when it
 changes, `hqc up` writes new access files, and each project needs `pixi run hq setup` again.
 
@@ -128,7 +133,8 @@ The GPUs are not billed, but they are shared with interactive work, and HQ canno
 
 - A task failed before Cairn started (missing checkout, pixi error): `ssh <node> cat /tmp/hq-<job>.<task>.err`
   (for arago: `ssh fermat ssh arago cat ...`). `hqc hq task list <job>` shows each task's state and worker.
-- `no checkout of <project> on <node>`: run `pixi run hq push`. A node added later also needs `pixi run hq setup`.
+- `no checkout of <project> on <node>`: run `pixi run hq push`. A node added later (`hqc add`) also needs `pixi run
+  hq setup` in each project.
 - Workers missing in `hqc status`: `hqc up`, then `hqc log <node>`.
 - `cairn status` on a node (`pixi run hq ssh @<node> pixi run --frozen cairn status`) shows versions still waiting
   for the hub. The hub is plain HTTP inside EPFL's network, and Cairn warns about it on every call.

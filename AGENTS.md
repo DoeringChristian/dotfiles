@@ -35,7 +35,7 @@ Each line is a tool. Notable entries:
 - `brew "doeringc/local/neovim", args: ["HEAD"]` — nightly-equivalent; the local formula prevents mixed host/Homebrew glibc headers on Linux.
 - `brew "tree-sitter-cli"` — the CLI (the `tree-sitter` formula is only the library).
 - `brew "python@3.13"` — provides `python3`; brew doesn't link a bare `python` on macOS.
-- `brew "doeringc/local/neovim"`, `…/resh`, and Linux `…/zathura*` / `…/hyperqueue` (prebuilt `hq`; macOS builds it via `cargo`) — the in-repo tap formulae.
+- `brew "doeringc/local/neovim"`, `…/resh`, and Linux `…/zathura*` — the in-repo tap formulae.
 - `cask "claude-code@latest"`, `cask "codex"`, GUI apps — casks work on Linux too;
   `update.sh` adds Linux fixups (kitty `.desktop`, tev AppImage repack).
 
@@ -57,7 +57,7 @@ helpers, so a bare `./update.sh` reuses the saved profile. Precedence: `--type` 
 
 ```
 Brewfile          # the tool list
-Formula/          # in-repo brew tap (neovim.rb, resh.rb, zathura*.rb, hyperqueue.rb)
+Formula/          # in-repo brew tap (neovim.rb, resh.rb, zathura*.rb)
 common/           # portable stow package (both platforms)
 darwin/           # macOS-only stow package (config overrides + LaunchAgents)
 stow/             # .stow-global-ignore
