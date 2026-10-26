@@ -29,3 +29,5 @@ brew "sunshine"
 # add more workstation-only apps here, e.g.:
 # cask "blender"
 # cask "gimp"
+
+cask "localsend"     # AirDrop alternative (Linux: x86_64 AppImage)
