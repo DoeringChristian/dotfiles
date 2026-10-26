@@ -49,6 +49,10 @@ card, measure with a short one-trial `submit` on `l40s` instead.
 
 ## Storage (check before every install and every study)
 
+**Never store data in `/home`: only code and pixi environments.** Run outputs,
+downloaded inputs, checkpoints, caches, and datasets all go to `/scratch`. When a
+write fails for quota, move the data to `/scratch` and link it; do not delete it.
+
 The `/home` quota is shared by everything in the account: every project, every
 environment, and every cache. Hitting it breaks installs, runs, and other
 sessions' work at once. The `slurm` skill's Storage table applies, with these
@@ -56,7 +60,8 @@ Kuma paths and limits:
 
 | What | Where | Why |
 |---|---|---|
-| Code, configs, `pixi.lock`, `outputs/` | `~/projects/<name>` (`/home`) | small, backed up, never purged |
+| Code, configs, `pixi.lock` | `~/projects/<name>` (`/home`) | small, backed up, never purged |
+| `outputs/` (runs, the inputs they download, launcher logs) | `/scratch/$USER/<project>/outputs`, linked as `~/projects/<name>/outputs` (`kuma setup`) | runs that download their input models fill `/home` within a day |
 | pixi environments (`.pixi/`) and pixi's cache (`~/.cache/rattler`) | `/home`, together | hardlinked: one CUDA torch stack (~14 GB) is shared by all projects on the same versions |
 | Kernel and model caches | `/scratch/$USER/.cache/<tool>` | re-creatable; `cluster.sh` exports their variables for every command and job. `kuma setup` links `~/.drjit` there for Dr.Jit < 1.5. |
 | Checkpoints, renders, intermediate arrays, datasets | `/scratch/$USER/<project>/` | bulky and re-creatable. Pull, log to the tracking server, or regenerate anything a report needs within 30 days. |

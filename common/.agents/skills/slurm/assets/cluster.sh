@@ -9,6 +9,9 @@
 #   pixi run <cluster> submit <overrides>     # push, then a detached study: one Slurm array task per trial
 #   pixi run <cluster> pack -t 2:00:00 [sbatch options] -- <overrides>
 #                                             # push, then every trial in sequence inside one GPU job
+#   pixi run <cluster> ppack -t 2:00:00 [sbatch options] -- "<overrides of run 1>" "<overrides of run 2>" ...
+#                                             # push, then the runs side by side in one GPU job (runs that
+#                                             # each leave the GPU mostly idle and fit its memory together)
 #   pixi run <cluster> status                 # your jobs and the newest launcher logs
 #   pixi run <cluster> gpu <jobid>            # live GPU utilisation of a running job (or <jobid>_<n>)
 #   pixi run <cluster> pull                   # rsync outputs/ back (no deletion)
@@ -49,6 +52,8 @@ DIR="projects/$(basename "$PWD")"
 ACCOUNT=""
 PACK_ARGS="--gpus 1 -c 8"
 CACHE_ROOT='/scratch/$USER/.cache'
+# where a project's data lives: its outputs/ is a link to $DATA_ROOT/<project>/outputs (never data in /home)
+DATA_ROOT='/scratch/$USER'
 BANNER='^$'
 HOME_NOTE="/home"
 SCRATCH_NOTE=""
@@ -81,7 +86,7 @@ remote() {
 
 push() {
     ssh -q "$HOST" "mkdir -p $(printf '%q' "$DIR")"
-    rsync -az --delete --filter=':- .gitignore' --exclude .pixi/ --exclude outputs/ --exclude generated/ \
+    rsync -az --delete --filter=':- .gitignore' --exclude .pixi/ --exclude /outputs --exclude generated/ \
         ./ "$HOST:$DIR/" 2> >(quiet)
     remote "pixi install --frozen 2>&1 | tail -1"
     if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
@@ -104,7 +109,15 @@ case "$command" in
             else
                 ln -sfn $CACHE_ROOT/drjit \$HOME/.drjit
             fi
-            mkdir -p $(printf '%q' "$DIR") && \$HOME/.pixi/bin/pixi --version"
+            mkdir -p $(printf '%q' "$DIR") && \$HOME/.pixi/bin/pixi --version
+            # outputs/ (runs, the inputs they download, launcher logs) lives on scratch, linked into the project
+            out=$DATA_ROOT/\$(basename $(printf '%q' "$DIR"))/outputs
+            mkdir -p \$out
+            if [ -e $(printf '%q' "$DIR")/outputs ] && [ ! -L $(printf '%q' "$DIR")/outputs ]; then
+                echo \"warning: $(printf '%q' "$DIR")/outputs is a real directory in /home; move it to \$out and link it there\" >&2
+            else
+                ln -sfn \$out $(printf '%q' "$DIR")/outputs
+            fi"
         ;;
     push)
         push
@@ -132,6 +145,38 @@ case "$command" in
             -o outputs/.launch/pack-%j.out$(quote "${sbatch_args[@]}") \
             --wrap \"export PATH=\\\$HOME/.pixi/bin:\\\$PATH; $ENTRY -m$(quote "$@")\") &&
             echo \"submitted job \$id, log outputs/.launch/pack-\$id.out\""
+        ;;
+    ppack)
+        sbatch_args=()
+        while [ $# -gt 0 ] && [ "$1" != "--" ]; do sbatch_args+=("$1"); shift; done
+        [ "${1:-}" = "--" ] && shift
+        case " ${sbatch_args[*]-} " in
+            *" -t "* | *" --time"*) ;;
+            *) echo "ppack needs an explicit time limit (-t HH:MM:SS) from a measured trial" >&2; exit 2 ;;
+        esac
+        [ $# -ge 1 ] || { echo "ppack needs one quoted override string per run" >&2; exit 2; }
+        # the job script: every run in the background with its own log, the job fails if any run fails
+        script="#!/bin/bash
+export PATH=\$HOME/.pixi/bin:\$PATH
+pids=()"
+        i=0
+        for run in "$@"; do
+            script+="
+$ENTRY $run > outputs/.launch/ppack-\$SLURM_JOB_ID-$i.log 2>&1 &
+pids+=(\$!)"
+            i=$((i + 1))
+        done
+        script+="
+rc=0
+for p in \"\${pids[@]}\"; do wait \$p || rc=1; done
+exit \$rc"
+        encoded=$(printf '%s\n' "$script" | base64 -w0)
+        push
+        remote "mkdir -p outputs/.launch && f=outputs/.launch/ppack-\$(date +%Y%m%d-%H%M%S).sh &&
+            echo $encoded | base64 -d > \$f &&
+            id=\$(sbatch --parsable $SBATCH_ACCOUNT $PACK_ARGS -J ppack \
+            -o outputs/.launch/ppack-%j.out$(quote "${sbatch_args[@]}") \$f) &&
+            echo \"submitted job \$id, logs outputs/.launch/ppack-\$id-<n>.log\""
         ;;
     status)
         remote "squeue --me -o '%.18i %.9P %.20j %.2t %.10M %.10l %.5D %R'; echo;

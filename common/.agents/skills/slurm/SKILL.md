@@ -115,12 +115,19 @@ pixi run <cluster> ssh <command...>            # any command in the remote proje
 
 ## Storage
 
+**`/home` holds code and environments only, never data.** Every run output,
+downloaded input, checkpoint, cache, and dataset goes to `/scratch`. A single
+study that downloads its input models into each run folder fills a `/home`
+quota within a day and breaks every later job. When a write fails for quota,
+move the data to `/scratch` (and link it); do not delete it to make room.
+
 Place each kind of data by what losing it would cost; the cluster's skill gives
 the paths, quotas, and purge rules:
 
 | What | Where |
 |---|---|
-| Code, configs, `pixi.lock`, `outputs/` (Hydra's runs and launcher logs) | the project directory under `/home`: small, backed up, never purged |
+| Code, configs, `pixi.lock` | the project directory under `/home`: small, backed up, never purged |
+| `outputs/`: Hydra's runs and sweeps, the inputs runs download (checkpoints, datasets from a tracking server), launcher logs | `/scratch/$USER/<project>/outputs`, linked as the project's `outputs/` (`setup` creates the link; `push` never overwrites it) |
 | pixi environments (`.pixi/`) and pixi's cache (`~/.cache/rattler`) | `/home`, together: environments are hardlinked from the cache, so projects on the same versions share one copy. Never move only one of them: across filesystems every environment becomes a full copy. |
 | Kernel and model caches (Dr.Jit, Triton, TorchInductor, CUDA, torch hub, Hugging Face) | the profile's `CACHE_ROOT` on `/scratch`: `cluster.sh` exports their variables for every remote command, and Slurm passes them into every job |
 | Checkpoints, renders, intermediate arrays, datasets | `/scratch/$USER/<project>/`: bulky and re-creatable; record the path in the run |
@@ -136,8 +143,11 @@ the paths, quotas, and purge rules:
   (`pixi run <cluster> ssh rm -rf .pixi`), then
   `pixi run <cluster> ssh pixi clean cache`; only the cache cleanup frees the
   bytes.
-- Never write experiment outputs larger than a few hundred MB into `outputs/`:
-  `pull` copies `outputs/` to the local machine as well.
+- Keep what `pull` should copy small: `outputs/` is on `/scratch`, but `pull`
+  copies it to the local machine; results that matter go to the tracking
+  server, not through `pull`.
+- `/scratch` is purged after a while (the cluster's skill gives the rule):
+  anything a report needs lives on the tracking server, not only in `outputs/`.
 
 ## GPU-efficiency gate (mandatory before every `submit` or `pack`)
 
