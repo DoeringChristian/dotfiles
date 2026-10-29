@@ -66,6 +66,9 @@ skill itself.
    recomputed from stored data without rerunning the expensive stage is a
    defect: fix the recording and rerun before citing it. Recording only the
    plotting function and its settings does not satisfy this.
+   Log metrics and intermediate outputs as they become available during the run,
+   at a configured cadence; do not defer recording until completion or report
+   generation. See the logging guidance in [project-setup.md](references/project-setup.md).
 6. **Develop the method with the user.** Resolve consequential ambiguities,
    visualize intermediate behavior, and establish feasibility against relevant
    baselines before tuning or scaling.
@@ -87,7 +90,7 @@ self-contained.
 | Before you | Read |
 |---|---|
 | create a project, change its environment, Hydra configs, run bookkeeping, logging, the repo or its remote; publish or pull artifacts; run on a cluster; plan a parameter study | [references/project-setup.md](references/project-setup.md) |
-| create, restructure, build, publish, host, or share reports; handle pasted location markers | [references/reports.md](references/reports.md) |
+| create, restructure, build, publish, host, or share reports; handle sent comments or pasted location markers | [references/reports.md](references/reports.md) |
 | write or revise a direction report's Abstract, Background, or Methods | [references/writing-methods.md](references/writing-methods.md), and once per project [references/example-methods.md](references/example-methods.md) |
 | write Mitsuba integrators, scenes, or other plugins | [references/mitsuba.md](references/mitsuba.md) |
 | hand off work that changed the setup, evidence, or reports | [references/checklist.md](references/checklist.md) |
@@ -119,7 +122,7 @@ There is no overview report and no nesting: the Cairn UI's project page lists
 the reports. Copy bundled assets by content and make the
 copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (repo
 client, runs, artifacts, report builder, server, UI) is the pinned
-[`cairn2` v0.11.0](https://github.com/DoeringChristian/cairn2/releases/tag/v0.11.0), imported as `cairn`: import and run it, never copy or
+[`cairn2` v0.13.1](https://github.com/DoeringChristian/cairn2/releases/tag/v0.13.1), imported as `cairn`: import and run it, never copy or
 patch it. Use Cairn's native run context and provenance capture. Initialize Git
 and commit the scaffold before the first run, and commit again before runs a
 report will cite.
@@ -131,7 +134,7 @@ For new projects, use this checklist; mark conditional items not applicable:
 ```text
 Project setup:
 - [ ] Read references/project-setup.md and references/reports.md
-- [ ] pixi.toml pins cairn2 v0.11.0 (reports, media, ui), Hydra separately, and the tasks; pixi install
+- [ ] pixi.toml pins cairn2 v0.13.1 (reports, media, ui), Hydra separately, and the tasks; pixi install
 - [ ] One repo: a local path (created on first access) OR the user's named server URL; explicit project namespace and protected login credentials
 - [ ] Hydra configs, experiments/run.py, research_cairn.py, report_tasks.py; standard Hydra functions using with cairn.init(...)
 - [ ] If using a cluster: scheduler files from the relevant skills; verify tracking glue against the new API before submission
@@ -278,6 +281,10 @@ a direction's method. The rules that hold everywhere:
   after substantive changes.
 - **Build after every change:** `pixi run report-build`; publish the report
   (`pixi run report-publish <slug>`) once its evidence or text changed.
+- **Handle sent report comments.** While collaborating on reports, use
+  `cairn comments watch` to receive sent threads, address their source anchors,
+  and reply or resolve after checking the change. See the watcher workflow in
+  [reports.md](references/reports.md); unsent drafts are not requests.
 - **Handle pasted location markers.** Alongside native report comments, the
   user may paste a line such as `reports/a/report.md:42 "quoted text"` or
   `... figure #fig-id "title" (source: file)` copied from the page. Treat each
@@ -286,7 +293,7 @@ a direction's method. The rules that hold everywhere:
 - **Share the generated output unchanged.** `pixi run report-share <slug> --out
   .cairn/share/<slug>` exports the complete published bundle. Share that bundle
   on a static host or use the Cairn UI (`pixi run ui` locally, or the selected
-  remote server's UI). Cairn2 v0.11.0 does not offer a standalone single-file
+  remote server's UI). Cairn2 v0.13.1 does not offer a standalone single-file
   export: do not re-author the page to fit a single-file destination. Never
   restyle or re-template reports for a destination; publishing-tool design
   guidance does not apply to these pages.

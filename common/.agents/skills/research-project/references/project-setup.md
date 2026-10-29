@@ -26,7 +26,7 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.11.0", extras = ["reports", "media", "ui"] }
+cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.13.1", extras = ["reports", "media", "ui"] }
 
 [tasks]
 experiment = "python experiments/run.py"
@@ -42,7 +42,7 @@ kuma = "bash experiments/cluster.sh kuma"
 lyra = "bash experiments/cluster.sh lyra"
 ```
 
-The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.11.0`
+The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.13.1`
 in pip or uv form. The import and command remain `cairn`. Hydra stays a separate
 dependency. `reports` supplies notebook execution; `media` supplies arrays,
 tables and figures; `ui` supplies the server dependencies for the bundled React UI.
@@ -113,8 +113,7 @@ tracked config, commands, logs, or handoffs. Use HTTPS, a VPN, or an SSH tunnel.
 
 For a user-authorized host, `cairn --repo <local-path> server --host <host>
 --port 8000` starts API and UI; the server creates a private token file when
-needed and prints an immediate login link. Browser authentication lasts 12 hours.
-Give the ordinary URL in handoffs. `--no-ui` disables UI hosting;
+needed and prints an immediate login link. Give the ordinary URL in handoffs. `--no-ui` disables UI hosting;
 `--no-auth` is for explicitly selected development access. To view a remote
 repo, open that server's UI; `cairn server` hosts a local backend,
 not a loopback proxy to another server.
@@ -303,6 +302,41 @@ by that rule. Requiring the outcome to be `completed` and the science to be
 validated is this skill's evidence policy; Cairn2 also retains finished failed
 artifacts.
 
+### Log results during the run
+
+Record metrics and intermediate outputs when they become available, inside the
+run context. Do not buffer all results until the end or wait for a report build.
+Choose a logging cadence in config: inexpensive scalars can be frequent; images,
+arrays, and figures can use a coarser interval. Keep complete scientific outputs
+needed to reproduce conclusions even when previews are sampled less often.
+
+Use stable field names, types, and units across runs. Include the coordinates
+needed to interpret each observation in the same record: `step`, `epoch`,
+`elapsed_seconds`, `split`, `sample_id`, or `camera`, as applicable. Use separate
+records for separate samples or conditions. Avoid encoding steps or sample IDs
+into field names, or logging a whole time series only as one final list.
+Cairn supplies `_wall_time` (Unix seconds); log elapsed time explicitly if needed.
+
+```python
+# Inside the run, as each observation becomes available:
+run.log(step=step, split="train", loss=float(loss), elapsed_seconds=elapsed)
+run.log(step=step, split="validation", loss=float(validation_loss))
+run.log(step=step, sample_id=sample_id, camera=camera,
+        reconstruction=cairn.Image(image_array))
+run.track(cairn.Figure(figure), {"step": step, "split": "validation"},
+          key="diagnostic")
+```
+
+Wrap media/large arrays with `Image`, `Figure`, `Array`, or `Table`; Cairn stores
+their payloads as blobs referenced by the record. Do not embed base64 images or
+large numeric lists in JSON. Preserve the data behind each diagnostic figure as
+well as its rendered preview. `track(value, metadata, key=...)` places the value
+and its coordinates in one record; `log` can combine multiple typed values and
+scalars in a record. Added files alone do not provide these observation axes.
+Remote writes may be queued: use `run.flush(timeout=...)` when a delivery
+checkpoint is needed, rather than flushing every scalar. A live observation is
+progress information; completed, validated runs are still required for evidence.
+
 ### Record evidence with the public API
 
 ```python
@@ -441,7 +475,7 @@ own durable journal and protected credentials.
 
 **Legacy adapter compatibility is not automatic.** HyperQueue assets may still
 use old Cairn distribution/extras, `remote set`, `${cairn.run:}`, or
-`finalize-study`. Those calls do not work with Cairn2 0.11.0.
+`finalize-study`. Those calls do not work with Cairn2 0.13.1.
 Preserve their scheduling, storage, and GPU-efficiency rules, but adapt and
 test the project's tracking glue with the current public helper/commands
 before submitting work. Do not silently edit the adjacent skills or claim

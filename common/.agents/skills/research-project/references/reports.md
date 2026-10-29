@@ -394,6 +394,50 @@ verified provenance includes its source/config/environment and lock,
 and each result identifies its producing run, so the chain from a number on
 the page to the code that produced it runs through artifact versions.
 
+### Receive and address sent comments
+
+During active report collaboration, start one watcher scoped to the selected
+repository and project in a managed background terminal, and continue the work.
+Use normal repository configuration, or supply the selected repo explicitly:
+
+```bash
+pixi run cairn --project PROJECT comments watch 'reports/**' --json
+# For one direction, replace the glob with reports/SLUG.
+```
+
+The watcher polls open threads and emits one JSON line per batch: an array of
+threads, each an array of comment objects. It emits a thread when a comment has
+a new `sent_at`, including already-sent open threads at startup. Restarting the
+watcher can replay those threads; inspect existing replies before repeating work.
+A thread includes context and can contain unsent drafts: act only on sent
+requests (`sent_at` is non-null), using the other messages as context. Plain
+`comments list` includes drafts and is not a sent-request queue.
+
+Read the managed process output as work proceeds. A watcher prints events; it
+does not launch an agent or guarantee that the host will notify an idle agent.
+Keep its process/session handle, avoid duplicate watchers, and stop the watcher
+you started when the collaboration ends. If background processes are unavailable,
+check `comments list 'reports/**' --json` at work checkpoints and inspect
+`sent_at` explicitly.
+
+Use the root comment's artifact/version and full anchor (source path, quote,
+lines, figure/media location) to locate the request, following the source-marker
+workflow below. Comments can refer to an older publication; inspect its source
+when the current source has drifted. Implement and validate the requested change;
+for report changes, rebuild and publish before reporting them as delivered.
+Reply in the thread with the outcome and exact report/run reference, and resolve
+the root only after its outstanding requests are addressed:
+
+```bash
+pixi run cairn --project PROJECT comments reply c_ROOT "Updated Methods; published reports/SLUG@vN" --by agent
+pixi run cairn --project PROJECT comments resolve c_ROOT --note "Verified the change in reports/SLUG@vN" --by agent
+```
+
+Leave blocked or ambiguous requests open and ask a focused question in a reply.
+Do not rewrite the user's messages or mark a request resolved merely because it
+was received. These replies are part of handling report feedback in this skill;
+comments remain guidance, not scientific evidence.
+
 ### Location markers pasted by the user
 
 Native reports support source inspection, comments, and source downloads.
@@ -474,7 +518,7 @@ mutable annotations, not scientific evidence.
 **Share generated reports unchanged.** Export the complete bundle with
 `report-share` or `cairn report export`. Publish its files as-is on a static
 host, preserving relative paths, or link to the selected repository's UI.
-Cairn2 v0.11.0 does not export a standalone single HTML file: if a destination
+Cairn2 v0.13.1 does not export a standalone single HTML file: if a destination
 only accepts one file, use a supported destination or explain the limitation
 rather than re-authoring the report. Native Plotly/media/HTML controls are
 richer than static exports; check the actual destination before sharing.
