@@ -268,7 +268,13 @@ plt.close(figure)
 ```
 ````
 
-For existing files, use `IPython.display.Image`, `SVG`, `Video(embed=True)`, or
+Redraw result charts from their stored numeric data using the captured plotting
+functions. Display recorded images, renders, audio, and video directly; they are
+the expensive outputs, not substitutes for the data behind a chart. The bundled
+sample’s prebuilt SVG/Plotly charts are a rendering smoke test, not the pattern
+for new experimental plots.
+
+For those media files, use `IPython.display.Image`, `SVG`, `Video(embed=True)`, or
 `Audio` on the declared input path. Plotly JSON with `data` and `layout` can be
 displayed as rich output without rebuilding its data:
 
@@ -326,8 +332,8 @@ A good method or setup figure:
   operators, losses) with one restrained palette, and uses a single accent
   colour only for what this direction adds or changes; the caption says so;
 - where it helps, embeds small real images of the input, an intermediate state,
-  or the output (computed by the project's code, saved under `assets/`, and
-  referenced from the SVG) instead of abstract boxes;
+  or the output (loaded from declared inputs and assembled into the SVG at
+  build time; only non-result illustrations belong under `assets/`) instead of abstract boxes;
 - has straight or orthogonal arrows that end at box edges, no crossings, text
   that fits its box and stays at least 11 px at report width, a `viewBox`
   without wasted margin, and a white or transparent background.
@@ -378,13 +384,13 @@ Cairn captures the report entry, includes, referenced resources, and explicit
 `cairn.resources`. Declare all report helpers/assets there. The project helper
 and gate compare all nonhidden source files against the captured hashes;
 mtime alone is insufficient. Symlinks are rejected. Keep the exact
-`pixi.lock` and strict run provenance: environment records are not an OS
+`pixi.lock` and verified native run provenance: environment records are not an OS
 sandbox, and undeclared external reads are outside the engine's policy.
 
 Every displayed metric, table, figure, and claim must trace to its input
 artifact and file; never copy results into report code or prose by hand.
 Rebuilding with the same pinned inputs must reproduce the report. Each run's
-strict provenance capture captures its source/config/environment and lock,
+verified provenance includes its source/config/environment and lock,
 and each result identifies its producing run, so the chain from a number on
 the page to the code that produced it runs through artifact versions.
 

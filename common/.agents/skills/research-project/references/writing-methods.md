@@ -34,11 +34,13 @@ organized is in [reports.md](reports.md)):
 6. `## Conclusion`: the answer the evidence supports, its limits, and the next
    decision or experiment.
 
-Write in two passes. Before or while the experiments run, write the
-Introduction, Background and related work, and Methods in full, give each
-planned result section its heading and a `note` callout naming the runs it waits
-for and the question it will answer, and let the Abstract, summary, and
-Conclusion state what is planned and pending. Build and publish this draft.
+Write in two passes. Right after the direction is agreed, before or alongside
+the first runs, write the Abstract, Introduction, Background and related work,
+and Methods in full: the Abstract states the question, the approach, and what
+the experiments will show, and the summary and Conclusion state what is planned
+and pending. Give each planned result section its heading and a `note` callout
+naming the runs it waits for and the question it will answer. Build and publish
+this draft, and refer back to it while you run the experiments.
 Then, as each run completes and passes validation, declare it as an input,
 replace its pending note with the result, and rebuild and publish; revise the
 Abstract and Conclusion once the evidence supports an answer. Never fill a
@@ -75,7 +77,7 @@ the order that suits the method:
 
 Use subsections where the method is large enough to need them, named for their
 content. State each setting the results depend on, and point to the run's
-configs (`configs/experiment/<name>.yaml`, captured with the resolved config in the run's provenance artifact)
+configs (`configs/<name>.yaml`, captured with the resolved config in the run's provenance artifact)
 for the rest instead of listing every value. One definition per method: if the
 method changed, rewrite the section rather than describing both versions.
 
@@ -145,7 +147,7 @@ ideas. Flag prior art where the reader needs it:
 
 ```markdown
 ::: {.callout}
-**Close prior work: <short name>**
+**Prior art: <short name>**
 
 <Source, with link> already does <what>. This report differs only in
 <difference>, so it is a replication or an extension, not a new idea.

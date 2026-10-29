@@ -376,5 +376,13 @@ Mitsuba:
 - OptiX/CUDA: code paths in `src/render/scene_optix.inl`, `src/render/optix/`,
   `include/mitsuba/render/optix_api.h` (OptiX API resolved at runtime, no SDK headers needed),
   driver >= 535. Not testable on macOS -- test CUDA on a Linux/NVIDIA machine.
+- **Inspecting what OptiX actually compiled.** By default there is very little visibility into
+  what happens inside an OptiX kernel (`PrintIR` shows only the PTX handed to OptiX, not what
+  OptiX made of it). The working approach: `rm -rf ~/.drjit` so the cache holds only the kernels
+  of the run you care about, re-run the repro once, then open `~/.drjit/optix7cache.db` (the name
+  is `optix7*.db`). It is a **SQLite database containing the compiled SASS code**, so inspect it
+  with `sqlite3 ~/.drjit/optix7cache.db '.tables'` / `'.schema'`, then dump the blobs (e.g. to
+  files, then `nvdisasm` / `cuobjdump -sass`) to read the final machine code (register spills,
+  local-memory traffic, SER reordering, inlined or not). Don't guess the schema; read it first.
   Metal: `src/render/scene_metal.inl`, `src/render/metal_accel.mm`.
 - Longer debugging guide (if present in the workspace): `../CODE_OVERVIEW.md` (sections D.1–D.7: r<N> errors, freeze slot diagnosis, IR inspection) and coding conventions in `../STYLE_GUIDE.md`.

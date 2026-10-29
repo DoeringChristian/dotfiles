@@ -1,6 +1,7 @@
 # Reproducibility checklist
 
-Go through it before a handoff that changes the project's setup, evidence, or reports.
+Review the applicable items before a handoff that changes the project's setup,
+evidence, or reports; mark unused cluster/hosting features not applicable.
 
 
 Environment and runs
@@ -11,27 +12,34 @@ Environment and runs
       excluded from formatting and other source tooling.
 - [ ] `reports/` holds only report sources; Cairn is the pinned
       `cairn2[reports,media,ui]` v0.11.0 dependency, imported as `cairn`.
-      No Cairn internals are copied or patched; the bundled project adapter
-      uses public APIs. Settings live in `.cairn.toml`; no JSON `.cairn` file is assumed.
+      No Cairn internals are copied or patched; entry points use Cairn’s native tracking APIs. Settings live in `.cairn.toml`; no JSON `.cairn` file is assumed.
 - [ ] No experiment-tracking service or custom run database is used; Cairn's
       repo (runs and artifacts) is the record.
 - [ ] `experiments/run.py` and `experiments/research_cairn.py` come from the
-      skill's assets; the experiment implements `run(run, output_dir)`.
+      skill's assets; each entry point is a standard `@hydra.main` function
+      using `with cairn.init(...) as run:` inside the function, with the name
+      from config and an explicitly resolved config passed to Cairn.
       Hydra is installed separately; no removed resolver/callback is imported.
 - [ ] Hydra keeps job bookkeeping and optional scratch files under ignored `outputs/`; each job gets one full Cairn
       run ID. Studies retain their expected roster and are finalized explicitly
       only when every expected trial is present and completed.
 - [ ] Every run records initial source, exact `pixi.lock`, resolved config,
-      Hydra files, runtime inventory, and logs. The strict provenance helper
-      fails before experiment work on missing required capture; backend status
-      is the completion record, and only completed, validated runs count as evidence.
+      runtime inventory, and logs through native Cairn capture. Capture omissions
+      and errors were inspected; required missing files (including Hydra runtime
+      files when relevant) were explicitly added. Backend status is the completion
+      record, and only completed, validated runs count as evidence.
 - [ ] Run names are concise semantic slugs, and descriptions explain purpose
       and interpretation limits.
 - [ ] Evidence is recorded with `run.log`, `run.track`, and
       `run.add`. Separate result publication is optional. Scientific tables
       and arrays are retained completely,
       and the producer's provenance identifies the source and environment.
-- [ ] `linux-64` is a locked platform; `experiments/cluster.sh` and other
+- [ ] Every expensive stage (training, fitting, rendering, simulation,
+      evaluation) stores its complete output: per-sample and per-point values,
+      not only aggregates or pictures. Every figure, table, and reported number
+      can be recomputed from stored records by cheap code without rerunning
+      that stage; anything that cannot is fixed and rerun before it is cited.
+- [ ] If using a GPU cluster: `linux-64` is a locked platform; `experiments/cluster.sh` and other
       scheduler files come from the relevant skills, and their legacy Cairn
       calls have been adapted and tested before use. Each used cluster's
       profile and launchers come from its skill, and every
@@ -100,8 +108,9 @@ Reports
 - [ ] Experimental figures come from the runs that wrote them
       through declared captured inputs, only from completed, validated
       producers, and their exact source refs and input hashes are inspectable.
-      The generating function and material plotting settings are recorded
-      alongside the figure or in artifact metadata, with source provenance.
+      The data each figure plots is stored in full under its key and the report
+      redraws it from that data; the generating function and material plotting
+      settings are recorded alongside, with source provenance.
 - [ ] Methods has the figures a good paper would: an overview of the method,
       structure diagrams where the method has interacting parts, and the
       experiment setup (geometry drawn to scale from the resolved config, the

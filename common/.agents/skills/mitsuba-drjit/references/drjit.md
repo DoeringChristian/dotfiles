@@ -317,6 +317,7 @@ run on LLVM + Metal on macOS. If the checkout is much newer, re-check against `d
   - On LLVM it emits DWARF line tables, so LLDB or GDB can break on Python lines inside kernels (**new in 1.6**; LLDB needs `settings set plugin.jit-loader.gdb.enable on`).
 - To step through code, use `dr.set_flag(dr.JitFlag.SymbolicAll, False)` or `with dr.scoped_set_flag(dr.JitFlag.SymbolicAll, False):`. That switches to evaluated mode so `print` and pdb work.
 - `dr.set_leak_warnings(False)` silences variable-leak warnings at exit.
+- **OptiX kernels are opaque by default.** To see the final SASS: `rm -rf ~/.drjit`, re-run once, then open `~/.drjit/optix7cache.db`, which is a SQLite database holding the compiled SASS. Details in `mitsuba-internals.md` (debugging section).
 
 ### Common errors and pitfalls
 

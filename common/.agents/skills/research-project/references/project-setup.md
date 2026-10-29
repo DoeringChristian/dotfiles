@@ -51,7 +51,7 @@ without the UI session dependency. For every optional feature, use `extras = ["a
 lists dependencies directly; Cairn2 is the base package, not an extra.
 Bump the tag only when the user asks.
 
-Copy `assets/report_tasks.py` into `experiments/` alongside the run adapter.
+Copy `assets/report_tasks.py` into `experiments/` alongside the entry point.
 This small project helper discovers flat reports, calls the public builder,
 and maintains the last successful previews. It does not copy or patch Cairn.
 Pixi appends extra arguments: `pixi run report-publish direction` builds and
@@ -92,8 +92,10 @@ project = "<project>"
 token_file = "~/.config/cairn/<host>.token"
 ```
 
-Keep one setting shared by experiments and report tasks. The adapter accepts
-`cairn: {repo: <path or URL>}`, passed to the public `repo` argument.
+Keep repository and project settings in `.cairn.toml` or the environment so
+entry points and report tasks use the same destination. A Hydra config key
+named `cairn.repo` or `project` is not automatically applied by `cairn.init`; pass explicit arguments or
+use normal Cairn configuration discovery.
 
 Use a server only when the user runs one and names it; never invent a server
 or upload project data to an unrequested repo:
@@ -132,60 +134,49 @@ A disconnected finish raises Pending; it does not prove completed evidence.
 Put every scientifically meaningful choice in config. Copy
 [`assets/run.py`](../assets/run.py) and
 [`assets/research_cairn.py`](../assets/research_cairn.py) into `experiments/`.
-The first is the entry point; the second supplies focused provenance,
-completed-evidence, and study helpers using public Cairn APIs.
+The first is a standard Hydra entry point using `with cairn.init(...)`; the second
+supplies completed-evidence and study helpers, not run-lifecycle glue.
 
 ```yaml
 # configs/config.yaml
 defaults:
-  - _self_                      # first, so each experiment config can set run.name
-  - experiment: primary
+  - _self_
 
-project: <project>
 seed: 0
-cairn: {}                       # normal environment/config resolution; never put a token here
-provenance:
-  max_file_bytes: 1048576
-  max_total_bytes: 33554432
-  exclude: []                   # add project-specific data/secret exclusions
+run:
+  name: feasibility-method
+  description: <question, purpose, and interpretation constraints>
 
 hydra:
   job:
     chdir: false
   run:
-    dir: outputs/${run.name}/${now:%Y-%m-%d_%H-%M-%S}
+    dir: outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
   sweep:
-    dir: outputs/${run.name}/study-${now:%Y-%m-%d_%H-%M-%S}
+    dir: outputs/${hydra.job.name}/study-${now:%Y-%m-%d_%H-%M-%S}
     subdir: ${hydra.job.num}
 ```
 
 These directories hold Hydra bookkeeping and optional scratch files. Do not use the removed
 `${cairn.run:}` or `${cairn.draft:}` resolvers or the old Cairn Hydra callbacks.
-Leave `hydra.job.chdir: false`: experiment code gets the job's folder as
-`output_dir`, and relative paths in config keep meaning "from the project
-root". Each job gets its own full Cairn run ID, even when names repeat.
+Leave `hydra.job.chdir: false` so relative paths remain relative to the project
+root. Use `Path(HydraConfig.get().runtime.output_dir)` for optional scratch space. Each job gets its own full Cairn run ID, even when names repeat.
 
-Each experiment config names its own runs:
+Use a config per entry point when needed (`configs/train.yaml`,
+`configs/evaluate.yaml`), selected with `config_name` on its `@hydra.main`
+decorator or `--config-name` on the command line. Put `_target_` on configurable
+components (models, datasets, solvers), then instantiate them in the function;
+there is no required `experiment._target_` or top-level class. Give each entry
+point a Pixi task, for example `train = "python experiments/train.py"`.
 
-```yaml
-# configs/experiment/primary.yaml
-# @package _global_
-run:
-  name: feasibility-method
-  description: <question, purpose, and interpretation constraints>
-experiment:
-  _target_: experiments.<module>.<ExperimentClass>
-  # every scientifically meaningful parameter of this experiment
-```
+Config groups remain useful for variants. Choose the defaults merge order
+intentionally: entries after `_self_` override the current config. Inspect
+`--cfg job --resolve` to verify the composed parameters.
 
-Keep `_self_` first in `config.yaml` and do not define `run:` there. Hydra
-merges the defaults list in order, so entries after `_self_` override
-`config.yaml`; with `_self_` last, a `run:` block in `config.yaml` would
-silently replace every experiment's run name and mix different experiments
-under one name.
-
-The entry point records the resolved config in run metadata, and the initial
-provenance capture carries Hydra's config and override files. The backend
+Pass `OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)` as
+`config=` to `cairn.init` so the resolved Hydra config is recorded. Add Hydra's `.hydra` folder explicitly with `cairn.add`
+if its runtime config and override files are needed; ignored output folders
+are not automatically part of the source archive. The backend
 run status is the authoritative completion record. A run counts as evidence
 only when it completed and its scientific validation passed; a job that raises
 is failed. Do not duplicate the full resolved config into another status schema.
@@ -194,8 +185,9 @@ Names must be short and semantic, such as `feasibility-method`,
 `reference-baseline`, or `ablation-no-feature`. Use the same semantic name for
 the result artifact when appropriate. Do not encode parameter lists, seeds,
 timestamps, or hashes in them; keep lowercase letters, digits, and hyphens as
-the project's naming convention. Put a concise description in config so a
-report reader understands what was tested and how to interpret it.
+the project's naming convention. Put a concise description in `cairn.init` argument
+`metadata={"description": "..."}` so a reader understands what was tested and
+how to interpret it.
 
 ### Snapshot source and runtime state
 
@@ -203,102 +195,103 @@ Copy bundled assets by content only and make the copies owner-writable (for
 example `install -m 0644 <source> <destination>`): skill directories may come
 from read-only plugin caches, shared installations, or dotfiles mounts.
 
-The adapter captures the current eligible source tree and runtime state
-synchronously before constructing the Experiment. It requires `pixi.lock`,
-includes the resolved config and Hydra files, and adds them as the run’s
-`project-provenance` folder. A missing required file or a source/total size
-limit violation fails the run before experiment work. This strict project
-capture is separate from Cairn's optional, best-effort source capture, which
-the adapter turns off and which Cairn keeps under the reserved `provenance/`
-names; do not claim the automatic capture guarantees a complete snapshot.
+Leave Cairn's native provenance and console capture enabled. It records
+Python/platform/executable/cwd, launch arguments, installed packages, Git state
+and a dirty diff, dependency manifests/lockfiles, and a bounded source archive.
+It captures these when entering the run context, before components are constructed. Do not implement a
+second source scanner, provenance store, or lifecycle wrapper in the project.
 
-The helper allowlists text source and project-definition files, respects Git
-ignores, and excludes symlinks, installed libraries, environments, caches,
-dependency trees, generated reports, Cairn's folders, credential stores
-(`.ssh`, `.aws`, …), and credential-like files (`.env*`, `*.pem`, `*.key`,
-`id_rsa*`, `credentials*`, `secrets*`, service-account JSON, tokens). Inspect
-its manifest and extend the deny rules for project-specific data or secrets.
-Files skipped as non-UTF-8 are listed in the manifest. The capture is of the
-current source tree, not the old git/tree callback or a full repository clone.
-
-Runtime provenance includes the exact `pixi.lock`, an inventory from installed
-package metadata (so `pip` is not required), Python/platform facts, Git revision,
-and a small allowlist of execution settings. Do not dump the complete process
-environment or copy `.pixi`; inventories and the lock file describe installed
-packages without duplicating libraries or exposing unrelated secrets. Initial
-provenance is recorded before experiment code, so a later experimental failure
-still retains its initial source and runtime state. Record stdout/log files and system metrics explicitly when needed; this release
-does not intercept them automatically.
+Native provenance is best-effort, not a completeness guarantee: inspect its
+omissions/errors and captured files before citing a run. Verify that the method
+source and exact `pixi.lock` are present. Outside Git the capture is limited to
+the entry script and known dependency files; initialize and commit the project
+before running it. Add required files the capture omitted through `cairn.add`,
+and fix and rerun if the original evidence cannot be reconstructed. Keep secrets
+out of configs and source; never dump the complete environment. Record system
+metrics explicitly when needed. Console capture is bounded and is not a
+substitute for scientific metrics or outputs.
 
 ### Where a run lives
 
-`outputs/` holds Hydra configs, optional scratch files, and a `cairn-run.json` pointer
-with the full run ID. It is not the authoritative evidence/status store.
+`outputs/` holds Hydra configs and optional scratch files. The native context
+does not create a project-specific `cairn-run.json` receipt. The output folder
+is not the authoritative evidence/status store.
 Inspect the backend with `pixi run cairn --project <project> artifact list --namespace runs`,
 `pixi run cairn --project <project> artifact inspect <full-run-id>`, or the UI. Keep failed job folders for
 diagnosis; publish scientific results only from completed, validated producers.
 
 A finished artifact can have a failed outcome, and `latest` is a movable alias.
-The adapter records results on the run itself by default. A successful
+Top-level `cairn.log/track/add` record on the current run. A successful
 log call is not a successful experiment. Use the completed-evidence check below
 and pin `@vN` before citing a result. Do not infer completion from a folder,
 alias, or local pointer file.
 
-## Experiment boundary: runs, inputs, and results
+## Hydra entry points: runs, inputs, and results
 
-Define the ordinary project interface:
+Use [`assets/run.py`](../assets/run.py) as the template:
 
 ```python
-from abc import ABC, abstractmethod
-from pathlib import Path
-from cairn import Artifact
-
-class Experiment(ABC):
-    @abstractmethod
-    def run(self, run: Artifact, output_dir: Path) -> None:
-        """Use declared inputs, record evidence directly, and validate the results."""
+@hydra.main(version_base=None, config_path="../configs", config_name="config")
+def main(cfg: DictConfig):
+    with cairn.init(
+        cfg.run.name,
+        config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
+        metadata={"description": cfg.run.description},
+    ) as run:
+        model = hydra.utils.instantiate(cfg.model)
+        # Compute, record results, and validate before leaving this block.
 ```
 
-The Hydra entry point opens a `Client`, starts `client.run(...)`, captures
-strict initial provenance, instantiates the configured Experiment, and calls
-it inside the artifact context. Normal exit finishes with outcome `completed`;
-exceptions finish with `failed`. The run itself is an artifact in `runs`.
-There is no separate Run entity or mutable version identity. Context exit calls
-`finish()` with default arguments: when finishing with a custom value or
-outcome, call `finish(...)` explicitly outside an artifact context to avoid
-a conflicting second finalization.
+Hydra composes the config first. Open one native Cairn context inside the
+function for each invocation, including each multirun job. The run name comes
+from `cfg.run.name`, so config groups and CLI overrides can adjust it. Pass the
+resolved config explicitly; repo/project use normal Cairn configuration discovery.
+Keep component construction, computation, recording, and scientific validation
+inside the block: normal exit completes the run, and an exception leaving it
+marks it failed. Do not swallow validation failures and then exit normally.
 
-Within an experiment:
+Use `with cairn.init(...)`, not `@cairn.run`, for project entry points. No
+Experiment class or custom tracking wrapper is needed. The explicit handle and
+top-level `cairn.*` API target the same current run, so helper functions can log
+without receiving a handle.
+
+Inside the run context (indent this code accordingly):
 
 ```python
 import json
 import matplotlib.pyplot as plt
 import cairn
 
-data = run.use("datasets/crops@v3")        # records the exact input ID
+from pathlib import Path
+from hydra.core.hydra_config import HydraConfig
+
+output_dir = Path(HydraConfig.get().runtime.output_dir)
+data = cairn.use("datasets/crops@v3")        # records the exact input ID
 data.download(to=output_dir / "inputs" / "crops")
-for step in range(self.steps):
+for step in range(cfg.steps):
     # ... perform the method and compute loss ...
-    run.log(loss=loss, step=step)
+    cairn.log(loss=loss, step=step)
 
 # ... scientifically validate scores, cases, and errors ...
-run.log({"scores": scores})
-run.track(cairn.Table(cases), key="cases")
-figure = error_histogram(errors)
-run.track(cairn.Figure(figure), key="error_histogram")
+cairn.log({"scores": scores})
+cairn.track(cairn.Table(cases), key="cases")
+rows = error_rows(errors)                  # every value the figure plots
+cairn.track(cairn.Table(rows), key="error_histogram")
+figure = error_histogram(rows)             # cheap: redrawable from the table
+cairn.track(cairn.Figure(figure), key="error_histogram")
 plt.close(figure)
 ```
 
 Write metrics, tables, figures, arrays, and files directly to the run with
 `log`, `track`, and `add`. For a library that requires a filesystem path,
 use `output_dir` as optional scratch space and explicitly add the resulting
-file. Hydra still keeps its configuration and run receipt there; Cairn does not
-require evidence to pass through that directory. The adapter does not scan
+file. Hydra keeps its configuration there; Cairn does not
+require evidence to pass through that directory. Cairn does not scan
 `output_dir/result` or automatically create a second artifact.
 
 A completed run can be declared directly as a report input. Create a separate
 result artifact only when its name, reuse, or lifecycle merits one. For example,
-explicitly add a result directory with `run.add(path, name="result")`,
+explicitly add a result directory with `cairn.add(path, name="result")`,
 then after the run finishes call `publish_result(client, client.get(run_id))`.
 That optional helper publishes the added bytes and records a `producer`
 dependency. There is no need to do this for every experiment.
@@ -313,13 +306,13 @@ artifacts.
 ### Record evidence with the public API
 
 ```python
-run.log({"loss": loss, "psnr": psnr}, step=step)
-run.track(cairn.Figure(plotly_figure), {"step": step}, key="running_rmse")
-run.track(cairn.Image(array), {"step": step}, key="reconstruction")
-run.track(cairn.Table([{"condition": c, "rmse": r} for c, r in rows]), key="trials")
-run.track({"solver_log": solver_log})
-run.add("checkpoints/best.pt", name="best-checkpoint")
-run.add("optimization.mp4", name="optimization")
+cairn.log({"loss": loss, "psnr": psnr}, step=step)
+cairn.track(cairn.Figure(plotly_figure), {"step": step}, key="running_rmse")
+cairn.track(cairn.Image(array), {"step": step}, key="reconstruction")
+cairn.track(cairn.Table([{"condition": c, "rmse": r} for c, r in rows]), key="trials")
+cairn.track({"solver_log": solver_log})
+cairn.add("checkpoints/best.pt", name="best-checkpoint")
+cairn.add("optimization.mp4", name="optimization")
 ```
 
 `track` uses `key=`, not `name=`; metadata such as step goes in its second
@@ -327,17 +320,20 @@ argument. Audio/video/text can be added as files; there are no `Video`,
 `Audio`, or `Text` wrapper classes in this release. Typed values select
 interpretation; ordinary dictionaries/lists are JSON, never implicit pickle.
 Preserve complete scientific tables and arrays, not just presentation subsets.
+The output of every expensive stage is recorded completely enough that every
+figure, table, and number derived from it can be recomputed from the record
+alone (SKILL.md: "Store what is expensive; recompute only what is cheap").
 
 Run records retain repeated steps. Read `client.get(run_id).records()`; each
 row is the logged dictionary, including metrics and optional `step`. Config is
 `reader.config`; `reader.files` lists
 added files and `reader.file(name)` returns one (`.load()`, `.open()`). There
-are no implicit `metrics.jsonl` or `summary.json` snapshot folders. Record logs
-explicitly with records or named added files; do not assume automatic stdout/system-metric interception.
+are no implicit `metrics.jsonl` or `summary.json` snapshot folders. Cairn captures bounded console output by default. Record scientific metrics
+and system measurements explicitly; console capture does not supply them.
 
 Use stable file names, columns, and units across experiments. Record the
 generating module/function and material plotting settings beside each figure
-or in run metadata; strict provenance pins the generating source. Never hide
+or in run metadata, in addition to the data it plots; verify that native provenance includes the generating source. Never hide
 important evidence through final-only output, excessive aggregation,
 cherry-picked examples, or presentation-only composites. Keep per-step series and final results in the run; reports can read both
 directly. Separate result artifacts are optional.
@@ -427,7 +423,8 @@ remain stored, but no real project report may still declare it.
 Projects use the `slurm` skill and the cluster's own skill (`kuma`, `lyra`)
 for EPFL's Slurm GPU clusters. Load both before the first cluster command in a
 session. Keep `hydra-submitit-launcher`, `linux-64`, and one task per used
-cluster in `pixi.toml`; the `experiment` task remains the entry point. Copy
+cluster in `pixi.toml`; configure the scheduler to invoke the intended Hydra
+entry-point task (the template defaults to `experiment`). Copy
 the scheduler script, cluster profiles, and launcher configs according to
 those skills, then check their tracking glue against this version before
 submission. Use this skill's `finalize-study` helper for Cairn study evidence.
@@ -488,8 +485,8 @@ supported, and both must keep every configuration's result inspectable:
   configurations are separate experiments to compare or select from: sweeps,
   ablations, or competing settings. Each trial is a complete Cairn run with
   its own provenance, config, logs, and results recorded on the run. Save the expected
-  trial roster when launching; fill in the full run IDs from each job's
-  `cairn-run.json`. Do not infer the expected roster from only successful jobs.
+  trial roster when launching; fill in full run IDs from the backend and match each resolved config to its
+  planned trial (record a trial label in config). Do not infer the expected roster from only successful jobs.
   Finalize explicitly with the helper below; no automatic study callback is
   assumed. A report declares the exact trial results and/or the summary
   artifact. Failures stay visible and prevent a completed study summary.
@@ -514,8 +511,8 @@ backend (or pass `--repo <path or URL>`). Missing or extra trials,
 duplicate run IDs, and non-completed backend runs fail the check. After the
 scientific validation passes, the helper creates a summary run, records each
 trial with `use(..., role="trial")`, and logs `<name>-study` with the roster and status table.
-Run from the project root or pass `--project-root <path>` so the summary's
-initial provenance captures the intended project and `pixi.lock`.
+Run from the project root so native provenance captures the intended project
+and `pixi.lock`; `--project-root` only sets helper output/repo path resolution.
 Keep the original expected roster and inspect every result, including failures;
 do not relabel a partial study as complete by deleting unsuccessful trials.
 

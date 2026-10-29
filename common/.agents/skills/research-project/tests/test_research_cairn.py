@@ -1,8 +1,8 @@
 """Exercise the scaffold against the pinned Cairn2 public API."""
-import hashlib
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import cairn
@@ -26,127 +26,8 @@ def project(tmp_path, monkeypatch):
     return root
 
 
-def config(root, **kwargs):
-    return {"project": "research-demo", "run": {"name": "trial"},
-            "cairn": {"repo": str(root / ".cairn/repo")}, **kwargs}
-
-
 def client(root):
     return cairn.Client(root / ".cairn/repo", project="research-demo")
-
-
-def test_provenance_is_exact_and_excludes_credentials_libraries_and_symlinks(project, monkeypatch):
-    subprocess.run(["git", "init", "-q", str(project)], check=True)
-    (project / ".gitignore").write_text("ignored.py\n")
-    (project / "ignored.py").write_text("DO_NOT_CAPTURE")
-    for relative in (".env.json", "credentials.json", "secrets.yaml", "token.json",
-                     "secrets/config.py", ".pixi/library.py", ".ssh/config.py", "outputs/generated.py"):
-        path = project / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("DO_NOT_CAPTURE")
-    (project / "bad_encoding.py").write_bytes(b"\xff")
-    (project / "link.py").symlink_to(project / "method.py")
-    monkeypatch.setenv("UNRELATED_SECRET", "DO_NOT_CAPTURE")
-    monkeypatch.setenv("OMP_NUM_THREADS", "2")
-    with client(project) as c:
-        with c.run("trial", provenance=False) as run:
-            helper.capture_provenance(run, project_root=project, output_dir=project / "outputs/job", config=config(project))
-        target = c.get(run.id).download("project-provenance", to=project / "outputs")
-        entries = {p.relative_to(target).as_posix(): p.read_bytes() for p in target.rglob("*") if p.is_file()}
-    assert entries["source/method.py"] == (project / "method.py").read_bytes()
-    assert b"cairn2==0.11.0" in entries["environment/packages.txt"]
-    assert not any(b"DO_NOT_CAPTURE" in content for content in entries.values())
-    runtime = json.loads(entries["environment/runtime.json"])
-    assert runtime["environment"]["OMP_NUM_THREADS"] == "2"
-    assert "UNRELATED_SECRET" not in runtime["environment"]
-    manifest = json.loads(entries["manifest.json"])
-    assert {item["reason"] for item in manifest["skipped"]} == {"symlink", "not UTF-8"}
-    for path, facts in manifest["files"].items():
-        assert facts["sha256"] == hashlib.sha256(entries[path]).hexdigest()
-
-
-@pytest.mark.parametrize("fault", ["missing_lock", "lock_symlink", "large_file", "total_limit", "empty_inventory", "secret_config"])
-def test_required_provenance_fails_closed(project, monkeypatch, fault):
-    cfg, kwargs = config(project), {}
-    if fault == "missing_lock":
-        (project / "pixi.lock").unlink()
-    elif fault == "lock_symlink":
-        (project / "pixi.lock").unlink()
-        (project / "pixi.lock").symlink_to(project / "method.py")
-    elif fault == "large_file":
-        (project / "large.py").write_bytes(b"x" * (1024 * 1024 + 1))
-    elif fault == "total_limit":
-        kwargs["max_total_bytes"] = 10
-    elif fault == "empty_inventory":
-        monkeypatch.setattr(helper.importlib.metadata, "distributions", lambda: [])
-    else:
-        cfg["credentials"] = "must-not-be-recorded"
-    with client(project) as c:
-        with pytest.raises((ValueError, FileNotFoundError)):
-            with c.run("trial", provenance=False) as run:
-                helper.capture_provenance(run, project_root=project, output_dir=project / "outputs/job", config=cfg, **kwargs)
-        assert c.get(run.id).outcome == "failed"
-
-
-class Experiment:
-    def run(self, run, output_dir):
-        raise NotImplementedError
-
-
-class Example(Experiment):
-    def __init__(self, root, fail=False):
-        self.root, self.fail = Path(root), fail
-        (self.root / "method.py").write_text("CHANGED_IN_CONSTRUCTOR")
-
-    def run(self, run, output_dir):
-        run.log(loss=0.1)
-        run.add(b'{"loss":0.1}', name="scores.json")
-        folder = output_dir / "result"
-        folder.mkdir(parents=True)
-        (folder / "result.json").write_text('{"loss":0.1}')
-        if self.fail:
-            raise RuntimeError("scientific validation failed")
-
-
-@pytest.mark.parametrize("fail", [False, True])
-def test_runner_records_directly_without_implicit_staging_or_publication(project, fail):
-    cfg = OmegaConf.create(config(project, experiment={"_target_": __name__ + ".Example", "root": str(project), "fail": fail}))
-    output = project / "outputs/job"
-    if fail:
-        with pytest.raises(RuntimeError, match="scientific validation failed"):
-            helper.run_experiment(cfg, Experiment, project_root=project, output_dir=output)
-    else:
-        helper.run_experiment(cfg, Experiment, project_root=project, output_dir=output)
-    ident = json.loads((output / "cairn-run.json").read_text())["run_id"]
-    with client(project) as c:
-        producer = c.get(ident)
-        assert producer.outcome == ("failed" if fail else "completed")
-        provenance = producer.download("project-provenance", to=output)
-        assert (provenance / "source/method.py").read_text() == "def compute():\n    return 42\n"
-        if fail:
-            with pytest.raises(cairn.NotFound):
-                c.get("artifacts/trial@latest")
-            with pytest.raises(ValueError, match="completed producer"):
-                helper.require_completed_artifact(c, ident)
-        else:
-            result = helper.require_completed_artifact(c, ident)
-            assert next(result.records())["loss"] == 0.1
-            scores = result.download("scores.json", to=output)
-            assert json.loads(scores.read_text()) == {"loss": 0.1}
-            assert "result" not in result.files
-            assert not c.find("artifacts/*")
-            assert not (output / "cairn-result.json").exists()
-
-
-def test_missing_lock_prevents_constructor(project):
-    (project / "pixi.lock").unlink()
-    cfg = OmegaConf.create(config(project, experiment={"_target_": "does.not.exist.Experiment"}))
-    output = project / "outputs/job"
-    with pytest.raises(FileNotFoundError):
-        helper.run_experiment(cfg, Experiment, project_root=project, output_dir=output)
-    with client(project) as c:
-        ident = json.loads((output / "cairn-run.json").read_text())["run_id"]
-        assert c.get(ident).outcome == "failed"
 
 
 def test_runless_and_failed_producers_cannot_certify_evidence(project):
@@ -218,3 +99,40 @@ def test_separate_result_publication_is_explicit(project):
         assert [producer.id for producer in checked.inputs(role="producer")] == [run.id]
         checked.download(to=project / "outputs/verified")
         assert json.loads((project / "outputs/verified/scores.json").read_text()) == {"loss": 0.1}
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_native_hydra_scaffold_tracks_each_invocation(project, fail):
+    assets = Path(__file__).parents[1] / "assets"
+    experiments = project / "experiments"
+    experiments.mkdir()
+    body = 'cairn.log(seed=cfg.seed)'
+    if fail:
+        body += '\n        raise RuntimeError("scientific validation failed")'
+    source = (assets / "run.py").read_text().replace(
+        'raise NotImplementedError("Implement this Hydra entry point before running it")', body,
+    )
+    (experiments / "run.py").write_text(source)
+    (project / ".cairn.toml").write_text('project = "research-demo"\nrepo = ".cairn/repo"\n')
+    configs = project / "configs"
+    configs.mkdir()
+    cfg = {"seed": 0, "run": {"name": "original-name", "description": "Scaffold test"}, "hydra": {"job": {"chdir": False},
+                               "sweep": {"dir": "outputs/sweep", "subdir": "${hydra.job.num}"}}}
+    (configs / "config.yaml").write_text(OmegaConf.to_yaml(OmegaConf.create(cfg)))
+    result = subprocess.run([sys.executable, str(experiments / "run.py"), "-m", "seed=1,2", "run.name=adjusted-name"],
+                            cwd=project, capture_output=True, text=True, timeout=60)
+    assert (result.returncode != 0) == fail, result.stdout + result.stderr
+    with client(project) as c:
+        runs = [c.get(f"runs/adjusted-name@v{n}") for n in (1, 2)]
+        assert len({run.id for run in runs}) == 2
+        assert all(run.config["run"]["name"] == "adjusted-name" for run in runs)
+        assert {run.config["seed"] for run in runs} == {1, 2}
+        assert {next(run.records())["seed"] for run in runs} == {1, 2}
+        assert all(run.outcome == ("failed" if fail else "completed") for run in runs)
+        assert all("provenance" in run.metadata for run in runs)
+        assert not c.find("artifacts/*")
+        if fail:
+            with pytest.raises(ValueError, match="completed producer"):
+                helper.require_completed_artifact(c, runs[0].id)
+        else:
+            assert helper.require_completed_artifact(c, runs[0].id).id == runs[0].id

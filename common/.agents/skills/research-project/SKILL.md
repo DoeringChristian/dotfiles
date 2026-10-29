@@ -27,6 +27,11 @@ Datasets and models are artifacts too. One single-page report per research
 direction reads the evidence it declares, presents it as a paper would, and
 holds the reviewed findings.
 
+Apply setup steps when creating or changing project setup; existing projects
+need only the steps relevant to the requested work. These research/report
+requirements apply to projects using the skill, not to maintenance of the
+skill itself.
+
 ## Core principles
 
 1. **pixi owns the environment.** Prefer `[pypi-dependencies]` for Python
@@ -34,13 +39,16 @@ holds the reviewed findings.
    and packages PyPI does not provide reliably. Commit `pixi.lock`.
 2. **Hydra owns configuration and object construction; Cairn owns the run.**
    Put configs under `configs/`, construct configurable objects with `_target_`
-   and `hydra.utils.instantiate`. The bundled entry point starts one Cairn run
-   per Hydra job, records its provenance before computation, and gives the
-   experiment an ignored `outputs/` folder for Hydra bookkeeping and optional
-   scratch files. Recording evidence directly needs no staging directory.
-3. **The experiment is the executable boundary.** A config-selected
-   `Experiment` is the highest-level behavior. The entry point composes config,
-   prepares the run folder, instantiates the experiment, and invokes it.
+   and `hydra.utils.instantiate`. A native `with cairn.init(...)` block starts one run
+   per Hydra job and records provenance before computation. Hydra keeps job
+   bookkeeping and optional scratch files in ignored `outputs/`. Recording evidence directly needs no staging directory.
+3. **Entry points are standard Hydra functions.** Each executable uses
+   `@hydra.main` and a `main(cfg: DictConfig)` function. Its body constructs
+   components and runs the method inside `with cairn.init(...) as run:`. Pass
+   `cfg.run.name` and the explicitly resolved config to `cairn.init`; use
+   `run.use/log/track/add` or `cairn.*` inside the block. Use this native context
+   instead of the run decorator. No Experiment base class or custom tracking
+   wrapper is needed.
 4. **Cairn holds the evidence; reports read only what they declare.** A
    result becomes evidence when its run completes and scientific validation
    passes. Verify the completed run, or the producer of a separate result
@@ -48,14 +56,24 @@ holds the reviewed findings.
    Builds capture the declared inputs; reading undeclared experimental results
    is forbidden by this workflow, although the engine does not block external
    reads. Reports never become an independent source of experimental numbers.
-5. **Develop the method with the user.** Resolve consequential ambiguities,
+5. **Store what is expensive; recompute only what is cheap.** Split the
+   pipeline where the cost drops: training, fitting, rendering, simulation,
+   and evaluation over the test set are expensive; plotting, tables, summary
+   statistics, and report numbers are cheap. Every expensive stage records its
+   complete output in its run (per-sample and per-point values, arrays, and
+   tables, not only aggregates or pictures), and every cheap stage reads only
+   those records. A figure, table, or number that cannot be redrawn or
+   recomputed from stored data without rerunning the expensive stage is a
+   defect: fix the recording and rerun before citing it. Recording only the
+   plotting function and its settings does not satisfy this.
+6. **Develop the method with the user.** Resolve consequential ambiguities,
    visualize intermediate behavior, and establish feasibility against relevant
    baselines before tuning or scaling.
-6. **Validation tests the claim.** Identify smoke tests and debugging proxies as
+7. **Validation tests the claim.** Identify smoke tests and debugging proxies as
    such; do not present them as scientific evidence.
-7. **Do not improve results by weakening the problem.** Configure and disclose
+8. **Do not improve results by weakening the problem.** Configure and disclose
    approximations that may change the scientific meaning.
-8. **Document the method like a paper.** Every direction report explains its
+9. **Document the method like a paper.** Every direction report explains its
    method well enough for an expert to reimplement it, with the figures a paper
    would have, in the field's established terms: never invent names for
    concepts no paper has named. Before finishing, you review it against the
@@ -85,8 +103,8 @@ project/
 ├── configs/                    # Hydra configs; hydra/launcher/ from each cluster's skill
 ├── <concept>/                  # project code, flat imports
 ├── experiments/
-│   ├── base.py                 # Experiment interface
-│   ├── run.py, research_cairn.py # from assets/: public-API lifecycle, provenance and evidence checks
+│   ├── run.py                  # standard Hydra function; add train.py, evaluate.py, etc. as needed
+│   ├── research_cairn.py       # evidence checks and study summaries
 │   ├── report_tasks.py         # flat report discovery, public build/publish/export API
 │   └── cluster.sh, clusters/<cluster>.sh # scheduler files; check their Cairn compatibility
 ├── outputs/                    # ignored Hydra job folders; bookkeeping and optional scratch, not the evidence record
@@ -102,21 +120,21 @@ the reports. Copy bundled assets by content and make the
 copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (repo
 client, runs, artifacts, report builder, server, UI) is the pinned
 [`cairn2` v0.11.0](https://github.com/DoeringChristian/cairn2/releases/tag/v0.11.0), imported as `cairn`: import and run it, never copy or
-patch it. The skill's small Hydra adapter calls its public API. Initialize Git
+patch it. Use Cairn's native run context and provenance capture. Initialize Git
 and commit the scaffold before the first run, and commit again before runs a
 report will cite.
 
 ## Starting a project
 
-Copy this checklist into your reply and tick it off:
+For new projects, use this checklist; mark conditional items not applicable:
 
 ```text
 Project setup:
 - [ ] Read references/project-setup.md and references/reports.md
 - [ ] pixi.toml pins cairn2 v0.11.0 (reports, media, ui), Hydra separately, and the tasks; pixi install
 - [ ] One repo: a local path (created on first access) OR the user's named server URL; explicit project namespace and protected login credentials
-- [ ] Hydra configs, experiments/run.py, research_cairn.py, report_tasks.py; Experiment.run(run, output_dir)
-- [ ] Cluster scheduler files from the relevant skills; verify tracking glue against the new API before submission
+- [ ] Hydra configs, experiments/run.py, research_cairn.py, report_tasks.py; standard Hydra functions using with cairn.init(...)
+- [ ] If using a cluster: scheduler files from the relevant skills; verify tracking glue against the new API before submission
 - [ ] .gitignore: .pixi/, .cairn/, outputs/, data/, artifacts/
 - [ ] git init and commit the scaffold
 - [ ] Sample: import assets/sample-run as datasets/sample-run@v1 in the selected project, copy assets/reports/direction, pixi run report-build passes
@@ -177,12 +195,18 @@ Leave the framework only where it cannot express the method, and say so in
 Methods. A baseline reimplemented outside the framework is not a faithful
 adaptation.
 
-**Build diagnostics with Matplotlib.** Write reusable functions that take
-explicit data and return a `Figure`, with units, labels, legends, and colorbars
-where needed, method colors and ordering centralized in one module. Add the
-figures to the experiment's run with `run.track(cairn.Figure(figure), key=...)`
-and reuse the same functions in reports. Save files only when needed by a
-library or useful as a reusable added file.
+**Build diagnostics with Matplotlib, from stored data.** Write reusable
+functions that take explicit data and return a `Figure`, with units, labels,
+legends, and colorbars where needed, method colors and ordering centralized in
+one module. A plotting function computes nothing expensive: its inputs are the
+recorded output of an expensive stage. Track that data in full in the run
+first (`cairn.track(cairn.Table(rows), key=...)`, or arrays), then the figure
+under the same key with `cairn.track(cairn.Figure(figure), key=...)`. Reports
+redraw from the stored data with the same functions instead of embedding
+pictures, so any value can be quoted, checked, or replotted without a rerun.
+Route every figure through one helper that stores its data, and make it
+reject argument types it cannot store instead of dropping them. Save files
+only when needed by a library or useful as a reusable added file.
 
 **Establish baselines and feasibility.** Agree with the user which baselines
 test the claimed advantage. Prefer faithful adaptations of authoritative
@@ -210,19 +234,21 @@ focused ratings or pairwise comparisons.
 
 ```text
 # Import datasets with Client.start("datasets", name).finish(value=Directory(...)).
-pixi run experiment experiment=<name>             # one run; run.use(...) records exact inputs
-# Inside: record directly with run.log/track/add; validate before normal context exit.
-pixi run evidence runs/<name>@vN                 # require completed evidence
+pixi run experiment --config-name <name>             # one run; cairn.use(...) records exact inputs
+# Inside: record directly with cairn.log/track/add; validate before returning.
+pixi run evidence runs/<name>@vN                 # lifecycle check; scientific validation is separate
 # report.md frontmatter: cairn: {inputs: {fit: "artifacts/<result>@vN", run: "runs/<name>@vN"}}
 pixi run report-build
 pixi run report-publish <slug>
 ```
 
-The entry point records required initial provenance and encloses the experiment
-in a run context: a normal return completes the run; an exception fails it.
+The native Cairn context records initial provenance and manages the run:
+normal exit completes it; an exception leaving the block fails it.
 Failed runs remain inspectable, and `latest` can point at failed artifacts.
-The adapter finishes the run without automatically creating another result
-artifact. Verify completed runs/producers and pin exact versions before using
+Cairn finishes the run without automatically creating another result
+artifact. The completion check does not assess scientific validity: record the
+checks, tolerances, and outcomes in the run, and raise on validation failure.
+Verify completed runs/producers and pin exact versions before using
 results as evidence. Details in
 [project-setup.md](references/project-setup.md).
 
@@ -239,12 +265,13 @@ a direction's method. The rules that hold everywhere:
   executable Python cell from a declared input (`inputs["name"]`), and every
   figure of a result comes from its declared run or artifact snapshot.
   Only results from completed, validated producers count. Never type a result.
-- **Write the report before the evidence.** Once a direction is agreed, write
-  its Introduction, Background and related work, and Methods with the
-  experimental design, then build and publish the report before the experiments
-  finish, so the user can check the framing and method while they run. Fill in
-  the results section by section as runs complete
-  ([writing-methods.md](references/writing-methods.md)).
+- **Write the report before the evidence.** As soon as a direction is agreed,
+  before or alongside the first runs, write its Abstract, Introduction,
+  Background and related work, and Methods with the experimental design, and
+  build and publish it. The draft keeps your own work on track and gives you
+  something to check each run against, and the user can catch reasoning errors
+  while the experiments still run. Fill in the results and the Conclusion as
+  runs complete ([writing-methods.md](references/writing-methods.md)).
 - **Keep each report coherent.** A report is for a reader who needs the current
   method, evidence, and decisions quickly, not an activity log: integrate
   changes where they belong, remove what is stale, and re-read the whole report
