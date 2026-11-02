@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: staged-calibration
+expected_outcome: |
+  Runnable, validated local project with immutable source data and appropriate evidence-backed reports.
+context:
+  scaffold_script: place-files.sh

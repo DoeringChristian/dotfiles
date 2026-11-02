@@ -22,10 +22,12 @@ Build research projects whose evidence is versioned artifacts. Every experiment
 process is a Cairn **run**: an artifact in the `runs` namespace that records its
 config, inputs, metrics, logs, code, environment, and results. All artifacts have
 permanent IDs. Write results directly to the run by default; create separately
-named result artifacts when they have an independent reuse or publication purpose.
-Datasets and models are artifacts too. One single-page report per research
-direction reads the evidence it declares, presents it as a paper would, and
-holds the reviewed findings.
+named result artifacts only when they need an identity or lifecycle independent
+of that execution. Reuse alone does not require another artifact.
+Datasets and models are artifacts too. Each single-page report answers a coherent question using declared evidence.
+Research-direction reports present the method and findings like a paper; dataset
+inspection, transformation validation, and comparison reports use a structure
+appropriate to their question.
 
 Apply setup steps when creating or changing project setup; existing projects
 need only the steps relevant to the requested work. These research/report
@@ -61,8 +63,9 @@ skill itself.
    and evaluation over the test set are expensive; plotting, tables, summary
    statistics, and report numbers are cheap. Every expensive stage records its
    complete output in its run (per-sample and per-point values, arrays, and
-   tables, not only aggregates or pictures), and every cheap stage reads only
-   those records. A figure, table, or number that cannot be redrawn or
+   tables, not only aggregates or pictures), and cheap stages use those records
+   and their declared inputs. Store invariant input data once: predictions plus
+   stable sample IDs can refer back to input columns without duplicating them. A figure, table, or number that cannot be redrawn or
    recomputed from stored data without rerunning the expensive stage is a
    defect: fix the recording and rerun before citing it. Recording only the
    plotting function and its settings does not satisfy this.
@@ -98,7 +101,38 @@ self-contained.
 The rubric you review a direction report against is
 [references/review.md](references/review.md).
 
+## Organizing the work
+
+Choose independently executable stages when work needs separate reruns, reuse,
+resources, or validation. Keep tightly coupled internal steps together. Each
+computational entry point is a standard Hydra function with a native Cairn run
+context; shared implementation belongs in ordinary modules. No pipeline
+framework, stage base class, or universal sequence is required.
+
+A run is already an artifact. Store its outputs on the run by default;
+downstream stages declare that exact run with `run.use` and read the named files,
+values, or records they need. Stage boundaries and multiple consumers do not
+require separate result artifacts. Give an output its own artifact identity
+only for an independent publication boundary or lifecycle, preserving producer
+lineage. Imported datasets may exist independently of any producing run.
+
+A single run and a report can be sufficient. Another project might branch into
+several competing runs, or use `preparation run → experiment runs → analysis run
+→ report`. Omit or combine stages when the question permits; a report may read
+any relevant declared inputs directly. Keep expensive computation in runs and
+cheap analysis in reports. Dependencies record provenance, not automatic
+scheduling, cache hits, or permission to rerun upstream work.
+
+Document each entry point's inputs, outputs, and command. Pin stage inputs for
+reviewed evidence; after deliberately rerunning a stage, select the new version
+explicitly for downstream runs and report inputs. Avoid dependencies on another
+script's temporary output directory. Storage/access choices and examples are in
+[project-setup.md](references/project-setup.md).
+
 ## Project layout
+
+This is an illustrative layout. Add only the entry points and modules the work
+needs; filenames and stage count follow the problem.
 
 ```text
 project/
@@ -111,8 +145,8 @@ project/
 │   ├── report_tasks.py         # flat report discovery, public build/publish/export API
 │   └── cluster.sh, clusters/<cluster>.sh # scheduler files; check their Cairn compatibility
 ├── outputs/                    # ignored Hydra job folders; bookkeeping and optional scratch, not the evidence record
-├── data/                       # local datasets before they are published (git-ignored)
-├── reports/<slug>/             # one single-page report per research direction
+├── data/                       # ignored local data; linked archives may live elsewhere
+├── reports/<slug>/             # one single-page report per coherent question
 │   ├── report.md
 │   └── assets/, data/          # non-result material kept with the report
 └── .cairn/                     # ignored local repo/journals and report builds; remote backend is separate
@@ -162,6 +196,24 @@ enough complementary views for the user to verify the implementation, not
 decorative figures. Prefer image grids for related inputs, references,
 predictions, residuals, masks, or steps.
 
+**Show the mechanism, not only its outcome.** For each part of the method whose
+behavior the claim depends on, ask what a reader would need to see to
+understand how it works and to check it, and draw what the code actually does,
+including where it departs from the equations. Use a setting small enough
+that every relevant value is visible (a 2D or 1D version, a tiny grid, a few
+iterations), labelled with the equations' symbols. What to draw depends on the
+method: what one operation does to its input, how a quantity changes along a
+slice or over iterations, or, for a method that works step by step, one
+instance followed through its steps. Take the values from the project's own
+code, adding a recording hook if internal state is needed, not from a separate
+reimplementation. Final outputs and aggregates show that something happened,
+not how.
+
+**Figures the user asks for are requirements.** Make each one as asked, even
+when a paper would leave it out, and don't swap in an easier figure (a final
+render, a loss curve, a box diagram). Put it in the report where its mechanism
+is explained, and if one can't be made, tell the user why in the handoff.
+
 Treat every repeated dataset, seed, model, or method comparison as one
 visualization family with a declared visual grammar: keep chart type, model
 colors, axis orientation, limits and scales, ordering, normalization,
@@ -207,8 +259,9 @@ first (`cairn.track(cairn.Table(rows), key=...)`, or arrays), then the figure
 under the same key with `cairn.track(cairn.Figure(figure), key=...)`. Reports
 redraw from the stored data with the same functions instead of embedding
 pictures, so any value can be quoted, checked, or replotted without a rerun.
-Route every figure through one helper that stores its data, and make it
-reject argument types it cannot store instead of dropping them. Save files
+Use a shared figure helper that records new plotting data or identifies the
+existing declared input supplying it; reject unsupported data instead of
+silently dropping it. Referencing stored inputs need not duplicate their bytes. Save files
 only when needed by a library or useful as a reusable added file.
 
 **Establish baselines and feasibility.** Agree with the user which baselines
@@ -257,9 +310,12 @@ results as evidence. Details in
 
 ## Reports
 
-One **direction report** per branch of the research
-(`reports/<slug>/report.md`), each a paper-like report: Abstract, Introduction,
-Background and related work, Methods, results and discussion, Conclusion.
+Use `reports/<slug>/report.md` for each coherent question: inspecting a dataset,
+validating a transformation, developing a method, or comparing runs. A research
+**direction report** follows the paper-like spine: Abstract, Introduction,
+Background and related work, Methods, results and discussion, Conclusion. Other
+reports use only the sections their question needs; do not invent a method or
+baseline to fill a template.
 [reports.md](references/reports.md) holds their structure, syntax, and
 tooling; [writing-methods.md](references/writing-methods.md) holds how to write
 a direction's method. The rules that hold everywhere:
@@ -268,13 +324,15 @@ a direction's method. The rules that hold everywhere:
   executable Python cell from a declared input (`inputs["name"]`), and every
   figure of a result comes from its declared run or artifact snapshot.
   Only results from completed, validated producers count. Never type a result.
-- **Write the report before the evidence.** As soon as a direction is agreed,
+- **Write the report before the evidence.** For a research direction, as soon as it is agreed,
   before or alongside the first runs, write its Abstract, Introduction,
   Background and related work, and Methods with the experimental design, and
   build and publish it. The draft keeps your own work on track and gives you
   something to check each run against, and the user can catch reasoning errors
   while the experiments still run. Fill in the results and the Conclusion as
-  runs complete ([writing-methods.md](references/writing-methods.md)).
+  runs complete ([writing-methods.md](references/writing-methods.md)). For an
+  inspection or validation task, state its question and checks first, then
+  present the captured evidence; a paper-length draft is unnecessary.
 - **Keep each report coherent.** A report is for a reader who needs the current
   method, evidence, and decisions quickly, not an activity log: integrate
   changes where they belong, remove what is stale, and re-read the whole report
@@ -305,7 +363,8 @@ Report change:
 - [ ] Read the reference for this step (writing-methods.md for Abstract, Background, Methods)
 - [ ] New evidence logged as artifacts, completed producers verified, exact refs declared under cairn.inputs:
 - [ ] Edited reports/<slug>/report.md (and its sources) only; result prose and figures computed from declared inputs
-- [ ] Methods still describes the method as implemented, with the figures a paper would have
+- [ ] Scope-appropriate explanation of the implemented method or checks, with useful figures
+- [ ] Every figure the user asked for is there as asked; key mechanisms shown, not only outcomes
 - [ ] Sections still waiting on runs say which runs and what they will answer
 - [ ] pixi run report-build succeeds
 - [ ] Looked at every figure I added or changed
@@ -321,9 +380,9 @@ same self-review explicitly before finishing; the requirement is unchanged.
 It does nothing unless a report's sources changed since it last passed. Then:
 
 1. it blocks until the changed reports are rebuilt;
-2. once, it sends you back to review each changed direction report yourself
-   against [references/review.md](references/review.md): re-read the built
-   report and its Methods figures, fix every failed item in the sources, and
+2. once, it sends you back to review each changed report yourself
+   against [references/review.md](references/review.md): apply the scope guidance, re-read the built
+   report and its relevant figures, fix every failed item in the sources, and
    rebuild.
 
 Fix the problem, never pad a section to pass an item. When you finish, tell the

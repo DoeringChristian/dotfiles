@@ -4,6 +4,9 @@ Read this when creating a project, changing its environment, run bookkeeping,
 the repo or server, logging evidence, publishing or downloading artifacts,
 running on a cluster, or planning a parameter study.
 
+Contents: environment; repository; Hydra entry points; stage handoffs; logging;
+datasets and storage; evidence validation; cluster execution; parameter studies.
+
 ## pixi setup
 
 Start with this template, replacing `<project>` consistently with the project's
@@ -57,6 +60,9 @@ and maintains the last successful previews. It does not copy or patch Cairn.
 Pixi appends extra arguments: `pixi run report-publish direction` builds and
 publishes that direction. `report-share direction --out .cairn/share/direction`
 exports the unchanged complete report bundle into a new directory.
+
+Keep only tasks whose scripts exist and features the project uses. The cluster
+tasks and launcher dependency are examples, not requirements for local work.
 
 List every platform the project runs on;
 `linux-64` is required for GPU clusters.
@@ -289,11 +295,12 @@ require evidence to pass through that directory. Cairn does not scan
 `output_dir/result` or automatically create a second artifact.
 
 A completed run can be declared directly as a report input. Create a separate
-result artifact only when its name, reuse, or lifecycle merits one. For example,
+result artifact only when it needs an identity or lifecycle independent of
+that execution. Reuse alone is not a reason to create another artifact. For example,
 explicitly add a result directory with `cairn.add(path, name="result")`,
 then after the run finishes call `publish_result(client, client.get(run_id))`.
-That optional helper publishes the added bytes and records a `producer`
-dependency. There is no need to do this for every experiment.
+That optional helper reuses the stored value in the same repository without
+downloading or re-uploading its payload and records a `producer` dependency. There is no need to do this for every experiment.
 
 **Backend rule versus research policy:** Cairn2 accepts dependencies only on
 finished artifacts. Thus a separate artifact with its run as a dependency must
@@ -301,6 +308,40 @@ wait until that run finishes. Recording results on the live run is unrestricted
 by that rule. Requiring the outcome to be `completed` and the science to be
 validated is this skill's evidence policy; Cairn2 also retains finished failed
 artifacts.
+
+### Stage handoffs
+
+Put the input run reference and the desired file/key in config. Inside a native
+run context, consume its recorded output directly:
+
+```python
+source = run.use(cfg.input_run, role="prepared-data")
+require_completed_run(source)              # plus the stage's scientific checks
+with source.file("prepared.json").open() as stream:
+    prepared = json.load(stream)
+# ... compute and validate ...
+run.add(checkpoint_path, name="model.pkl")
+```
+
+A later stage can similarly `use` this run with role `base-model`, then open or
+download `model.pkl`. Files are opaque; use the producing framework's loader for
+trusted checkpoints. Persist optimizer/RNG state as well as weights when exact
+continuation needs it. Multiple input runs support branches and combined models;
+no extra dataset/model artifact is required to connect them.
+
+A report declares the completed runs it analyzes, or a separate analysis run
+when evaluation is expensive. Store invariant inputs once and record output
+values plus stable IDs where needed to join them; do not repeat whole input
+arrays in every trial or store identical data in JSON, tables, and added files
+without a consumer that needs those representations. Include all upstream
+artifacts the report actually reads in its declared inputs.
+
+Cairn readers require finished artifacts. Split independently reusable passes
+into completed runs when appropriate; a live run's checkpoint file is not yet
+a readable finished input. A separately published checkpoint while training
+continues has different lineage constraints; do not invent a dependency on a
+live producing run. Scheduling and deciding which stages to rerun remain
+project tasks, not automatic behavior inferred from Cairn dependencies.
 
 ### Log results during the run
 
@@ -385,27 +426,76 @@ Finished content is immutable. Mutable `annotations` hold tags, titles or
 review status; they do not change captured evidence. `latest` is a movable
 alias, not evidence of successful validation. Check outcomes and producers.
 
-Import datasets with documented source/license/validation:
+### Register and consume datasets without redundant copies
+
+Choose storage by ownership, lifetime, and where consumers run. Importing a
+small portable dataset by value (`finish(value=Directory(path))`) copies its
+bytes into Cairn. For an existing immutable archive whose files must remain in
+place, use native linked-file registration instead of a JSON path/checksum
+manifest. Register once, document origin/license/validation, and retain its exact
+reference:
 
 ```python
-from cairn import Client, Directory
+from pathlib import Path
+from cairn import Client
+
 with Client(project="<project>") as client:
-    dataset = client.start("datasets", "crops")
-    dataset.finish(
-        value=Directory("data/crops"),
-        metadata={"origin": "<source>", "validation": "<checks>"},
-    )
-    print(dataset.id)
+    with client.start("datasets", "measurements") as dataset:
+        dataset.add(Path("data/measurements").resolve(), name="files", link=True)
+        dataset.update({"origin": "<source>", "validation": "<checks>"})
+    print(str(client.get(dataset.id)))       # datasets/measurements@vN
 ```
 
-```bash
-pixi run cairn --project <project> artifact list
-pixi run cairn --project <project> artifact versions datasets/crops@latest
-pixi run cairn --project <project> artifact inspect datasets/crops@v1
+Consumers declare the artifact; local linked access leaves bytes in place:
+
+```python
+source = run.use(cfg.dataset, role="observations")
+with source.file("files").open("part-01.csv") as stream:
+    # Stream or parse only the needed file.
+    ...
+# For a library requiring a path, select one file rather than the whole archive:
+path = source.file("files").download(name="part-01.csv")
 ```
 
-Download with `client.get(ref).download(to="artifacts/crops-v1")`; it
-returns one path, the folder or the named file. Without `to`, downloads go to
+The same Reader operations work for declared report inputs. Small dataset
+inspections may analyze them directly in report cells; expensive validation or
+conversion belongs in a run. Imported datasets need documented source and
+validation, not an invented producer run. Computed results stay on the producing
+run by default.
+
+Important access and storage distinctions:
+
+- **Linking** hashes files at registration and retains their locations instead
+  of storing another copy. Keep those locations persistent and immutable;
+  local reads check recorded size/mtime, not a full hash on every access.
+  Local downloads of linked content create symlinks. Do not edit through them.
+- **Remote access** requires the server to see the paths under its configured
+  `--link-root` folders. `link=True` can warn and fall back to copying when
+  linking is unsupported; it is not a strict no-copy option. Where copying is
+  unacceptable, verify server path visibility/link roots before registration
+  or report the access constraint. Remote readers transfer bytes; they do not
+  automatically reuse a client's shared-filesystem mount. Exports copy bytes.
+- **Deduplication** reuses identical stored blob bytes. It does not eliminate
+  repeated hashing, different encodings of the same data, or all downloads.
+  Normal downloads use a content-addressed cache and hard links where possible;
+  a different filesystem may require a copy. Prefer `.open(name)` or selective
+  `.download(name=...)` over downloading an entire dataset for each run.
+- **Generated data** should have one durable recorded representation unless
+  distinct consumers justify more. Link generated outputs only when their
+  location is retained and immutable; temporary scratch is not durable storage.
+- **Many-file directories** have an inline manifest constrained by Cairn's
+  1 MiB entry limit in this version. File count and path lengths matter even
+  with linked payloads. Use bounded groups/named captures or dataset shards;
+  do not assume one directory capture scales to arbitrarily many files.
+
+Ignore raw archives and generated data before the first commit and run, including
+custom directory names outside `data/`, so native provenance does not copy them.
+A hand-written external path manifest does not replace a linked dataset: it
+bypasses native retrieval and integrity behavior. Keep path handling in the
+Cairn API instead of building a second data registry.
+
+Download a whole artifact only when needed with
+`client.get(ref).download(to="artifacts/dataset-v1")`. Without `to`, downloads use
 `<cache>/artifacts/<id>/` (`$CAIRN_CACHE_DIR`, default `~/.cache/cairn`).
 Remove an artifact only when the user asks: `pixi run cairn --project <project>
 remove <ref>` hides that exact version, `latest` falls back, and dependents keep
@@ -413,8 +503,8 @@ it readable by ID; `pixi run cairn gc --apply` later reclaims storage, on the
 server when the repo is a URL.
 Record experiment outputs on their run by default. If publishing a separate
 result artifact, retain a `producer` dependency on the completed run; do not
-disguise experiment results as runless dataset imports. Import external file
-URIs as real bytes before reports consume them.
+disguise experiment results as runless dataset imports. Register external files as stored bytes or native links before reports consume
+them; do not substitute untracked filesystem reads.
 
 ### Completed evidence and lineage
 
@@ -424,6 +514,9 @@ exactly one completed producing run in the same project, or a completed run
 when the input itself is in `runs`. This is lifecycle validation, not proof
 of scientific validity. Runless datasets/sample fixtures require documented
 origin/validation and intentionally do not pass the scientific-results gate.
+They can be valid report inputs without that gate: check their completed outcome,
+source, integrity, and fitness for the question. Do not fabricate producer runs
+just to make an import pass a computed-results check.
 
 Use `run.use(ref)` for exact input dependencies, `result.use(run.id,
 role="producer")` after run completion, and `summary.use(trial.id, role="trial")`
@@ -544,7 +637,8 @@ Run `pixi run finalize-study outputs/<study>/roster.json` against the selected
 backend (or pass `--repo <path or URL>`). Missing or extra trials,
 duplicate run IDs, and non-completed backend runs fail the check. After the
 scientific validation passes, the helper creates a summary run, records each
-trial with `use(..., role="trial")`, and logs `<name>-study` with the roster and status table.
+trial with `use(..., role="trial")`, and records the roster and status table on `runs/<name>@vN` itself. It does
+not automatically publish a second result artifact.
 Run from the project root so native provenance captures the intended project
 and `pixi.lock`; `--project-root` only sets helper output/repo path resolution.
 Keep the original expected roster and inspect every result, including failures;

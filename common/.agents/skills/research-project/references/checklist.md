@@ -33,7 +33,8 @@ Environment and runs
 - [ ] Metrics and intermediate outputs are recorded during the run at a configured
       cadence, with stable fields and observation axes alongside media.
 - [ ] Evidence is recorded with `run.log`, `run.track`, and
-      `run.add`. Separate result publication is optional. Scientific tables
+      `run.add`. Separate result publication is optional. Reusable stage outputs remain on runs by default; a separate artifact
+      has an independent identity/lifecycle purpose. Scientific tables
       and arrays are retained completely,
       and the producer's provenance identifies the source and environment.
 - [ ] Every expensive stage (training, fitting, rendering, simulation,
@@ -49,6 +50,13 @@ Environment and runs
       GPU-efficiency gate.
 
 Artifacts and repo
+- [ ] Existing immutable archives use native links when appropriate; raw files
+      are excluded from Git/provenance before the first run. Remote link/copy
+      behavior is checked where duplicate storage is unacceptable.
+- [ ] Downstream stages use exact producing runs and named outputs; invariant
+      inputs are referenced rather than redundantly copied into every trial.
+- [ ] Imported datasets have documented origin/validation, without a fabricated
+      producer. Reports distinguish imported inputs from computed evidence.
 - [ ] Every result a report cites was recorded on a completed, scientifically
       validated run. Any separately published result artifact has a verified
       completed producer. `latest` is
@@ -79,12 +87,13 @@ Method and evidence
       any change of chart is justified by a different question.
 
 Reports
-- [ ] Each research direction has its own single-page
+- [ ] Each coherent report question has its own single-page
       `reports/<slug>/report.md` (no root report, no nesting) with a current
       front matter `title` and `description`, with scientific status and
       synthesis in its body; related reports cross-link with checked URLs
       and explicit anchors in the native reader and standalone export.
-- [ ] Each direction report follows the paper-like spine: Abstract,
+- [ ] Inspection, validation, and comparison reports have scope-appropriate
+      sections; research-direction reports follow the paper-like spine: Abstract,
       Introduction, Background and related work, Methods, results and
       discussion, Conclusion.
 - [ ] The method and baselines are built from the framework's abstractions
@@ -92,8 +101,8 @@ Reports
       `torch.optim`, ...); any departure is stated in Methods.
 - [ ] Methods states the method as implemented (equations or an algorithm),
       with the figures a paper in the field would have (for a neural network,
-      its architecture drawn from the model), and every changed direction
-      report was reviewed against references/review.md; items left open are in the handoff.
+      its architecture drawn from the model), and every changed
+      report was reviewed according to its scope against references/review.md; items left open are in the handoff.
 - [ ] Background and related work comes from a literature and prior-art
       search with linked sources, and overlapping prior art is flagged in
       supported callouts explicitly headed "Prior art".
@@ -110,8 +119,8 @@ Reports
 - [ ] Experimental figures come from the runs that wrote them
       through declared captured inputs, only from completed, validated
       producers, and their exact source refs and input hashes are inspectable.
-      The data each figure plots is stored in full under its key and the report
-      redraws it from that data; the generating function and material plotting
+      The data each figure plots is stored in full on its run or declared inputs,
+      and the report redraws it from that data; the generating function and material plotting
       settings are recorded alongside, with source provenance.
 - [ ] Methods has the figures a good paper would: an overview of the method,
       structure diagrams where the method has interacting parts, and the
@@ -121,6 +130,9 @@ Reports
       overlaps or clipped text, arrows reach their targets); no auto-laid-out
       graphs, no diagrams of the report or run tooling or of linear protocol
       steps.
+- [ ] Every figure the user asked for is in the report as asked, and the
+      mechanisms the claim depends on are shown on a small instance with
+      values from the project's code, not only through outputs or aggregates.
 - [ ] `::: {.finding}` blocks state tentative/supported/contradicted/superseded
       explicitly, have a qualitative title (no result numbers), cite source
       artifacts, and expose conflicts.

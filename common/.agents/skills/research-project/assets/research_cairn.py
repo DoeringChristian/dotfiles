@@ -61,11 +61,9 @@ def require_completed_run(reader):
 def publish_result(client, producer, *, name=None):
     """Opt in to a separate result artifact from a run’s added "result" folder."""
     require_completed_run(producer)
-    with tempfile.TemporaryDirectory(prefix="research-result-") as temporary:
-        folder = producer.download("result", to=temporary)
-        result = client.start("artifacts", name or producer.name)
+    with client.start("artifacts", name or producer.name) as result:
         result.use(producer, role="producer")
-        result.finish(value=cairn.Directory(folder))
+        result.finish(value=producer.file("result"))
     return client.get(result.id)
 
 
@@ -114,7 +112,7 @@ def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None):
             for trial in trials:
                 run.use(trial["run_id"], role="trial")
             run.add(result_dir, name="result")
-        return publish_result(client, client.get(run.id), name=name + "-study")
+        return client.get(run.id)
 
 
 def main() -> None:

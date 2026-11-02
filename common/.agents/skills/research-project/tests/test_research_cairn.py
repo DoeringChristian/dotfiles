@@ -81,20 +81,28 @@ def test_study_summary_preserves_every_trial_and_public_lineage(project):
         study = helper.finalize_study(roster(*ids), project_root=project, repo=c.repo)
         result = helper.require_completed_artifact(c, study.id)
         result.download(to=project / "outputs/summary")
-        assert json.loads((project / "outputs/summary/roster.json").read_text()) == roster(*ids)
-        (producer,) = result.inputs(role="producer")
-        assert {trial.id for trial in producer.inputs(role="trial")} == set(ids)
+        assert json.loads((project / "outputs/summary/result/roster.json").read_text()) == roster(*ids)
+        assert result.namespace == "runs"
+        assert {trial.id for trial in result.inputs(role="trial")} == set(ids)
+        assert not c.find("artifacts/*")
 
 
-def test_separate_result_publication_is_explicit(project):
+@pytest.mark.parametrize("linked", [False, True])
+def test_separate_result_publication_reuses_stored_value(project, monkeypatch, linked):
     with client(project) as c:
         folder = project / "outputs/staged"
         folder.mkdir(parents=True)
         (folder / "scores.json").write_text('{"loss":0.1}')
         with c.run("trial", provenance=False) as run:
-            run.add(folder, name="result")
+            run.add(folder, name="result", link=linked)
         assert not c.find("artifacts/*")
-        result = helper.publish_result(c, c.get(run.id))
+        producer = c.get(run.id)
+        def no_transfer(*args, **kwargs):
+            raise AssertionError("Publication must reuse stored content without byte transfer")
+        with monkeypatch.context() as patch:
+            patch.setattr(producer, "download", no_transfer)
+            patch.setattr(c.backend, "put_blob", no_transfer)
+            result = helper.publish_result(c, producer)
         checked = helper.require_completed_artifact(c, result.id)
         assert [producer.id for producer in checked.inputs(role="producer")] == [run.id]
         checked.download(to=project / "outputs/verified")

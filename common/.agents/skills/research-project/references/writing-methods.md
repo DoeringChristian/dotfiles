@@ -107,6 +107,14 @@ introduced, saying what to see in it:
   functions, or an illustration experiment whose figure is logged as an artifact), never with
   a separate reimplementation or a hand-drawn approximation, so the figure
   shows what the code does.
+- **Internal behavior over steps** when the method's point lies in how its
+  state evolves (one instance followed through an iterative or sequential
+  process, with its state plotted beneath it on a shared axis). Use values the
+  project's code recorded; see "Show the mechanism, not only its outcome" in
+  SKILL.md.
+
+Any figure the user asked for belongs here too, whether or not a paper would
+include it.
 - **The experiment setup**: what the experiment physically or geometrically
   consists of, as a paper's "experimental setup" figure shows it. For example
   the scene with its camera, lights, and object poses; the sensor and emitter

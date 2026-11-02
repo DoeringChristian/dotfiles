@@ -173,10 +173,11 @@ def gate(event: dict) -> dict | None:
 
 def self_review(names: list[str]) -> str:
     return (
-        f"Before finishing, review the report(s) you changed ({', '.join(names)}) as a demanding reviewer at a good"
-        f" venue would, using the rubric in {RUBRIC}. Re-read each whole report as its reader sees it"
-        " (the built page under .cairn/build/<slug>/), and open every figure the Methods section"
-        " relies on. Decide each item R1-R9. Fix every failed item in the report sources and rebuild"
+        f"Before finishing, review the report(s) you changed ({', '.join(names)}) using the scope-appropriate"
+        f" rubric in {RUBRIC}. Re-read each whole report as its reader sees it"
+        " (the built page under .cairn/build/<slug>/), and open the relevant figures, including Methods"
+        " figures when applicable. Decide each item R1-R9, marking scope-inapplicable items with a reason."
+        " Fix every failed item in the report sources and rebuild"
         " (`pixi run report-build`); do not pad sections to satisfy an item. When the report's evidence"
         " or conclusions changed, publish it (`pixi run report-publish <slug>`). Then finish, and tell"
         " the user which items, if any, you left open and why."

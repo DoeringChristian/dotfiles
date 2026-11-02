@@ -9,42 +9,49 @@ executable Markdown and figures; reproducibility; feedback; publication.
 
 ## Interactive running reports
 
-The reports are the research interface: built from published run artifacts,
+The reports are the research interface: built from declared datasets and run artifacts,
 they show the current method, questions, decisions, findings, supporting and
 contradictory evidence, limitations, and next experiments, and the user points
 at passages with copy-location markers. Create them at the start of the project and keep them current.
 
-### Organize reports: one single page per direction
+### Organize reports by question
 
 A report is one page: a folder `reports/<slug>/` (short, stable lowercase
 slug: letters, digits, `-`, `_`) with exactly one `report.md` or `report.qmd`.
 Keep the sample's `.md` extension; both use the same notebook syntax. Other
 captured sources, such as `assets/`, includes, and small Python helpers, live
-under that folder. There is one **direction report** per branch of the
-research process or per idea. A direction is a self-contained question with
+under that folder. Choose the structure to fit the question:
+
+- **Dataset inspection / transformation validation:** scope and data source,
+  checks and procedure, evidence, limitations, and disposition/next steps. No
+  invented training method, baseline, or related-work section is needed.
+- **Comparison:** question, compared inputs, protocol/fairness, results,
+  limitations, and conclusions. It can span methods from several directions.
+- **Research direction:** the paper-like spine described in
+  [writing-methods.md](writing-methods.md), including a reimplementable method.
+
+These are examples, not required report types or metadata fields. All reports
+compute result values from declared inputs and receive a scope-appropriate
+review. There is one **direction report** per branch of the research process or
+per idea. A direction is a self-contained question with
 its own methods and evidence, such as an alternative method, a failure
 investigation, or a follow-up study. Do not split a report merely because it
 grew long, and do not keep two reports about the same question.
 
 Reports are flat: there is no root report, no nesting, and no report index to
 write. The bundled report_tasks.py helper discovers `reports/<slug>/report.md` or `report.qmd`; other
-locations are not direction reports. The Cairn UI lists published reports.
+locations are not discovered by this helper. The Cairn UI lists published reports.
 There is no generated `.cairn/build/index.html`. Keep `title` and the qualitative
 `description` accurate. Put the current status and a short summary in the body:
 one to three sentences (at most 400 characters) stating what the direction
 tests, its current result or state, and what is pending. Generate result values
 from declared inputs, as below, and update the summary whenever evidence changes.
 
-The project's shared target (the problem every direction tries to solve, its
-success criteria, and shared constraints) has no page of its own. Each
-direction's Introduction states it briefly and says what the direction
-contributes; when one report defines it at length, link there instead of
-restating it. Ask the user before adding a report whose only purpose is
-cross-direction status: decisions and comparisons belong in the direction
-reports they concern, linked to each other. A proposed direction that has no
-report yet goes into the Conclusion of the report that motivates it, with the
-idea, why it might reach the target, and what would justify starting it; when
-it starts, create its report and replace the proposal with a link.
+State the project's shared target and relevant constraints where needed, linking
+to another report rather than repeating long explanations. A dataset or
+cross-method comparison can have its own report when it answers a distinct
+question. Do not create an overview page merely to duplicate the UI's index.
+Keep proposed future work separate from supported findings.
 
 The sample direction report carries the section guidance as `<!-- -->`
 source comments under each heading of the paper-like spine. They are author
@@ -121,7 +128,9 @@ cp -R <skill-directory>/assets/reports/direction reports/boundary-aware
 pixi run report-build
 ```
 
-Build once as a smoke test and visual reference. Then rename the folder for the
+Build once as a smoke test and visual reference. For a non-direction report,
+replace the paper sections with the question-appropriate structure above.
+Then rename the folder for the
 project's first direction and replace its sample content, summary, `inputs:`,
 and figures with the direction's own material. Add a direction later the same
 way. Build output goes to `.cairn/build/<slug>/`, never into `reports/`.

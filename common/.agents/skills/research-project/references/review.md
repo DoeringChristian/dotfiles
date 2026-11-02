@@ -1,10 +1,15 @@
-# Reviewing a direction report
+# Reviewing a report
 
-Review a direction report you changed as a demanding but fair reviewer for a good
-venue in its field would. A strong NeurIPS, ICML, CVPR, or SIGGRAPH paper's
-Methods and Experiments sections are the standard. The skill's Stop hook asks
-for this review once whenever you finish a turn in which a direction report
-changed.
+Review each changed report according to its question, not a universal section
+list. For a research-direction report, use the standard of a good paper in its
+field. For dataset inspection, transformation validation, or comparisons, judge
+whether the procedure, evidence, limitations, and decision are clear and sound.
+The Stop hook requests this review for every changed report.
+
+Apply R1–R9 below to the actual scope. For example, R2 asks whether inspection
+checks are reproducible; R6 applies only when baselines/variants are relevant.
+Mark an item not applicable with a short reason when necessary; do not invent a
+method, baseline, literature review, or architecture figure to satisfy it.
 
 Read the report as its reader sees it: the built page under
 `.cairn/build/<slug>/`, not only the Markdown source. Pretend you have
@@ -39,9 +44,11 @@ alone.
 - **R4 figures**: where a paper in this field would show the model or mechanism
   in a figure, the report has one, it matches the text, and the text says what
   to see in it. Examples: the architecture of a neural network, the
-  computational graph of a multi-part model, or a toy example of a key
-  operation. This item also fails when a figure only decorates (the tooling, a
-  linear list of steps, a restated table).
+  computational graph of a multi-part model, a toy example of a key
+  operation, or how the state evolves in an iterative method. It also fails when a
+  figure the user asked for is missing or was replaced by a different one, or
+  when a figure only decorates (the tooling, a linear list of steps, a
+  restated table).
 - **R5 rationale**: the report says why the method should work, which
   assumptions it relies on, and where it may fail.
 - **R6 baselines**: every baseline and variant is defined before results use its
