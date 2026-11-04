@@ -339,10 +339,14 @@ a direction's method. The rules that hold everywhere:
   after substantive changes.
 - **Build after every change:** `pixi run report-build`; publish the report
   (`pixi run report-publish <slug>`) once its evidence or text changed.
-- **Handle sent report comments.** While collaborating on reports, use
-  `cairn comments watch` to receive sent threads, address their source anchors,
-  and reply or resolve after checking the change. See the watcher workflow in
-  [reports.md](references/reports.md); unsent drafts are not requests.
+- **Always watch report comments.** In every session in a project that has
+  reports, and as soon as the first one is published, start one
+  `cairn comments watch` watcher in the background, in a way that wakes you on
+  each new event (in Claude Code, the Monitor tool), and keep it running until
+  the session ends. Handle each sent thread when it arrives: address its source
+  anchor, then reply or resolve after checking the change. See the watcher
+  workflow in [reports.md](references/reports.md); unsent drafts are not
+  requests.
 - **Handle pasted location markers.** Alongside native report comments, the
   user may paste a line such as `reports/a/report.md:42 "quoted text"` or
   `... figure #fig-id "title" (source: file)` copied from the page. Treat each

@@ -405,9 +405,13 @@ the page to the code that produced it runs through artifact versions.
 
 ### Receive and address sent comments
 
-During active report collaboration, start one watcher scoped to the selected
-repository and project in a managed background terminal, and continue the work.
-Use normal repository configuration, or supply the selected repo explicitly:
+Always watch: at the start of every session in a project with reports (and
+right after publishing the first one), start one watcher scoped to the selected
+repository and project, and continue the work. Don't wait for the user to ask
+for it or to mention comments. Run it so that each output line wakes you (in
+Claude Code, the Monitor tool, not a plain background command that is only read
+when it exits). Use normal repository configuration, or supply the selected
+repo explicitly:
 
 ```bash
 pixi run cairn --project PROJECT comments watch 'reports/**' --json
@@ -422,12 +426,13 @@ A thread includes context and can contain unsent drafts: act only on sent
 requests (`sent_at` is non-null), using the other messages as context. Plain
 `comments list` includes drafts and is not a sent-request queue.
 
-Read the managed process output as work proceeds. A watcher prints events; it
-does not launch an agent or guarantee that the host will notify an idle agent.
-Keep its process/session handle, avoid duplicate watchers, and stop the watcher
-you started when the collaboration ends. If background processes are unavailable,
-check `comments list 'reports/**' --json` at work checkpoints and inspect
-`sent_at` explicitly.
+A watcher prints events; it does not launch an agent. If the host cannot wake
+you on its output, read the output at every work checkpoint and before ending
+each turn. Keep its process/session handle, avoid duplicate watchers (check for
+one you already started before starting another), and stop it when the session
+ends. If background processes are unavailable, check
+`comments list 'reports/**' --json` at work checkpoints and before ending each
+turn, and inspect `sent_at` explicitly.
 
 Use the root comment's artifact/version and full anchor (source path, quote,
 lines, figure/media location) to locate the request, following the source-marker
