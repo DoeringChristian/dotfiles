@@ -148,6 +148,7 @@ defaults:
   - _self_
 
 seed: 0
+image_every: 50          # steps between logged images; scalars every step
 run:
   name: feasibility-method
   description: <question, purpose, and interpretation constraints>
@@ -166,6 +167,26 @@ These directories hold Hydra bookkeeping and optional scratch files. Do not use 
 `${cairn.run:}` or `${cairn.draft:}` resolvers or the old Cairn Hydra callbacks.
 Leave `hydra.job.chdir: false` so relative paths remain relative to the project
 root. Use `Path(HydraConfig.get().runtime.output_dir)` for optional scratch space. Each job gets its own full Cairn run ID, even when names repeat.
+
+### Run names
+
+A run name says which experiment this is, so a person can find it in a list of
+hundreds. Cairn versions repeated names (`runs/<name>@v1`, `@v2`, ...) and keeps
+every run's full ID and config, so the name carries nothing else:
+
+- one to three lowercase words for the method or question and the stage:
+  `weightnet-train`, `tv-baseline`, `noise-sweep`, `prior-eval`;
+- the same name for every rerun of the same experiment, including after a bug
+  fix or a config change; the version number tells reruns apart;
+- the same name for every trial of a multirun; the trial label and the varied
+  values live in config;
+- never hyperparameter values, seeds, dates, trial indices, `v2`, `final`,
+  `fixed`, `new`, `test`, or a sentence about the purpose. Put the purpose in
+  `run.description` and the differences in config.
+
+Keep the set of names small and stable across the project; reuse an existing
+name rather than coining a near-duplicate. Before starting a run, list the
+project's existing run names and pick from them where one fits.
 
 Use a config per entry point when needed (`configs/train.yaml`,
 `configs/evaluate.yaml`), selected with `config_name` on its `@hydra.main`
@@ -186,11 +207,8 @@ run status is the authoritative completion record. A run counts as evidence
 only when it completed and its scientific validation passed; a job that raises
 is failed. Do not duplicate the full resolved config into another status schema.
 
-Names must be short and semantic, such as `feasibility-method`,
-`reference-baseline`, or `ablation-no-feature`. Use the same semantic name for
-the result artifact when appropriate. Do not encode parameter lists, seeds,
-timestamps, or hashes in them; keep lowercase letters, digits, and hyphens as
-the project's naming convention. Put a concise description in `cairn.init` argument
+Name runs as in Run names above; a result artifact may share its run's name.
+Put a concise description in `cairn.init` argument
 `metadata={"description": "..."}` so a reader understands what was tested and
 how to interpret it.
 
@@ -350,6 +368,30 @@ run context. Do not buffer all results until the end or wait for a report build.
 Choose a logging cadence in config: inexpensive scalars can be frequent; images,
 arrays, and figures can use a coarser interval. Keep complete scientific outputs
 needed to reproduce conclusions even when previews are sampled less often.
+
+**Every run is visually inspectable on its own.** A person opening the run in
+the Cairn UI, without the code or a report, sees what it did. Besides scalars,
+log as images over the step, at a configured `image_every` interval (and once
+at the start and the end), everything that is cheap to compute from state the
+run already has:
+
+- the current output or reconstruction next to its reference/target and the
+  input, on a fixed set of samples or views, so frames compare across steps;
+- the error or residual image with a fixed colour scale;
+- the optimized parameters when they are images or fields (textures, weights,
+  masks, density slices), and their gradients where the method uses them;
+- intermediate quantities the method's claim depends on (a predicted weight
+  map, an attention map, a per-pixel loss term);
+- at the end, a small figure per diagnostic (loss terms over steps, a histogram
+  of errors) from the logged data.
+
+Use the same `key`, samples, image size, and colour scale at every step so the
+UI's step slider shows a sequence. Log with `cairn.Image` (arrays scaled to
+`[0, 1]` or `uint8`, tonemapped if HDR, downsampled for previews) and the
+step, sample, and split as metadata. A non-iterative run still logs its inputs,
+outputs, and errors as images once. Skip only what is genuinely expensive to
+compute (an extra full render per step), and then log it at a coarser
+interval rather than not at all.
 
 Use stable field names, types, and units across runs. Include the coordinates
 needed to interpret each observation in the same record: `step`, `epoch`,
@@ -613,7 +655,8 @@ supported, and both must keep every configuration's result inspectable:
   ablations, or competing settings. Each trial is a complete Cairn run with
   its own provenance, config, logs, and results recorded on the run. Save the expected
   trial roster when launching; fill in full run IDs from the backend and match each resolved config to its
-  planned trial (record a trial label in config). Do not infer the expected roster from only successful jobs.
+  planned trial (record a trial label in config; all trials share one run
+  name, see Run names). Do not infer the expected roster from only successful jobs.
   Finalize explicitly with the helper below; no automatic study callback is
   assumed. A report declares the exact trial results and/or the summary
   artifact. Failures stay visible and prevent a completed study summary.

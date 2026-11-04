@@ -28,8 +28,13 @@ Environment and runs
       and errors were inspected; required missing files (including Hydra runtime
       files when relevant) were explicitly added. Backend status is the completion
       record, and only completed, validated runs count as evidence.
-- [ ] Run names are concise semantic slugs, and descriptions explain purpose
-      and interpretation limits.
+- [ ] Run names are one to three words naming the experiment, reused across
+      reruns and multirun trials (no hyperparameters, seeds, dates, or
+      `v2`/`final`); descriptions explain purpose and interpretation limits.
+- [ ] Each run logs images over steps of everything cheap to compute (output
+      next to reference and input, error map, image-valued parameters and
+      intermediate quantities) under stable keys, so it is inspectable in the
+      UI without a report.
 - [ ] Metrics and intermediate outputs are recorded during the run at a configured
       cadence, with stable fields and observation axes alongside media.
 - [ ] Evidence is recorded with `run.log`, `run.track`, and
@@ -79,6 +84,22 @@ Artifacts and repo
 Method and evidence
 - [ ] The user confirmed the method specification and consequential
       ambiguities.
+- [ ] The method under study is tested on its own over the whole problem, not
+      in a hybrid that hands its hard parts (a stage, region, case, or
+      fallback) to the baseline or another method; any hybrid was requested by
+      the user and is reported next to the pure method.
+- [ ] The handoff states the project's stage (in principle, exploring
+      approaches, or digging into one). While exploring, several approaches
+      are compared on the same setup with their trade-offs, effort is not
+      concentrated on the current leader, and untested alternatives or
+      reformulations are suggested, not implemented without the user's
+      agreement; the objective and problem statement are the user's.
+- [ ] Baselines run in their faithful configuration; a plain one is added and
+      labelled only when the question needs it (the tuning does not transfer
+      or hides the mechanism).
+- [ ] Results are reported per setup, with the setup stated precisely and
+      where each method is better and why; no result is generalized beyond
+      the setups it was measured on.
 - [ ] Faithful baselines and a bounded feasibility study precede tuning or
       large studies; studies use a multirun for separate experiments or a
       declared in-run grid for evaluation conditions, sized to the decision and

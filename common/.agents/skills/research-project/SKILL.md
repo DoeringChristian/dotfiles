@@ -47,7 +47,9 @@ skill itself.
 3. **Entry points are standard Hydra functions.** Each executable uses
    `@hydra.main` and a `main(cfg: DictConfig)` function. Its body constructs
    components and runs the method inside `with cairn.init(...) as run:`. Pass
-   `cfg.run.name` and the explicitly resolved config to `cairn.init`; use
+   `cfg.run.name` (one to three words naming the experiment, reused across
+   reruns and trials; see Run names in project-setup.md) and the explicitly
+   resolved config to `cairn.init`; use
    `run.use/log/track/add` or `cairn.*` inside the block. Use this native context
    instead of the run decorator. No Experiment base class or custom tracking
    wrapper is needed.
@@ -72,13 +74,17 @@ skill itself.
    Log metrics and intermediate outputs as they become available during the run,
    at a configured cadence; do not defer recording until completion or report
    generation. See the logging guidance in [project-setup.md](references/project-setup.md).
-6. **Develop the method with the user.** Resolve consequential ambiguities,
-   visualize intermediate behavior, and establish feasibility against relevant
-   baselines before tuning or scaling.
+6. **Develop the method with the user, stage by stage.** Resolve consequential
+   ambiguities and visualize intermediate behavior. First test whether the idea
+   works in principle, then explore several approaches side by side, and only
+   when the user has chosen one, dig into it and tune it (see "How a project
+   progresses").
 7. **Validation tests the claim.** Identify smoke tests and debugging proxies as
    such; do not present them as scientific evidence.
 8. **Do not improve results by weakening the problem.** Configure and disclose
-   approximations that may change the scientific meaning.
+   approximations that may change the scientific meaning. Test the method
+   under study on its own, not inside a hybrid that hands its hard parts to
+   another method (see "Test the method itself" below).
 9. **Document the method like a paper.** Every direction report explains its
    method well enough for an expert to reimplement it, with the figures a paper
    would have, in the field's established terms: never invent names for
@@ -178,6 +184,60 @@ Project setup:
 - [ ] Replace the sample report and its input with the project's own
 ```
 
+## How a project progresses
+
+A project starts from an idea the user provides and usually moves through
+three stages. Know which one the work is in, state it in the handoff, and let
+the user decide when to move on.
+
+1. **Does the idea work in principle?** Implement a direct, naive prototype of
+   the idea and run it next to the baseline on a small, inspectable problem.
+   The question is whether and how it works, not whether it wins: a first
+   prototype that is worse than a tuned baseline is the normal outcome, not a
+   failure to fix. Report plainly what works, what does not, and where it
+   breaks, with the figures that show the mechanism. Do not tune, add tricks,
+   or build hybrids to close the gap at this stage.
+2. **Explore the space of approaches.** Build several variations of the idea
+   and the alternatives agreed with the user (other representations,
+   architectures, or solvers for the same problem), each at modest and
+   comparable effort, compared on the same setup. Record their trade-offs, not only a
+   ranking: speed, memory, data needs, quality, and the scenarios where each
+   one is better. Keep a short list of the approaches in play and why each is
+   there. Do not spend the effort only on whichever variant currently scores
+   best: an approach that is behind now may be the more interesting one, or
+   win in a setting not yet tested, and refining only the leader is how the
+   work gets stuck in a local minimum.
+3. **Dig into one approach.** Only after the user has fixed on one, find out
+   why it falls short of the baseline and whether that is fundamental (a
+   limit of the formulation) or fixable (implementation, capacity, tuning,
+   data). If fixable, improve it until it outperforms the baseline or until
+   you find an application where the baseline struggles; if fundamental, say
+   so and why.
+
+**Results hold for a setup.** Methods are usually specific to a setup: the
+data source, scene or material class, scale, noise, budget, or the quantity
+being reconstructed. A method that wins in one setup and loses in another is a
+finding, not a failure, as long as the report states the setup precisely and
+where each method is better and why. Report results per setup rather than
+averaging setups into one ranking, and do not generalize a result beyond the
+setups it was measured on. When the evidence suggests the method fits a
+different or narrower application than the one being tested, that is a shift
+to suggest to the user (below), with the evidence.
+
+**The user sets the objective; you may suggest shifts.** The problem
+statement, the objective, and the set of approaches belong to the user. Never
+change them on your own: do not reformulate the problem, swap the objective or
+loss, relax what must be reproduced, or start a new approach because it looks
+more promising. That silently moves the work away from what the user is
+investigating. You may suggest such a shift, especially when the explored
+approaches share a limitation: state it in the handoff with the reasoning and
+the evidence behind it, and implement it only after the user agrees.
+
+**Notice when you are stuck.** When several iterations on one approach give
+only small gains, stop and report: show where the time went, what limits the
+approach, and which alternatives or reformulations you would suggest, instead
+of continuing to tune.
+
 ## Developing a method
 
 **Establish shared understanding.** Ask focused questions about ambiguities in
@@ -194,7 +254,9 @@ loss terms, update directions, small optimization trajectories, baseline
 comparisons, ablations, and representative failure cases as appropriate:
 enough complementary views for the user to verify the implementation, not
 decorative figures. Prefer image grids for related inputs, references,
-predictions, residuals, masks, or steps.
+predictions, residuals, masks, or steps. Log these as images over the step on
+the run itself, not only in reports (see Log results during the run in
+project-setup.md).
 
 **Show the mechanism, not only its outcome.** For each part of the method whose
 behavior the claim depends on, ask what a reader would need to see to
@@ -268,10 +330,33 @@ only when needed by a library or useful as a reusable added file.
 test the claimed advantage. Prefer faithful adaptations of authoritative
 reference implementations: read the paper, documentation, configuration,
 evaluation protocol, and the complete relevant execution path; record the
-reference version and material deviations. Begin with a bounded feasibility
-study, with agreed checks, metrics, tolerances, and failure cases. Do not start
+reference version and material deviations. The faithful configuration is the
+default. A published baseline is sometimes tuned for its own task in ways that
+do not transfer, or that make its mechanism hard to see (an intermediate state
+that is never visible, an effect averaged away). Only when that matters for the
+question, add a plain configuration with those choices removed, label it, and
+use it to understand and visualize the mechanism; keep the faithful one for
+performance claims. Begin with a bounded feasibility study,
+with agreed checks, metrics, tolerances, and failure cases. Do not start
 systematic tuning, large multiruns, or expensive scaling until the user has
-seen the evidence and the method has passed this gate.
+seen the evidence and chosen the approach to pursue.
+
+**Test the method itself, not a hybrid.** When the question is whether a
+method works, the experiment uses that method everywhere it would be used, and
+the baseline everywhere the baseline would be used, so each is measured on the
+whole problem. Do not combine it with the baseline, a classical method, or a
+known-good component to cover the parts where it struggles: splitting the work
+by stage, recursion depth, iteration, region, sample, frequency band, or
+condition; falling back when its confidence is low or its output looks wrong;
+initializing or correcting it with the reference; or restricting it to the easy
+cases. Such a hybrid hides exactly the behaviour the study exists to measure,
+and its results say little about either method. If the pure method fails,
+where and how it fails is the result: record and show it. A hybrid is a
+separate direction, started only when the user asks for one after seeing the
+pure method's results, and always reported next to the pure method and the
+baseline. If a component cannot be avoided (for example a piece the method
+does not define), keep it identical across all compared methods and state it
+in Methods.
 
 **Leave the user's machine usable.** Runs on the user's own computer use at
 most half its cores unless the user asks for more: cap worker processes and
