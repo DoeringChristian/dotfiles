@@ -1,18 +1,19 @@
 # Reviewing a report
 
-Review each changed report according to its question, not a universal section
-list. For a research-direction report, use the standard of a good paper in its
-field. For dataset inspection, transformation validation, or comparisons, judge
-whether the procedure, evidence, limitations, and decision are clear and sound.
-The Stop hook requests this review for every changed report.
+Review each agent report you changed according to its question, not a
+universal section list. For a research direction, use the standard of a good
+paper in its field. For dataset inspection, transformation validation, or
+comparisons, judge whether the procedure, evidence, limitations, and decision
+are clear and sound. The user's own reports are not reviewed against this
+rubric.
 
 Apply R1–R9 below to the actual scope. For example, R2 asks whether inspection
 checks are reproducible; R6 applies only when baselines/variants are relevant.
 Mark an item not applicable with a short reason when necessary; do not invent a
 method, baseline, literature review, or architecture figure to satisfy it.
 
-Read the report as its reader sees it: the built page under
-`.cairn/build/<slug>/`, not only the Markdown source. Pretend you have
+Read the report as its reader sees it: in the Cairn UI, with its embedded
+figures and tables, not only the Markdown from `cairn report show`. Pretend you have
 not seen the code or the conversation. Open every figure that the Methods
 section relies on and look at it.
 
@@ -57,16 +58,16 @@ alone.
   behind each claim are stated. The details the main results depend on are given
   or pointed to; for learned models, these are the data splits, the training
   procedure, and how the settings that matter were chosen.
-- **R8 claims**: the abstract and conclusion claim no more than the evidence
-  shown supports. Smoke tests and proxies are not presented as evidence, results
-  come only from the report's declared inputs (completed artifact versions), and
-  no result number is typed into the prose where it should be computed from an
-  input (a typed design constant is fine).
+- **R8 claims**: the header's claim and status, the abstract, and the
+  conclusion claim no more than the evidence shown supports, and the setup says
+  where it was tested. Smoke tests and proxies are not presented as evidence,
+  every result is a table, value, or figure embedded from a completed run, and
+  no result number is typed into the text (a typed design constant is fine).
 - **R9 concise**: there is no padding, filler, or repetition between sections,
   and the length fits the content.
 
 ## After the review
 
-Fix every failed item in the report sources and rebuild. Fix the problem, not
+Fix every failed item and write the report again. Fix the problem, not
 the wording that revealed it: never pad a section to make an item pass. Then
 finish, and tell the user which items, if any, you left open and why.

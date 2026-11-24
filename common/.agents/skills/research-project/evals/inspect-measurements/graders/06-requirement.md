@@ -4,4 +4,4 @@ focus: trace
 weight: 1
 ---
 
-Reports rebuild successfully from their recorded inputs without creating new experiment runs or refitting models.
+The tables and figures the reports embed come from analysis runs that read the recorded results, so they can be redrawn by rerunning only those analysis runs, without refitting models.

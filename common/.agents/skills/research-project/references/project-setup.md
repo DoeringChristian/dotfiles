@@ -29,37 +29,27 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.13.1", extras = ["reports", "media", "ui"] }
+cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.16.0", extras = ["media", "ui"] }
 
 [tasks]
 experiment = "python experiments/run.py"
 evidence = "python experiments/research_cairn.py check-artifact --project <project>"
 finalize-study = "python experiments/research_cairn.py finalize-study"
-report-build = "python experiments/report_tasks.py --project <project> build"
-report-serve = "python experiments/report_tasks.py --project <project> serve"
-report-publish = "python experiments/report_tasks.py --project <project> publish"
-report-share = "python experiments/report_tasks.py --project <project> share"
 ui = "cairn server"
 format = "black --extend-exclude '/([.]pixi|[.]cairn|data|outputs|artifacts)/' ."
 kuma = "bash experiments/cluster.sh kuma"
 lyra = "bash experiments/cluster.sh lyra"
 ```
 
-The pin is `cairn2[reports,media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.13.1`
+The pin is `cairn2[media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.16.0`
 in pip or uv form. The import and command remain `cairn`. Hydra stays a separate
-dependency. `reports` supplies notebook execution; `media` supplies arrays,
-tables and figures; `ui` supplies the server dependencies for the bundled React UI.
+dependency. `media` supplies arrays, tables and figures; `ui` supplies the
+server dependencies for the bundled React UI, where reports are read and
+written. Reports need no extra: they are part of the repository.
 Deployment extras are `postgres` and `s3`; `server` provides the API dependencies
 without the UI session dependency. For every optional feature, use `extras = ["all"]` instead. The `all` extra
 lists dependencies directly; Cairn2 is the base package, not an extra.
 Bump the tag only when the user asks.
-
-Copy `assets/report_tasks.py` into `experiments/` alongside the entry point.
-This small project helper discovers flat reports, calls the public builder,
-and maintains the last successful previews. It does not copy or patch Cairn.
-Pixi appends extra arguments: `pixi run report-publish direction` builds and
-publishes that direction. `report-share direction --out .cairn/share/direction`
-exports the unchanged complete report bundle into a new directory.
 
 Keep only tasks whose scripts exist and features the project uses. The cluster
 tasks and launcher dependency are examples, not requirements for local work.
@@ -99,7 +89,7 @@ token_file = "~/.config/cairn/<host>.token"
 ```
 
 Keep repository and project settings in `.cairn.toml` or the environment so
-entry points and report tasks use the same destination. A Hydra config key
+entry points and `pixi run cairn` (reports, comments) use the same destination. A Hydra config key
 named `cairn.repo` or `project` is not automatically applied by `cairn.init`; pass explicit arguments or
 use normal Cairn configuration discovery.
 
@@ -180,6 +170,8 @@ every run's full ID and config, so the name carries nothing else:
   fix or a config change; the version number tells reruns apart;
 - the same name for every trial of a multirun; the trial label and the varied
   values live in config;
+- for an analysis run, what its figure or table shows (`error-maps`,
+  `convergence`), never a figure or table number or a counter;
 - never hyperparameter values, seeds, dates, trial indices, `v2`, `final`,
   `fixed`, `new`, `test`, or a sentence about the purpose. Put the purpose in
   `run.description` and the differences in config.
@@ -246,7 +238,8 @@ diagnosis; publish scientific results only from completed, validated producers.
 A finished artifact can have a failed outcome, and `latest` is a movable alias.
 Top-level `cairn.log/track/add` record on the current run. A successful
 log call is not a successful experiment. Use the completed-evidence check below
-and pin `@vN` before citing a result. Do not infer completion from a folder,
+before citing a result. Runs pin their inputs (`run.use` with `@vN` in configs
+for reviewed evidence); reports may embed `@latest` (see reports.md). Do not infer completion from a folder,
 alias, or local pointer file.
 
 ## Hydra entry points: runs, inputs, and results
@@ -312,7 +305,7 @@ file. Hydra keeps its configuration there; Cairn does not
 require evidence to pass through that directory. Cairn does not scan
 `output_dir/result` or automatically create a second artifact.
 
-A completed run can be declared directly as a report input. Create a separate
+A report can embed a completed run's files directly. Create a separate
 result artifact only when it needs an identity or lifecycle independent of
 that execution. Reuse alone is not a reason to create another artifact. For example,
 explicitly add a result directory with `cairn.add(path, name="result")`,
@@ -347,12 +340,11 @@ trusted checkpoints. Persist optimizer/RNG state as well as weights when exact
 continuation needs it. Multiple input runs support branches and combined models;
 no extra dataset/model artifact is required to connect them.
 
-A report declares the completed runs it analyzes, or a separate analysis run
-when evaluation is expensive. Store invariant inputs once and record output
+A report embeds what analysis runs recorded; each analysis run `use`s the
+completed runs it reads. Store invariant inputs once and record output
 values plus stable IDs where needed to join them; do not repeat whole input
 arrays in every trial or store identical data in JSON, tables, and added files
-without a consumer that needs those representations. Include all upstream
-artifacts the report actually reads in its declared inputs.
+without a consumer that needs those representations.
 
 Cairn readers require finished artifacts. Split independently reusable passes
 into completed runs when appropriate; a live run's checkpoint file is not yet
@@ -460,7 +452,8 @@ directly. Separate result artifacts are optional.
 References are `namespace/name@vN`, `namespace/name@alias`, or full plain
 artifact IDs, resolved inside the selected project. Names may contain slashes.
 Use full IDs for cross-project inputs and exact `@vN` references or IDs for
-reviewed evidence. A run keeps its ID when it finishes and receives a version
+reviewed evidence a run reads. Report embeds are not inputs and may use
+`@latest`. A run keeps its ID when it finishes and receives a version
 label like any other artifact. There are no `artifact:`/`run:` prefixes,
 separate revision IDs, or snapshot-digest suffixes.
 
@@ -499,9 +492,8 @@ with source.file("files").open("part-01.csv") as stream:
 path = source.file("files").download(name="part-01.csv")
 ```
 
-The same Reader operations work for declared report inputs. Small dataset
-inspections may analyze them directly in report cells; expensive validation or
-conversion belongs in a run. Imported datasets need documented source and
+Dataset inspections are analysis runs too: they read the dataset with these
+operations and add the tables and figures a report embeds. Imported datasets need documented source and
 validation, not an invented producer run. Computed results stay on the producing
 run by default.
 
@@ -525,10 +517,10 @@ Important access and storage distinctions:
 - **Generated data** should have one durable recorded representation unless
   distinct consumers justify more. Link generated outputs only when their
   location is retained and immutable; temporary scratch is not durable storage.
-- **Many-file directories** have an inline manifest constrained by Cairn's
-  1 MiB entry limit in this version. File count and path lengths matter even
-  with linked payloads. Use bounded groups/named captures or dataset shards;
-  do not assume one directory capture scales to arbitrarily many files.
+- **Many-file directories** are stored as paged indexes (version 2
+  directories), so large datasets upload and page in bounded parts; see the
+  large-datasets guide in Cairn's `docs/datasets.md`. Prefer one dataset
+  directory over hand-made shards.
 
 Ignore raw archives and generated data before the first commit and run, including
 custom directory names outside `data/`, so native provenance does not copy them.
@@ -556,36 +548,44 @@ exactly one completed producing run in the same project, or a completed run
 when the input itself is in `runs`. This is lifecycle validation, not proof
 of scientific validity. Runless datasets/sample fixtures require documented
 origin/validation and intentionally do not pass the scientific-results gate.
-They can be valid report inputs without that gate: check their completed outcome,
+They can be valid evidence without that gate: check their completed outcome,
 source, integrity, and fitness for the question. Do not fabricate producer runs
 just to make an import pass a computed-results check.
 
 Use `run.use(ref)` for exact input dependencies, `result.use(run.id,
 role="producer")` after run completion, and `summary.use(trial.id, role="trial")`
-for studies. The UI shows dataset → run → report lineage, with a separate
-result node when explicitly published.
-The report builder pins exact finished IDs, including failed outcomes; the
-project's completed-evidence policy is intentionally stricter.
+for studies. The UI shows dataset → run lineage, with a separate result node
+when explicitly published. Reports are not part of the lineage: their `cairn:`
+embeds are resolved when the page is shown.
+A report embeds whatever version a reference names, including failed
+outcomes; the project's completed-evidence policy is intentionally stricter.
 
 ### The sample artifact
 
 The bundled sample is synthetic demonstration evidence, not an experimental
-result. Import it into the selected project:
+result. Import it into the selected project, one file per name:
 
 ```python
-from cairn import Client, Directory
+from pathlib import Path
+from cairn import Client
+root = Path("<skill-directory>/assets/sample-run")
 with Client(project="<project>") as client:
     sample = client.start("datasets", "sample-run")
-    sample.finish(value=Directory("<skill-directory>/assets/sample-run"),
-                  metadata={"origin": "research-project skill sample", "synthetic": True})
-    print(sample.id)
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        sample.add(path, name=path.relative_to(root).as_posix())
+    sample.finish(metadata={"origin": "research-project skill sample", "synthetic": True})
 ```
 
-Copy `assets/reports/direction/` into `reports/direction/`. Its
-`cairn.inputs.result: datasets/sample-run@v1` assumes the first import;
-otherwise use the exact ID printed above. Build it as a scaffold smoke test.
-Then replace its content and input with the project's own. The sample may
-remain stored, but no real project report may still declare it.
+As a smoke test of the repository and the UI, create a scratch report that
+embeds one of its figures, open it in `pixi run ui`, then delete it:
+
+```bash
+printf '# Scratch\n\n![Sample grid](cairn:datasets/sample-run@latest#figures/grid.svg)\n' \
+  | pixi run cairn report new scratch - --owner agent
+pixi run cairn report delete scratch
+```
+
+The sample may remain stored, but no real report may embed it.
 
 ## Running on a cluster
 
@@ -641,8 +641,8 @@ SQLite repository there:
   or publishing evidence. A node-local scratch journal must be recovered
   before the allocation deletes it.
 
-Build reports locally in the locked project environment; the server does not execute report cells. The evidence repo
-does not move report sources or local preview files.
+Reports live in the evidence repository with the runs; nothing about them is
+built or moved locally.
 
 ## Parameter studies
 
@@ -658,8 +658,8 @@ supported, and both must keep every configuration's result inspectable:
   planned trial (record a trial label in config; all trials share one run
   name, see Run names). Do not infer the expected roster from only successful jobs.
   Finalize explicitly with the helper below; no automatic study callback is
-  assumed. A report declares the exact trial results and/or the summary
-  artifact. Failures stay visible and prevent a completed study summary.
+  assumed. A report embeds the summary run's tables or an analysis run over
+  the trials. Failures stay visible and prevent a completed study summary.
 - **An in-run grid** when the configurations are evaluation conditions of one
   experiment, such as noise levels or contamination rates applied to the same
   methods. Declare the grid in the experiment config, log one table row per

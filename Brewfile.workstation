@@ -9,6 +9,10 @@ cask "inkscape"
 cask "tev"          # HDR/EXR image viewer (slow to install; Linux fixup in update.sh)
 cask "obsidian"
 
+# Pumice — our Obsidian-compatible markdown editor (own tap; macOS builds only so far).
+tap "DoeringChristian/pumice" if OS.mac?
+cask "DoeringChristian/pumice/pumice" if OS.mac?
+
 # zathura — keyboard-driven PDF/PS/DjVu viewer (not in homebrew-core).
 # macOS uses the upstream zathura tap; Linux uses our in-repo tap formulae.
 tap "homebrew-zathura/zathura" if OS.mac?

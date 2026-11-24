@@ -4,16 +4,9 @@ description:
   Initialize, extend, or develop a reproducible research project managed with
   pixi, Hydra-configured object construction, and Cairn (an artifact store in
   which every experiment is a recorded run and its results are versioned
-  artifacts, single-page paper-like reports built from pinned artifacts, and a
-  browser UI). Use for research project setup, experiments, method
-  development, feasibility studies, baselines, parameter studies, diagnostics,
-  cluster runs, and reports.
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: 'python3 "$HOME/.claude/skills/research-project/scripts/report_gate.py"'
-          timeout: 1800
+  artifacts, reports the user writes and agents answer in, and a browser UI).
+  Use for research project setup, experiments, method development, feasibility
+  studies, baselines, parameter studies, diagnostics, cluster runs, and reports.
 ---
 
 # Research Project
@@ -24,10 +17,10 @@ config, inputs, metrics, logs, code, environment, and results. All artifacts hav
 permanent IDs. Write results directly to the run by default; create separately
 named result artifacts only when they need an identity or lifecycle independent
 of that execution. Reuse alone does not require another artifact.
-Datasets and models are artifacts too. Each single-page report answers a coherent question using declared evidence.
-Research-direction reports present the method and findings like a paper; dataset
-inspection, transformation validation, and comparison reports use a structure
-appropriate to their question.
+Datasets and models are artifacts too. Reports live in the same repository: the
+user writes theirs (the plan, the questions, the requests), agents answer in the
+user's agent blocks, and each direction an agent explores gets its own agent
+report under the block that asked for it.
 
 Apply setup steps when creating or changing project setup; existing projects
 need only the steps relevant to the requested work. These research/report
@@ -53,27 +46,24 @@ skill itself.
    `run.use/log/track/add` or `cairn.*` inside the block. Use this native context
    instead of the run decorator. No Experiment base class or custom tracking
    wrapper is needed.
-4. **Cairn holds the evidence; reports read only what they declare.** A
-   result becomes evidence when its run completes and scientific validation
-   passes. Verify the completed run, or the producer of a separate result
-   artifact, before pinning it in a report's `cairn.inputs:`.
-   Builds capture the declared inputs; reading undeclared experimental results
-   is forbidden by this workflow, although the engine does not block external
-   reads. Reports never become an independent source of experimental numbers.
+4. **Cairn holds the evidence; reports only embed it.** A result becomes
+   evidence when its run completes and scientific validation passes. Reports
+   run no code and never become a source of experimental numbers: every result
+   in a report is a table, value, or figure a run recorded, embedded with a
+   `cairn:` reference. Never type a result number.
 5. **Store what is expensive; recompute only what is cheap.** Split the
    pipeline where the cost drops: training, fitting, rendering, simulation,
    and evaluation over the test set are expensive; plotting, tables, summary
    statistics, and report numbers are cheap. Every expensive stage records its
    complete output in its run (per-sample and per-point values, arrays, and
-   tables, not only aggregates or pictures), and cheap stages use those records
-   and their declared inputs. Store invariant input data once: predictions plus
+   tables, not only aggregates or pictures), and cheap stages (analysis runs)
+   use those records. Store invariant input data once: predictions plus
    stable sample IDs can refer back to input columns without duplicating them. A figure, table, or number that cannot be redrawn or
    recomputed from stored data without rerunning the expensive stage is a
    defect: fix the recording and rerun before citing it. Recording only the
    plotting function and its settings does not satisfy this.
    Log metrics and intermediate outputs as they become available during the run,
-   at a configured cadence; do not defer recording until completion or report
-   generation. See the logging guidance in [project-setup.md](references/project-setup.md).
+   at a configured cadence; do not defer recording until completion. See the logging guidance in [project-setup.md](references/project-setup.md).
 6. **Develop the method with the user, stage by stage.** Resolve consequential
    ambiguities and visualize intermediate behavior. First test whether the idea
    works in principle, then explore several approaches side by side, and only
@@ -85,11 +75,12 @@ skill itself.
    approximations that may change the scientific meaning. Test the method
    under study on its own, not inside a hybrid that hands its hard parts to
    another method (see "Test the method itself" below).
-9. **Document the method like a paper.** Every direction report explains its
-   method well enough for an expert to reimplement it, with the figures a paper
-   would have, in the field's established terms: never invent names for
-   concepts no paper has named. Before finishing, you review it against the
-   rubric (see "Finishing a turn").
+9. **The user's report is the user's.** Write into their agent blocks; change
+   their text only when asked, and only what was asked. In your own agent
+   reports, document a direction's method like a paper: well enough for an
+   expert to reimplement it, with the figures a paper would have, in the
+   field's established terms (never invent names for concepts no paper has
+   named), and review it against the rubric before finishing.
 
 ## Where the details are
 
@@ -99,12 +90,12 @@ self-contained.
 | Before you | Read |
 |---|---|
 | create a project, change its environment, Hydra configs, run bookkeeping, logging, the repo or its remote; publish or pull artifacts; run on a cluster; plan a parameter study | [references/project-setup.md](references/project-setup.md) |
-| create, restructure, build, publish, host, or share reports; handle sent comments or pasted location markers | [references/reports.md](references/reports.md) |
-| write or revise a direction report's Abstract, Background, or Methods | [references/writing-methods.md](references/writing-methods.md), and once per project [references/example-methods.md](references/example-methods.md) |
+| read, write, or answer in reports; create agent reports; handle sent comments | [references/reports.md](references/reports.md) |
+| write or revise the method of a direction in your agent report | [references/writing-methods.md](references/writing-methods.md), and once per project [references/example-methods.md](references/example-methods.md) |
 | write Mitsuba integrators, scenes, or other plugins | [references/mitsuba.md](references/mitsuba.md) |
 | hand off work that changed the setup, evidence, or reports | [references/checklist.md](references/checklist.md) |
 
-The rubric you review a direction report against is
+The rubric you review your agent reports against is
 [references/review.md](references/review.md).
 
 ## Organizing the work
@@ -122,16 +113,36 @@ require separate result artifacts. Give an output its own artifact identity
 only for an independent publication boundary or lifecycle, preserving producer
 lineage. Imported datasets may exist independently of any producing run.
 
-A single run and a report can be sufficient. Another project might branch into
+A single run and a report can be sufficient when that run records the
+tables and figures the report embeds. Another project might branch into
 several competing runs, or use `preparation run → experiment runs → analysis run
-→ report`. Omit or combine stages when the question permits; a report may read
-any relevant declared inputs directly. Keep expensive computation in runs and
-cheap analysis in reports. Dependencies record provenance, not automatic
-scheduling, cache hits, or permission to rerun upstream work.
+→ report`. Omit or combine stages when the question permits; a report may embed
+any run's recorded files directly. Keep expensive computation in experiment runs
+and cheap analysis in analysis runs. Dependencies record provenance, not
+automatic scheduling, cache hits, or permission to rerun upstream work.
+
+**Split runs by computation, not by attempt.** A project has a few named runs,
+each a distinct computation someone would rerun on its own, for example:
+
+- one run per expensive computation: `<method>-train` (every trial of a sweep
+  shares this name), `<method>-eval`, `dataset-prep`;
+- one analysis run per figure or table, or per small group drawn from the same
+  data, named after what it shows (`error-maps`, `convergence`,
+  `curvature-views`). It declares the runs it reads with `run.use` and is cheap,
+  so changing the figure means rerunning only it.
+
+Twenty runs called `exp1` … `exp20`, `run-3`, `fig-7` or `test-final-2` are
+wrong. A rerun or a fix is the next version of the same name. A variant is a
+config difference, or a sweep under one name. A figure run is named after its
+content, never its position in a report. When
+one run does both an expensive computation and the figures from it, split it in
+two. Before starting a run, list the project's run names
+(`cairn artifact list --namespace runs`) and reuse a fitting one. Names follow
+Run names in [project-setup.md](references/project-setup.md).
 
 Document each entry point's inputs, outputs, and command. Pin stage inputs for
 reviewed evidence; after deliberately rerunning a stage, select the new version
-explicitly for downstream runs and report inputs. Avoid dependencies on another
+explicitly for downstream runs. Avoid dependencies on another
 script's temporary output directory. Storage/access choices and examples are in
 [project-setup.md](references/project-setup.md).
 
@@ -148,21 +159,17 @@ project/
 ├── experiments/
 │   ├── run.py                  # standard Hydra function; add train.py, evaluate.py, etc. as needed
 │   ├── research_cairn.py       # evidence checks and study summaries
-│   ├── report_tasks.py         # flat report discovery, public build/publish/export API
 │   └── cluster.sh, clusters/<cluster>.sh # scheduler files; check their Cairn compatibility
 ├── outputs/                    # ignored Hydra job folders; bookkeeping and optional scratch, not the evidence record
 ├── data/                       # ignored local data; linked archives may live elsewhere
-├── reports/<slug>/             # one single-page report per coherent question
-│   ├── report.md
-│   └── assets/, data/          # non-result material kept with the report
-└── .cairn/                     # ignored local repo/journals and report builds; remote backend is separate
+└── .cairn/                     # ignored local repo and journals; remote backend is separate
 ```
 
-There is no overview report and no nesting: the Cairn UI's project page lists
-the reports. Copy bundled assets by content and make the
-copies owner-writable (`install -m 0644 <source> <destination>`). Cairn (repo
-client, runs, artifacts, report builder, server, UI) is the pinned
-[`cairn2` v0.13.1](https://github.com/DoeringChristian/cairn2/releases/tag/v0.13.1), imported as `cairn`: import and run it, never copy or
+Reports are not project files: they live in the Cairn repository with the runs.
+Copy bundled assets by content and make the copies owner-writable (`install -m
+0644 <source> <destination>`). Cairn (repo client, runs, artifacts, reports,
+server, UI) is the pinned
+[`cairn2` v0.16.0](https://github.com/DoeringChristian/cairn2/releases/tag/v0.16.0), imported as `cairn`: import and run it, never copy or
 patch it. Use Cairn's native run context and provenance capture. Initialize Git
 and commit the scaffold before the first run, and commit again before runs a
 report will cite.
@@ -174,21 +181,44 @@ For new projects, use this checklist; mark conditional items not applicable:
 ```text
 Project setup:
 - [ ] Read references/project-setup.md and references/reports.md
-- [ ] pixi.toml pins cairn2 v0.13.1 (reports, media, ui), Hydra separately, and the tasks; pixi install
+- [ ] pixi.toml pins cairn2 v0.16.0 (media, ui), Hydra separately, and the tasks; pixi install
 - [ ] One repo: a local path (created on first access) OR the user's named server URL; explicit project namespace and protected login credentials
-- [ ] Hydra configs, experiments/run.py, research_cairn.py, report_tasks.py; standard Hydra functions using with cairn.init(...)
+- [ ] Hydra configs, experiments/run.py, research_cairn.py; standard Hydra functions using with cairn.init(...)
 - [ ] If using a cluster: scheduler files from the relevant skills; verify tracking glue against the new API before submission
 - [ ] .gitignore: .pixi/, .cairn/, outputs/, data/, artifacts/
 - [ ] git init and commit the scaffold
-- [ ] Sample: import assets/sample-run as datasets/sample-run@v1 in the selected project, copy assets/reports/direction, pixi run report-build passes
-- [ ] Replace the sample report and its input with the project's own
+- [ ] Sample: import assets/sample-run as datasets/sample-run@v1 in the selected project; a scratch report embedding its figure renders in pixi run ui; delete the scratch report
+- [ ] The comment watcher runs (references/reports.md)
 ```
+
+## Exploring and exploiting
+
+The user works in one of two modes, and the request says which; ask when it does
+not.
+
+- **Exploring.** The user asks an open question in an agent block ("why does
+  it ring at the boundary?", "what else could represent the field?"). Find the
+  candidate directions, create one agent report per direction under that block
+  (each with the Claim / Setup where it holds / Status / Evidence header from
+  [reports.md](references/reports.md)), run the small experiments that test each
+  claim, and answer in the block with a short overview linking them. Breadth
+  matters more than polish: several directions at comparable effort, each
+  honest about where it holds. The user reads the cards, comments to steer, and
+  takes over the directions worth keeping.
+- **Exploiting.** The user has decided and writes what to do: the method, the
+  setup, the experiments, often in their own words in their report. Implement
+  exactly that. Speak up only for a clear mistake, a point that is genuinely
+  unclear, or a component that is clearly better for what they want; say it in
+  a reply with the reason, and implement the change only after they agree. Do
+  not substitute your own design, add directions they did not ask for, or
+  rewrite their text.
 
 ## How a project progresses
 
 A project starts from an idea the user provides and usually moves through
-three stages. Know which one the work is in, state it in the handoff, and let
-the user decide when to move on.
+three stages; the first two are mostly exploring, the third exploiting. Know
+which one the work is in, state it in the handoff, and let the user decide when
+to move on.
 
 1. **Does the idea work in principle?** Implement a direct, naive prototype of
    the idea and run it next to the baseline on a small, inspectable problem.
@@ -211,8 +241,28 @@ the user decide when to move on.
    why it falls short of the baseline and whether that is fundamental (a
    limit of the formulation) or fixable (implementation, capacity, tuning,
    data). If fixable, improve it until it outperforms the baseline or until
-   you find an application where the baseline struggles; if fundamental, say
-   so and why.
+   you find an application where the baseline struggles, within what the
+   user specified; if fundamental, say so and why.
+
+**Climb the scale ladder.** Answer each question at the smallest setup that
+can answer it, then move up only to check that the answer holds. Typical rungs:
+a 1D or flatland (2D) version, then a small 3D or low-resolution instance with
+few samples and a short schedule, then the target scale. A proof of concept
+should take minutes on a laptop, not hours on a cluster; stages 1 and 2 live on
+the lower rungs. Before a run that takes much longer than the runs before it,
+state what question it answers that no smaller setup can, and launch it only
+after the small version works and a short smoke run of the large configuration
+(a few steps) has passed. Check that each reduction keeps the property being
+tested: a flatland version that removes the hard part of the problem shows
+nothing about it.
+
+Small-scale success is not the claim. Some effects appear only at scale
+(capacity, memory, conditioning, sample counts, long-range structure,
+optimization instability), so a result that matters is backed by experiments
+at the scale it is claimed for. Push deliberately into the regime where the
+method might break: measure how quality, cost, and failure modes change along
+the ladder (a short scale sweep), and report where it stops working rather
+than stopping at the size where it still does.
 
 **Results hold for a setup.** Methods are usually specific to a setup: the
 data source, scene or material class, scale, noise, budget, or the quantity
@@ -225,10 +275,11 @@ different or narrower application than the one being tested, that is a shift
 to suggest to the user (below), with the evidence.
 
 **The user sets the objective; you may suggest shifts.** The problem
-statement, the objective, and the set of approaches belong to the user. Never
-change them on your own: do not reformulate the problem, swap the objective or
-loss, relax what must be reproduced, or start a new approach because it looks
-more promising. That silently moves the work away from what the user is
+statement, the objective, and the set of approaches belong to the user. When
+they ask you to explore, the directions you test answer their question and are
+theirs to keep or drop; otherwise never change these on your own: do not
+reformulate the problem, swap the objective or loss, relax what must be
+reproduced, or start a new approach because it looks more promising. That silently moves the work away from what the user is
 investigating. You may suggest such a shift, especially when the explored
 approaches share a limitation: state it in the handoff with the reasoning and
 the evidence behind it, and implement it only after the user agrees.
@@ -245,7 +296,7 @@ purpose, inputs, outputs, operations, state, update rules, objectives,
 invariants, assumptions, intended advantages, and failure cases. Restate the
 interpretation with equations, pseudocode, diagrams, or simple examples and ask
 the user to confirm it. Record confirmed choices in config, code, and the
-report's Methods. Reopen the discussion when implementation exposes a
+Methods of your agent report for the direction. Reopen the discussion when implementation exposes a
 consequential ambiguity.
 
 **Make behavior inspectable.** Create simple examples that expose important
@@ -318,13 +369,13 @@ legends, and colorbars where needed, method colors and ordering centralized in
 one module. A plotting function computes nothing expensive: its inputs are the
 recorded output of an expensive stage. Track that data in full in the run
 first (`cairn.track(cairn.Table(rows), key=...)`, or arrays), then the figure
-under the same key with `cairn.track(cairn.Figure(figure), key=...)`. Reports
-redraw from the stored data with the same functions instead of embedding
-pictures, so any value can be quoted, checked, or replotted without a rerun.
-Use a shared figure helper that records new plotting data or identifies the
-existing declared input supplying it; reject unsupported data instead of
-silently dropping it. Referencing stored inputs need not duplicate their bytes. Save files
-only when needed by a library or useful as a reusable added file.
+under the same key with `cairn.track(cairn.Figure(figure), key=...)`. A
+report's figures and tables come from an analysis run that reads that stored
+data with the same functions and adds them under names the report embeds
+(`cairn.add(cairn.Figure(figure), name=...)`), so any value can be checked or
+replotted by rerunning only the analysis. Reject unsupported data instead of
+silently dropping it. Referencing stored inputs need not duplicate their bytes.
+Save files only when needed by a library or useful as a reusable added file.
 
 **Establish baselines and feasibility.** Agree with the user which baselines
 test the claimed advantage. Prefer faithful adaptations of authoritative
@@ -378,9 +429,8 @@ focused ratings or pairwise comparisons.
 pixi run experiment --config-name <name>             # one run; cairn.use(...) records exact inputs
 # Inside: record directly with cairn.log/track/add; validate before returning.
 pixi run evidence runs/<name>@vN                 # lifecycle check; scientific validation is separate
-# report.md frontmatter: cairn: {inputs: {fit: "artifacts/<result>@vN", run: "runs/<name>@vN"}}
-pixi run report-build
-pixi run report-publish <slug>
+pixi run experiment --config-name <figure>           # analysis run: reads runs, adds tables and figures
+# In the report: ![Error per setup](cairn:runs/<figure>@latest#figures/error)
 ```
 
 The native Cairn context records initial provenance and manages the run:
@@ -389,103 +439,69 @@ Failed runs remain inspectable, and `latest` can point at failed artifacts.
 Cairn finishes the run without automatically creating another result
 artifact. The completion check does not assess scientific validity: record the
 checks, tolerances, and outcomes in the run, and raise on validation failure.
-Verify completed runs/producers and pin exact versions before using
-results as evidence. Details in
+Verify completed runs before embedding their results as evidence. Details in
 [project-setup.md](references/project-setup.md).
 
 ## Reports
 
-Use `reports/<slug>/report.md` for each coherent question: inspecting a dataset,
-validating a transformation, developing a method, or comparing runs. A research
-**direction report** follows the paper-like spine: Abstract, Introduction,
-Background and related work, Methods, results and discussion, Conclusion. Other
-reports use only the sections their question needs; do not invent a method or
-baseline to fill a template.
-[reports.md](references/reports.md) holds their structure, syntax, and
-tooling; [writing-methods.md](references/writing-methods.md) holds how to write
-a direction's method. The rules that hold everywhere:
+Reports are documents in the Cairn repository; agents read and write them as
+Markdown with `cairn report`. [reports.md](references/reports.md) holds how they
+work, their syntax, and the comment workflow; read it before touching one. The
+rules that hold everywhere:
 
-- **Numbers come from inputs.** Every result in a report is generated by an
-  executable Python cell from a declared input (`inputs["name"]`), and every
-  figure of a result comes from its declared run or artifact snapshot.
-  Only results from completed, validated producers count. Never type a result.
-- **Write the report before the evidence.** For a research direction, as soon as it is agreed,
-  before or alongside the first runs, write its Abstract, Introduction,
-  Background and related work, and Methods with the experimental design, and
-  build and publish it. The draft keeps your own work on track and gives you
-  something to check each run against, and the user can catch reasoning errors
-  while the experiments still run. Fill in the results and the Conclusion as
-  runs complete ([writing-methods.md](references/writing-methods.md)). For an
-  inspection or validation task, state its question and checks first, then
-  present the captured evidence; a paper-length draft is unnecessary.
+- **The user's report is the user's.** Write into its agent blocks. Change its
+  text only when asked, and only what was asked; never add sections (Abstract,
+  Background, related work) or restructure it on your own.
+- **Your agent reports are yours.** One per explored direction, under the block
+  that asked for it, opening with the Claim / Setup where it holds / Status /
+  Evidence header. Below it, the structure the question needs: a research
+  direction follows the paper-like spine in
+  [writing-methods.md](references/writing-methods.md); an inspection or
+  comparison uses only the sections its question needs. Write the claim, setup,
+  and method before the evidence, and fill the evidence in as runs complete.
+- **Numbers come from runs.** Never type a result number: every result is an
+  embedded table, value, or figure that a completed, validated run recorded.
+  Prose describes what it shows qualitatively. Design constants may be typed.
 - **Keep each report coherent.** A report is for a reader who needs the current
-  method, evidence, and decisions quickly, not an activity log: integrate
-  changes where they belong, remove what is stale, and re-read the whole report
-  after substantive changes.
-- **Build after every change:** `pixi run report-build`; publish the report
-  (`pixi run report-publish <slug>`) once its evidence or text changed.
-- **Always watch report comments.** In every session in a project that has
-  reports, and as soon as the first one is published, start one
-  `cairn comments watch` watcher in the background, in a way that wakes you on
-  each new event (in Claude Code, the Monitor tool), and keep it running until
-  the session ends. Handle each sent thread when it arrives: address its source
-  anchor, then reply or resolve after checking the change. See the watcher
-  workflow in [reports.md](references/reports.md); unsent drafts are not
-  requests.
-- **Handle pasted location markers.** Alongside native report comments, the
-  user may paste a line such as `reports/a/report.md:42 "quoted text"` or
-  `... figure #fig-id "title" (source: file)` copied from the page. Treat each
-  as pointing at that file, line, or figure (details in
-  [reports.md](references/reports.md)).
-- **Share the generated output unchanged.** `pixi run report-share <slug> --out
-  .cairn/share/<slug>` exports the complete published bundle. Share that bundle
-  on a static host or use the Cairn UI (`pixi run ui` locally, or the selected
-  remote server's UI). Cairn2 v0.13.1 does not offer a standalone single-file
-  export: do not re-author the page to fit a single-file destination. Never
-  restyle or re-template reports for a destination; publishing-tool design
-  guidance does not apply to these pages.
+  state quickly, not an activity log: integrate changes where they belong,
+  remove what is stale, and re-read the whole report after substantive changes.
+  After a rerun, re-read the claims that rest on it.
+- **Always watch comments.** In every session in a project with reports, keep
+  one `cairn comments watch 'reports/**' --json --once` running in the
+  background in a way that wakes you when it exits (in Claude Code, Bash with
+  `run_in_background`), and start it again after handling each batch. Requests
+  in agent blocks arrive this way too. Act only on sent messages; reply, and
+  resolve once done.
 
 Copy this checklist into your reply whenever you change a report:
 
 ```text
 Report change:
-- [ ] Read the reference for this step (writing-methods.md for Abstract, Background, Methods)
-- [ ] New evidence logged as artifacts, completed producers verified, exact refs declared under cairn.inputs:
-- [ ] Edited reports/<slug>/report.md (and its sources) only; result prose and figures computed from declared inputs
-- [ ] Scope-appropriate explanation of the implemented method or checks, with useful figures
+- [ ] Checked the owner: only agent blocks in the user's report unless asked; only what was asked
+- [ ] Wrote each part with --revision of the version I read
+- [ ] Results recorded by completed, validated runs; analysis runs added the tables and figures embedded
+- [ ] No typed result numbers; prose describes the embedded results
+- [ ] Agent report: header (Claim / Setup where it holds / Status / Evidence) matches the evidence
 - [ ] Every figure the user asked for is there as asked; key mechanisms shown, not only outcomes
-- [ ] Sections still waiting on runs say which runs and what they will answer
-- [ ] pixi run report-build succeeds
-- [ ] Looked at every figure I added or changed
-- [ ] Re-read the whole report: description, abstract, findings, and conclusion match the evidence
-- [ ] Published it: pixi run report-publish <slug>
+- [ ] Looked at every figure I added or changed, in the report
+- [ ] Re-read the whole report I changed
+- [ ] Replied in the thread that asked for it
 ```
 
 ## Finishing a turn
 
-On hosts that support its Stop hook, the skill runs `scripts/report_gate.py`
-whenever you try to finish. On other hosts, run the build check and perform the
-same self-review explicitly before finishing; the requirement is unchanged.
-It does nothing unless a report's sources changed since it last passed. Then:
-
-1. it blocks until the changed reports are rebuilt;
-2. once, it sends you back to review each changed report yourself
-   against [references/review.md](references/review.md): apply the scope guidance, re-read the built
-   report and its relevant figures, fix every failed item in the sources, and
-   rebuild.
-
-Fix the problem, never pad a section to pass an item. When you finish, tell the
-user which items, if any, you left open and why. After three blocks in a row
-the gate lets you stop and shows the user what is still open.
+Before finishing a turn in which you changed an agent report, review it once
+against [references/review.md](references/review.md), scoped to its question:
+open it in the UI as its reader would (the embeds matter, so Markdown alone is
+not enough), decide each item, fix what fails, and write it again. Fix the problem, never pad a section to pass an item. Tell the user
+which items, if any, you left open and why. The user's own reports are not
+reviewed against the rubric; answer what they asked.
 
 ## Handoff
 
 The handoff states what changed or was learned, what validation supports it,
 and what could still limit the conclusion. Distinguish smoke tests and proxies
-from evidence. Give exact commands for reproducing experiments, rebuilding
-and publishing the reports, and viewing them, the run and artifact references
-(`runs/<name>@vN`, `artifacts/<name>@vN`, or full artifact IDs, with the project) the reports
-read, the concrete URLs, and any review items you left open. Say that the user
-can paste a page's copy-location
-markers to point at a line or figure, and that reviewed findings live in the
-reports' finding blocks.
+from evidence. Give exact commands for reproducing experiments, the run and
+artifact references (`runs/<name>@vN`, `artifacts/<name>@vN`, or full artifact
+IDs, with the project) the reports embed, the URLs of the reports you wrote or
+answered in (`<ui>/p/<project>/r/<name>`), and any review items you left open.

@@ -10,8 +10,8 @@ Environment and runs
       pixi tasks on every listed platform.
 - [ ] `.pixi/`, `.cairn/`, `outputs/`, `artifacts/`, and `data/` are ignored and
       excluded from formatting and other source tooling.
-- [ ] `reports/` holds only report sources; Cairn is the pinned
-      `cairn2[reports,media,ui]` v0.13.1 dependency, imported as `cairn`.
+- [ ] Cairn is the pinned `cairn2[media,ui]` v0.16.0 dependency, imported as
+      `cairn`; reports live in its repository, not in the project.
       No Cairn internals are copied or patched; entry points use Cairn’s native tracking APIs. Settings live in `.cairn.toml`; no JSON `.cairn` file is assumed.
 - [ ] No experiment-tracking service or custom run database is used; Cairn's
       repo (runs and artifacts) is the record.
@@ -31,6 +31,10 @@ Environment and runs
 - [ ] Run names are one to three words naming the experiment, reused across
       reruns and multirun trials (no hyperparameters, seeds, dates, or
       `v2`/`final`); descriptions explain purpose and interpretation limits.
+- [ ] Runs split by computation: one per expensive computation (training,
+      evaluation, preparation) and one analysis run per figure or table group,
+      named after what it shows and reading upstream runs with `run.use`; no
+      numbered or near-duplicate run names.
 - [ ] Each run logs images over steps of everything cheap to compute (output
       next to reference and input, error map, image-valued parameters and
       intermediate quantities) under stable keys, so it is inspectable in the
@@ -62,11 +66,11 @@ Artifacts and repo
       inputs are referenced rather than redundantly copied into every trial.
 - [ ] Imported datasets have documented origin/validation, without a fabricated
       producer. Reports distinguish imported inputs from computed evidence.
-- [ ] Every result a report cites was recorded on a completed, scientifically
+- [ ] Every result a report embeds was recorded on a completed, scientifically
       validated run. Any separately published result artifact has a verified
-      completed producer. `latest` is
-      not a success filter; exact versions are pinned. No experiment output
-      was published through the run-less explicit-project import API.
+      completed producer. `latest` is not a success filter: after a rerun, the
+      claims that rest on it were re-read. No experiment output was published
+      through the run-less explicit-project import API.
 - [ ] Datasets and models experiments read are artifacts, used with
       `run.use` (exact `@vN` refs in configs for cited evidence), so each
       run lists them as inputs.
@@ -94,6 +98,11 @@ Method and evidence
       concentrated on the current leader, and untested alternatives or
       reformulations are suggested, not implemented without the user's
       agreement; the objective and problem statement are the user's.
+- [ ] Each question was answered at the smallest setup that can answer it
+      (proofs of concept in minutes); long runs state what no smaller setup
+      could show and followed a passing small version and smoke run; claimed
+      results are backed at the claimed scale, with the trend along the scale
+      ladder and where the method breaks.
 - [ ] Baselines run in their faithful configuration; a plain one is added and
       labelled only when the question needs it (the tuning does not transfer
       or hides the mechanism).
@@ -108,73 +117,53 @@ Method and evidence
       any change of chart is justified by a different question.
 
 Reports
-- [ ] Each coherent report question has its own single-page
-      `reports/<slug>/report.md` (no root report, no nesting) with a current
-      front matter `title` and `description`, with scientific status and
-      synthesis in its body; related reports cross-link with checked URLs
-      and explicit anchors in the native reader and standalone export.
-- [ ] Inspection, validation, and comparison reports have scope-appropriate
-      sections; research-direction reports follow the paper-like spine: Abstract,
-      Introduction, Background and related work, Methods, results and
-      discussion, Conclusion.
+- [ ] In the user's reports, only agent blocks were written, plus any change
+      the user asked for, and only that; no sections were added or text
+      restructured on my own.
+- [ ] Each explored direction is an agent report under the block that asked
+      for it, opening with Claim / Setup where it holds / Status / Evidence,
+      and the header matches the evidence below it.
+- [ ] Direction reports follow the paper-like spine where the question needs
+      it; inspection, validation, and comparison reports use the sections
+      their question needs.
 - [ ] The method and baselines are built from the framework's abstractions
       (Mitsuba plugins and Dr.Jit autodiff, PyTorch `nn.Module`s and
       `torch.optim`, ...); any departure is stated in Methods.
 - [ ] Methods states the method as implemented (equations or an algorithm),
       with the figures a paper in the field would have (for a neural network,
-      its architecture drawn from the model), and every changed
-      report was reviewed according to its scope against references/review.md; items left open are in the handoff.
+      its architecture drawn from the model), and every changed direction
+      report was reviewed against references/review.md; items left open are
+      in the handoff.
 - [ ] Background and related work comes from a literature and prior-art
       search with linked sources, and overlapping prior art is flagged in
-      supported callouts explicitly headed "Prior art".
+      callouts explicitly headed "Prior art".
 - [ ] Every method, baseline, and variant is defined, with its difference
       from the baseline, what is held constant, and the fairness boundary,
       before results use its name.
-- [ ] Every report declares what it reads under `cairn.inputs:`; references a
-      finding relies on are pinned (`artifacts/<name>@vN`, `runs/<name>@vN`, or full artifact IDs), and report code reads no undeclared
-      experimental results. This is a workflow check, not an engine sandbox.
-- [ ] Every metric card and result in prose is generated from the declared
-      inputs; only design constants are typed into the scientific text;
-      metric labels state the comparison, direction, population, and
-      aggregation.
-- [ ] Experimental figures come from the runs that wrote them
-      through declared captured inputs, only from completed, validated
-      producers, and their exact source refs and input hashes are inspectable.
-      The data each figure plots is stored in full on its run or declared inputs,
-      and the report redraws it from that data; the generating function and material plotting
-      settings are recorded alongside, with source provenance.
+- [ ] No result number is typed into a report: every result is a table,
+      value, or figure embedded from a run, added by an analysis run that
+      `use`s what it reads; only design constants are typed. Table columns
+      state the comparison, direction, population, and aggregation.
+- [ ] The data each figure plots is stored in full on its run, so the
+      analysis run can redraw it without rerunning an expensive stage.
 - [ ] Methods has the figures a good paper would: an overview of the method,
       structure diagrams where the method has interacting parts, and the
       experiment setup (geometry drawn to scale from the resolved config, the
       real test data). Each is labelled with the symbols of the equations,
       explained in the text, and was rendered and inspected (aligned, no
       overlaps or clipped text, arrows reach their targets); no auto-laid-out
-      graphs, no diagrams of the report or run tooling or of linear protocol
-      steps.
+      graphs, no diagrams of the tooling or of linear protocol steps.
 - [ ] Every figure the user asked for is in the report as asked, and the
       mechanisms the claim depends on are shown on a small instance with
       values from the project's code, not only through outputs or aggregates.
-- [ ] `::: {.finding}` blocks state tentative/supported/contradicted/superseded
-      explicitly, have a qualitative title (no result numbers), cite source
-      artifacts, and expose conflicts.
 - [ ] Callouts mark only consequential synchronization needs and are revised
       when resolved.
-- [ ] Each successful report build has `manifest.json` with exact input refs,
-      captured source hashes, exact input IDs, and environment provenance.
-      Undeclared external reads are not tracked; the report obeys the stricter
-      declared-input policy and does not claim hermetic execution.
-- [ ] Every changed report is published (`pixi run report-publish <slug>`),
-      so its version records the exact inputs.
+- [ ] One comment watcher ran through the session; every sent request was
+      answered in its thread, and resolved only when done.
 
 Hosting
-- [ ] Pasted copy-location markers (`reports/<slug>/report.md:42 "..."`) are
-      located by file, line, or figure id, handled, rebuilt, and summarized
-      per marker.
-- [ ] The report server and the UI bind to localhost by default and are not
-      exposed unauthenticated to an untrusted network.
-- [ ] Shared or published reports are the unchanged Cairn output
-      (`.cairn/share/<slug>/`, `.cairn/build/`, or the published
-      report version); nothing was restyled or re-authored for the destination.
-- [ ] The handoff gives exact build, publish, serve, and UI commands, concrete
-      URLs, the run and artifact references the reports read, and the
-      locations of run data and findings.
+- [ ] The UI binds to localhost by default and is not exposed unauthenticated
+      to an untrusted network.
+- [ ] The handoff gives exact commands for the experiments, the report URLs
+      (`<ui>/p/<project>/r/<name>`), and the run and artifact references the
+      reports embed.

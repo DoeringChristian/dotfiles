@@ -1,5 +1,8 @@
 # Writing a direction report
 
+This is for your own agent reports. In the user's report, write only what they
+ask for, in their structure.
+
 Read this before writing or revising a direction report's Abstract,
 Background, or Methods, and read the worked example
 [example-methods.md](example-methods.md) once per project. Report syntax
@@ -15,14 +18,15 @@ below), so know its items before you write.
 
 ## The spine
 
-Author every direction report with this ordered spine (how reports are
-organized is in [reports.md](reports.md)):
+Below the Claim / Setup where it holds / Status / Evidence header (see
+[reports.md](reports.md)), author every direction report with this ordered
+spine, adapted to the question rather than followed to the letter:
 
 1. `## Abstract`: question, approach, principal result, important
    qualification, and current decision, self-contained.
 2. `## Introduction`: how this direction serves the project's shared target
-   (stated briefly, or linked to the published report's explicit `#introduction` anchor when another
-   report defines it), its research question,
+   (stated briefly, or linked to the report that defines it), its research
+   question,
    scope, and why the comparison matters.
 3. `## Background and related work`: prior and related work, the baselines,
    and the comparison ladder, for a technically literate reader who has not
@@ -34,21 +38,23 @@ organized is in [reports.md](reports.md)):
 6. `## Conclusion`: the answer the evidence supports, its limits, and the next
    decision or experiment.
 
-Write in two passes. Right after the direction is agreed, before or alongside
-the first runs, write the Abstract, Introduction, Background and related work,
-and Methods in full: the Abstract states the question, the approach, and what
+While exploring, a direction's report can be just the header, the setup, the
+method in a few sentences, and the evidence; breadth matters more than polish.
+Write the full spine once the user wants the direction pursued (they comment
+so, or take it over and ask for it), in two passes. Before or alongside the
+next runs, write the Abstract, Introduction, Background and related work, and
+Methods in full: the Abstract states the question, the approach, and what
 the experiments will show, and the summary and Conclusion state what is planned
 and pending. Give each planned result section its heading and a `note` callout
-naming the runs it waits for and the question it will answer. Build and publish
-this draft, and refer back to it while you run the experiments.
-Then, as each run completes and passes validation, declare it as an input,
-replace its pending note with the result, and rebuild and publish; revise the
-Abstract and Conclusion once the evidence supports an answer. Never fill a
-pending section with expected or typed results.
+naming the runs it waits for and the question it will answer. Write this
+draft to the report with `proposed` status, and refer back to it while you run
+the experiments. Then, as each run completes and passes validation, replace its
+pending note with the embedded result, and revise the header, the Abstract, and
+the Conclusion once the evidence supports an answer. Never fill a pending
+section with expected or typed results.
 
 Add Results, Discussion, Limitations, or Appendix sections when they help; keep
-the Abstract first and the Conclusion last. Put hidden loading code in a
-preamble and visible metrics inside a named section.
+the Abstract first and the Conclusion last.
 
 ## Methods
 
@@ -103,8 +109,8 @@ introduced, saying what to see in it:
   single equation needs no graph.
 - **A toy example of a key operation**: before and after on a small input, a
   one-dimensional slice, a small grid, the geometry of a constraint. Compute it
-  with the project's own code (a `{python}` block importing captured project
-  functions, or an illustration experiment whose figure is logged as an artifact), never with
+  with the project's own code in an illustration run that adds the figure for
+  the report to embed, never with
   a separate reimplementation or a hand-drawn approximation, so the figure
   shows what the code does.
 - **Internal behavior over steps** when the method's point lies in how its
@@ -185,23 +191,17 @@ Mark comparisons that change several factors as confounded.
 
 ## Summaries and findings
 
-Metric cards hold only values the next decision depends on; each label and
-detail says what is compared, whether higher or lower is better, the evaluated
-population, and the aggregation. Findings hold only decision-relevant claims;
-supporting numbers go to the evidence sections. Say each result once, where it
+Result tables hold only values the next decision depends on; each column says
+what is compared, whether higher or lower is better, the evaluated population,
+and the aggregation (the analysis run names them). The header's claim and the
+Conclusion hold only decision-relevant claims; supporting tables go to the
+evidence sections. Say each result once, where it
 is discussed, and link to it elsewhere instead of repeating it.
 
 ## The review
 
-When you finish a turn in which a direction report's sources changed, the
-skill's Stop hook (`scripts/report_gate.py`) checks that the report was rebuilt
-and then sends you back once to review it against [review.md](review.md). Read
-the built report as its reader would, decide each item, fix what fails in the
-sources, and rebuild. Fix the problem, not the wording that revealed it: never
-pad a section to make an item pass, and tell the user which items you left
-open and why.
-
-On a host that does not execute Stop hooks, run the gate explicitly with the
-project root as its `cwd`, carry out the same whole-report review, then run it
-with `stop_hook_active: true` only after that review. A successful build does
-not substitute for deciding R1–R9.
+Before finishing a turn in which you changed a direction report, review it once
+against [review.md](review.md): read it in the UI as its reader would, decide
+each item, fix what fails, and write it again. Fix the problem, not the wording
+that revealed it: never pad a section to make an item pass, and tell the user
+which items you left open and why.
