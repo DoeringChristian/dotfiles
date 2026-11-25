@@ -1,0 +1,4 @@
+interface:
+  display_name: "Inter-agent review"
+  short_description: "Have Claude and Codex independently critique each other"
+  default_prompt: "Use $inter-agent-review to obtain an independent critique of my completed work."
