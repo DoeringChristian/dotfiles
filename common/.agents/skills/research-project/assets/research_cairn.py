@@ -1,4 +1,4 @@
-"""Project evidence checks and study summaries using the Cairn2 public API.
+"""Project evidence checks and study summaries using Cairn's public API (v0.18).
 
 Copy beside experiments/run.py. This is project policy, not a Cairn plugin.
 Run "python experiments/research_cairn.py --help" for evidence/study checks.
@@ -48,33 +48,34 @@ def _write_json(path: Path, value: Any) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def exact_ref(reader):
-    return str(reader)
-
-
 def require_completed_run(reader):
-    if reader.namespace != "runs" or reader.outcome != "completed":
+    if reader.namespace != "runs" or not reader.completed:
         raise ValueError(f"Run {reader.id} is not a completed producer")
     return reader
+
+
+def used(reader, role):
+    """The artifacts an artifact used in a role, each once."""
+    return list({found.id: found for path, found in reader.uses() if path == f"_use/{role}"}.values())
 
 
 def publish_result(client, producer, *, name=None):
     """Opt in to a separate result artifact from a run’s added "result" folder."""
     require_completed_run(producer)
-    with client.start("artifacts", name or producer.name) as result:
+    with client.artifact("artifacts", name or producer.name) as result:
         result.use(producer, role="producer")
-        result.finish(value=producer.file("result"))
+        result.log(result=producer["result"])
     return client.get(result.id)
 
 
 def require_completed_artifact(client, ref: str):
     """Require immutable evidence with a completed run, not just an alias."""
     reader = client.get(ref)
-    if reader.outcome != "completed":
+    if not reader.completed:
         raise ValueError(f"Artifact {reader.id} has no verifiable completed producer")
     if reader.namespace == "runs":
         return require_completed_run(reader)
-    producers = reader.inputs(role="producer")
+    producers = used(reader, "producer")
     if len(producers) != 1:
         raise ValueError(f"Artifact {reader.id} has no verifiable completed producer")
     if producers[0].project != reader.project:
@@ -101,9 +102,8 @@ def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None):
             if trial.id != runs[label] or trial.project != project:
                 raise ValueError(f"Trial {label} is missing or belongs to another project")
             trials.append({"trial": label, "run_id": trial.id, "status": "completed"})
-        config = {"project": project, "run": {"name": name}, "study": dict(roster),
-                  "cairn": {"repo": client.repo}}
-        with client.run(name, config=config, metadata={"kind": "study"}) as run:
+        config = {"project": project, "run": {"name": name}, "study": dict(roster)}
+        with client.run(name, config=config, about={"kind": "study"}) as run:
             output_dir = root / "outputs" / "studies" / run.id
             _write_json(output_dir / "cairn-run.json", {"project": project, "run_id": run.id})
             result_dir = output_dir / "result"
@@ -111,7 +111,7 @@ def finalize_study(roster: Mapping[str, Any], *, project_root: Path, repo=None):
             _write_json(result_dir / "trials.json", trials)
             for trial in trials:
                 run.use(trial["run_id"], role="trial")
-            run.add(result_dir, name="result")
+            run.add(result_dir, "result")
         return client.get(run.id)
 
 
@@ -131,7 +131,7 @@ def main() -> None:
             reader = require_completed_artifact(client, args.ref)
     else:
         reader = finalize_study(json.loads(Path(args.roster).read_text()), project_root=args.project_root, repo=args.repo)
-    print(f"{reader} ({reader.id})")
+    print(f"{reader.ref} ({reader.id})")
 
 
 if __name__ == "__main__":

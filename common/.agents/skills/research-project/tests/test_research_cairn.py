@@ -1,4 +1,4 @@
-"""Exercise the scaffold against the pinned Cairn2 public API."""
+"""Exercise the scaffold against the pinned Cairn public API."""
 import importlib.util
 import json
 import subprocess
@@ -20,7 +20,7 @@ def project(tmp_path, monkeypatch):
     root.mkdir()
     (root / "method.py").write_text("def compute():\n    return 42\n")
     (root / "pixi.lock").write_text("version: 6\nenvironments: {}\n")
-    for key in ("CAIRN_REPO", "CAIRN_TOKEN", "CAIRN_TOKEN_FILE"):
+    for key in ("CAIRN_REPO", "CAIRN_TOKEN", "CAIRN_PROJECT"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.chdir(root)
     return root
@@ -32,14 +32,14 @@ def client(root):
 
 def test_runless_and_failed_producers_cannot_certify_evidence(project):
     with client(project) as c:
-        sample = c.start("datasets", "sample")
-        sample.finish(value={"synthetic": True})
+        with c.artifact("datasets", "sample") as sample:
+            sample.log(synthetic=True)
         with pytest.raises(ValueError, match="completed producer"):
             helper.require_completed_artifact(c, sample.id)
         failed = c.run("failed", provenance=False)
-        failed.finish(outcome="failed")
-        with c.start("artifacts", "manual") as result:
-            result.use(failed.id, role="producer")
+        failed.finish("failed")
+        with c.artifact("artifacts", "manual") as result:
+            result.use(failed.id, role="producer", incomplete=True)
         with pytest.raises(ValueError, match="completed producer"):
             helper.require_completed_artifact(c, result.id)
 
@@ -55,7 +55,7 @@ def test_study_refuses_incomplete_or_ambiguous_roster(project, fault):
         first, second = c.run("first", provenance=False), c.run("second", provenance=False)
         first.finish()
         if fault != "running":
-            second.finish(outcome="failed" if fault == "failed" else "completed")
+            second.finish("failed" if fault == "failed" else "completed")
         data = roster(first.id, second.id)
         if fault == "missing":
             del data["runs"]["1"]
@@ -80,10 +80,10 @@ def test_study_summary_preserves_every_trial_and_public_lineage(project):
                 ids.append(run.id)
         study = helper.finalize_study(roster(*ids), project_root=project, repo=c.repo)
         result = helper.require_completed_artifact(c, study.id)
-        result.download(to=project / "outputs/summary")
+        result.download(project / "outputs/summary", "result/**")
         assert json.loads((project / "outputs/summary/result/roster.json").read_text()) == roster(*ids)
         assert result.namespace == "runs"
-        assert {trial.id for trial in result.inputs(role="trial")} == set(ids)
+        assert {trial.id for trial in helper.used(result, "trial")} == set(ids)
         assert not c.find("artifacts/*")
 
 
@@ -94,19 +94,19 @@ def test_separate_result_publication_reuses_stored_value(project, monkeypatch, l
         folder.mkdir(parents=True)
         (folder / "scores.json").write_text('{"loss":0.1}')
         with c.run("trial", provenance=False) as run:
-            run.add(folder, name="result", link=linked)
+            run.log(result=cairn.Directory(folder, link=linked))
         assert not c.find("artifacts/*")
         producer = c.get(run.id)
         def no_transfer(*args, **kwargs):
             raise AssertionError("Publication must reuse stored content without byte transfer")
         with monkeypatch.context() as patch:
             patch.setattr(producer, "download", no_transfer)
-            patch.setattr(c.backend, "put_blob", no_transfer)
+            patch.setattr(c.backend, "put", no_transfer)
             result = helper.publish_result(c, producer)
         checked = helper.require_completed_artifact(c, result.id)
-        assert [producer.id for producer in checked.inputs(role="producer")] == [run.id]
-        checked.download(to=project / "outputs/verified")
-        assert json.loads((project / "outputs/verified/scores.json").read_text()) == {"loss": 0.1}
+        assert [producer.id for producer in helper.used(checked, "producer")] == [run.id]
+        checked.download(project / "outputs/verified")
+        assert json.loads((project / "outputs/verified/result/scores.json").read_text()) == {"loss": 0.1}
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -135,9 +135,9 @@ def test_native_hydra_scaffold_tracks_each_invocation(project, fail):
         assert len({run.id for run in runs}) == 2
         assert all(run.config["run"]["name"] == "adjusted-name" for run in runs)
         assert {run.config["seed"] for run in runs} == {1, 2}
-        assert {next(run.records())["seed"] for run in runs} == {1, 2}
+        assert {run["seed"] for run in runs} == {1, 2}
         assert all(run.outcome == ("failed" if fail else "completed") for run in runs)
-        assert all("provenance" in run.metadata for run in runs)
+        assert all(run["_about/git"] is None and "source.tar.gz" in run["_about"] and run["_about/description"] == "Scaffold test" for run in runs)
         assert not c.find("artifacts/*")
         if fail:
             with pytest.raises(ValueError, match="completed producer"):

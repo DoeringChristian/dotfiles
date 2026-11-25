@@ -1,4 +1,4 @@
-"""Standard Hydra entry point using Cairn's native run context."""
+"""Standard Hydra entry point that logs one Cairn run."""
 
 import sys
 from pathlib import Path
@@ -12,13 +12,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # flat project 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
-    with cairn.init(
+    with cairn.run(
         cfg.run.name,
         config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
-        metadata={"description": cfg.run.description},
+        about={"description": cfg.run.description},
     ) as run:
         # Construct components with hydra.utils.instantiate(cfg.<component>).
-        # Use run.use/log/track/add (or cairn.*) to read inputs and record results.
+        # Use run.use/log/add (or cairn.*) to read inputs and record results.
         # Perform scientific validation before leaving this block; raise on failure.
         raise NotImplementedError("Implement this Hydra entry point before running it")
 

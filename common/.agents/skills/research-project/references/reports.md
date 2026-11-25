@@ -1,85 +1,110 @@
 # Reports
 
-Read this before creating, writing, or answering in reports, and before handling
-sent comments. How to write a direction's method is in
+Read this before creating, writing, or changing a report, and whenever the user
+gives you a reference to a place in one. How to write a direction's method is in
 [writing-methods.md](writing-methods.md).
 
-Contents: what a report is; whose report it is; agent blocks; agent reports;
-syntax; numbers and figures; comments; viewing.
+Contents: what a report is; how agents read and write; how the user tells you
+what to change; whose report it is; agent reports; syntax; numbers and figures;
+viewing.
 
 ## What a report is
 
-A report is a document in the project's Cairn repository, not a file in the
-project. The user edits it in the browser as they read it; agents read and write
-the same document as Markdown through `cairn report`. A report runs no code:
-analyses are runs that log their tables and figures, and the report embeds them.
-There is no build, publish, or export step. Every saved text of a part is kept as
-a revision, and a write against an older revision is refused instead of
-overwriting.
+A report is a Markdown file that the user and agents write at the same time. It
+lives in **cairn-ui**, the program that shows the pages, and has nothing to do
+with the runs' repository: Cairn itself knows no reports, and a report is not an
+artifact. It runs no code: analyses are runs that log their tables and figures,
+and the report shows them by reference. There is no build, publish, or export
+step, and no history: only the current text exists.
+
+The user edits in the browser. Every change you make appears there at once, and
+the user may be typing while you write.
+
+## How agents read and write
+
+All commands ask a running cairn-ui. `ui` in `.cairn.toml` (or `CAIRN_UI`, or
+`--url`) names it, and the project comes from `.cairn.toml` too; the token is
+the one that the server uses.
 
 ```bash
-pixi run cairn report list
-pixi run cairn report show NAME                 # every part; the body also as markdown
-pixi run cairn report write NAME body body.md --revision N --by agent
-pixi run cairn report write NAME SLOT answer.md --revision N --by agent
-pixi run cairn report new NAME body.md --owner agent --origin ORIGIN --slot SLOT
+pixi run cairn-ui report list
+pixi run cairn-ui report show NAME > /tmp/report.md
+pixi run cairn-ui report edit NAME --old "the passage" --new "what it becomes"
+pixi run cairn-ui report write NAME --base /tmp/before.md --file /tmp/after.md
+pixi run cairn-ui report write NAME --file new.md        # also creates it
+pixi run cairn-ui report delete NAME                     # only when the user asks
 ```
 
-Always pass `--revision` with the revision of the part you read (`report show`
-lists it; a part not written yet is at 0). Without it, a write silently replaces
-whatever the user saved in between. On a conflict, read the part again, merge,
-and write again. Names are short, lowercase, and may nest with `/`
-(`study/grids`). Link to
-another report as `[grids](/p/PROJECT/r/study/grids)`.
+- **Prefer `edit`** for any change to an existing report. It replaces the one
+  passage that reads exactly `--old` and touches nothing else. It fails when the
+  passage is not there exactly once: read the report again, and give a longer or
+  current passage.
+- **Rewriting more:** keep a copy of what you read (`show > before.md`), change
+  a second copy, and `write --base before.md --file after.md`. What others wrote
+  since you read it is merged in; where both changed the same lines, both stay,
+  so read the result and resolve it.
+- **Never `write` an existing report without `--base`.** It replaces the whole
+  text, including what the user is typing.
+- Read the report again right before you change it, and after. Use
+  `--new ""` to remove a passage. Pass multi-line text as quoted arguments
+  (`--new "$(cat passage.md)"`).
+
+Names are short and lowercase, and may nest with `/` (`study/grids`). The files
+lie beside cairn-ui's database; use the commands, not the files.
+
+Workspaces (the pages of live curves) are cairn-ui's too:
+`pixi run cairn-ui workspace list | show NAME | write NAME --file layout.json
+--expected REVISION`. Change one only when asked.
+
+## How the user tells you what to change
+
+There are no comments, agent blocks, or watchers. The user asks in the chat,
+often with a reference copied from the report, or writes a note to you in the
+report's text and tells you to look.
+
+A copied reference names the report, the line, and the exact Markdown:
+
+```text
+study/grids.md:12 "The loss **falls** quickly" [cairn:reports/study/grids]
+```
+
+- The quoted passage is what `edit --old` needs. The line number is where it was
+  when it was copied: search for the passage, do not trust the line.
+- A reference to a figure quotes its `![…](cairn:…)`; one from an enlarged
+  image or video is JSON with the report (`file`), the run and path
+  (`artifact_ref`), and a region (pixels) or time (seconds). Look at that region
+  or time before you answer.
+- Do exactly what is asked at that place, then say in the chat what you changed.
+  When the request is a question, answer it in the chat; change the report only
+  if it asks for that or the text is wrong, and say so.
+- If the passage is gone or no longer fits the request, ask.
 
 ## Whose report it is
 
-Every report has an owner, `user` or `agent`, and the owner writes its body.
+Cairn-ui does not record an owner. The rule is by how the report came to be:
 
-- **The user's report** is the user's: their plan, their framing, their
-  sections. Write only into its agent blocks. Change the body only when the user
-  asks, and then only what they asked: do not add an Abstract, Background,
-  related work, or any other section, restructure, or "clean up" text they did
-  not mention. Read the current revision first and write with `--revision`.
-- **An agent report** is yours to write. The user steers it with comments, and
-  **Take over** in the UI makes it theirs; from then on it is the user's report
-  and the rule above applies. `report show` tells you the owner; check it before
-  every write.
+- **The user's report** is every report the user started: their plan, their
+  framing, their sections. Change only what they ask, where they ask it. Do not
+  add an Abstract, Background, related work, or any other section, restructure,
+  or "clean up" text they did not mention. Results they ask for go where they
+  say; if they did not say, propose a place in the chat.
+- **An agent report** is one you created and that opens with the header below.
+  It is yours to write. The user may edit it: keep their changes, build on them,
+  and never write over them. Once they tell you it is theirs, it is.
 
-## Agent blocks
-
-The user types `@agent` on a line of its own where an agent should work. In
-Markdown, a block is `<?cairn agent SLOT?>`. Its conversation is the block's
-comments without a quote; the first sent message is the request, and later
-messages refine it. A template's block may carry a suggested request
-(`<?cairn agent SLOT "..."?>`); it is a request only once the user sends it.
-
-Answer in the block itself:
-
-```bash
-pixi run cairn report write NAME SLOT answer.md --revision N --by agent
-pixi run cairn comments reply c_ROOT "Done: the baseline converged; see the block" --by agent
-```
-
-The answer is what the user asked for and nothing more: the result, with the
-embedded tables and figures that show it, and one or two sentences on what it
-means and what is still open. Rewrite the answer when the work moves on instead
-of appending to it. When the request asks to explore, the answer is short and
-the work goes into agent reports under the block (below).
+When you cannot tell, treat it as the user's.
 
 ## Agent reports
 
-Create an agent report for each direction you explore, under the block that
-asked for it, named after the direction:
+Create an agent report for each direction you explore, named below the report it
+belongs to:
 
 ```bash
-pixi run cairn report new study/grids grids.md --owner agent --origin study --slot directions
+pixi run cairn-ui report write study/grids --file grids.md
 ```
 
-The UI shows it as a card under that block and in the report tree. Agent
-reports may start further agent reports under their own blocks. When the user
-asks for a report in chat rather than in a block, create a standalone agent
-report (`--owner agent`, no origin) and give them its URL.
+Tell the user its name and URL in the chat. Link it from the user's report only
+if they ask (`[grids](/p/PROJECT/r/study/grids)`).
 
 Every agent report opens with the same header, so the user can scan many:
 
@@ -96,7 +121,7 @@ Every agent report opens with the same header, so the user can scan many:
 - **Status**: `proposed` (nothing run yet), `running`, `supported`,
   `contradicted`, `inconclusive`, or `abandoned`, with the reason for the last
   three in a few words.
-- **Evidence**: which runs and which embeds below carry the claim.
+- **Evidence**: which runs and which figures below carry the claim.
 
 Below the header, use the structure the question needs. A research direction
 follows the paper-like spine in [writing-methods.md](writing-methods.md); an
@@ -107,19 +132,16 @@ header with it.
 
 Keep each report coherent for a reader who needs the current state quickly:
 integrate changes where they belong, remove what is stale, and re-read the
-whole report after substantive changes. It is not an activity log; the revision
-history keeps the past.
+whole report after substantive changes. It is not an activity log.
 
 ## Syntax
 
-Reports are Markdown: headings, lists, tables, `$...$` and `$$...$$` math,
-code fences (shown, never run), and callouts:
+Reports are Markdown: headings, lists, tasks (`- [ ]`), tables, `$...$` and
+`$$...$$` math, code fences (shown, never run), and callouts:
 
 ```markdown
-::: {.callout-warning}
-**Question: which boundary handling is authoritative?** The two baselines differ;
-confirm before the results are interpreted.
-:::
+> [!warning] Question: which boundary handling is authoritative?
+> The two baselines differ; confirm before the results are interpreted.
 ```
 
 Callout kinds are `note`, `tip`, `warning`, and `important`. Use one when the
@@ -128,29 +150,57 @@ unresolved assumption, a surprising limitation, contradicting evidence,
 overlapping prior art, a question for the user), say what response is needed,
 and remove it once resolved.
 
-Artifacts appear through `cairn:` references, each on a line of its own:
+Keep an empty line around tables, figures, and blocks.
+
+What a run holds appears through `cairn:` references, `REF#path`, where the path
+is the key it was logged under (or a path inside it):
 
 ```markdown
-![Error on the test set](cairn:runs/grids-eval@latest#figures/error.png)
-![](cairn:runs/grids-eval@latest#results)
-![](cairn:runs/grids-eval@v3)
+![Error on the test set](cairn:runs/grids-eval@v3#figures/error)
+
+![Ours](cairn:runs/ours@v1#render){width=50%} ![Reference](cairn:runs/reference@v1#render){width=50%}
+
+The final error was ![error](cairn:runs/grids-eval@v3#rmse).
 ```
 
-`REF#name` shows the file or typed value the run added under that name: images,
-SVG, video, and audio play, Plotly figures stay interactive, and tables show as
-tables. `REF` alone shows the run's value. `@latest` is fine: the report shows
-the newest version, so after a rerun re-read every claim that rests on it. Use
-an exact `@vN` only where the claim is about that version, for example when
-comparing an old run with its fix.
+- Images, SVG, video, and audio play, Plotly figures stay interactive, tables
+  show as tables. Several on one line stand beside each other; `{width=NN%}`
+  sets a share of the line.
+- A number or text shows as itself within a sentence. This is how a result
+  number enters prose.
+- `[the run](cairn:runs/grids-eval@v3)` links to the run.
+- The selector is `@vN`, an alias, or `@latest` (the newest *completed* version,
+  also without a selector). `@latest` moves: after a rerun, re-read every claim
+  that rests on it. Use `@vN` where the claim is about that version.
 
-A viewer (an artifact's `index.html` with its scripts beside it, for example a
-three.js mesh viewer added by a run as `viewers/mesh`) shows with settings in a
-`view` block; `viewer` and `caption` are reserved, every other key is passed to
-the viewer, and `cairn:` strings become links to those files:
+A `card` block shows live curves, images, or figures of several runs, as a
+workspace card does:
+
+````markdown
+```card
+kind: scalar
+runs: [runs/ours-*, runs/baseline-ai57_008@v2]
+x: step
+y: loss
+logY: true
+height: 360
+caption: Training loss of every variant
+```
+````
+
+`kind` is `scalar`, `image`, `video`, or `plotly`; `runs` are references, or names
+with `*` (the newest completed version of each). Other keys are the card's
+settings: `x`, `y`, `logX`, `logY`, `split` (a list, default `["@run"]`),
+`value` and `axis` for media (the key and the step axis), `mode` (`gallery`,
+`compare`, `sequence`), `columns`.
+
+A `view` block loads a viewer, an artifact's `index.html` with its scripts beside
+it. `viewer` and `caption` are reserved, every other key is passed to the viewer,
+and `cairn:` strings become links to those files:
 
 ````markdown
 ```view
-viewer: cairn:viewers/mesh@latest#index.html
+viewer: cairn:viewers/mesh@v1#index.html
 caption: Lucy decimated to 250k and 50k triangles
 meshes:
   - label: 250k triangles
@@ -164,27 +214,33 @@ loads its own files by relative path.
 
 ## Numbers and figures come from runs
 
-**Never type a result number into a report.** Every result enters as an embed
-of what a run recorded: a table, a value, or a figure. Prose says what the
-embedded result shows qualitatively ("lower on every setup, most at the
+**Never type a result number into a report.** Every result enters as a
+reference to what a run recorded: a table, a value, or a figure. Prose says what
+the shown result means qualitatively ("lower on every setup, most at the
 thinnest shells") and points at it. Design constants that define the setup (a
 resolution, a threshold, a budget) may be typed.
 
 So results need an analysis run: one per figure or table group, named after
-what it shows, that `run.use`s the runs it reads and adds its tables and
-figures under names the report embeds (`cairn.add(cairn.Table(rows),
-name="results")`, `cairn.add(cairn.Figure(figure), name="figures/error")`;
-`track` writes records over steps for the UI, not embeddable files). Changing a
-figure means rerunning only it. Only completed, scientifically validated runs count as
-evidence; a smoke test or proxy is labelled as such.
+what it shows, that `run.use`s the runs it reads and logs its tables and figures
+under the keys the report references:
+
+```python
+with cairn.run("error-maps-ai57_008-widths", config, {"description": "..."}) as run:
+    source = run.use("runs/eval-ours-ai57_008-w64@v2", role="evaluation")
+    rows = source["cases"].load()
+    run.log({"results": cairn.Table(summary(rows)), "figures/error": cairn.Figure(error_figure(rows))})
+```
+
+Changing a figure means rerunning only it. Only completed, scientifically
+validated runs count as evidence; a smoke test or proxy is labelled as such.
 
 Which figures a method needs is in [writing-methods.md](writing-methods.md).
 Make each one the way a paper figure is made, not with an automatic layout
 engine (Graphviz, torchview, Mermaid). Choose the medium by what it shows:
 
 - **Structure** (an architecture, an overview): a self-contained SVG written by
-  hand and added by a run (an `illustrations` run with `run.add(path,
-  name="figures/architecture.svg")`), embedded like any figure.
+  hand and added by a run (an `illustrations` run with
+  `run.add("architecture.svg", "figures/architecture.svg")`), shown like any figure.
 - **Geometry and setup** (a scene, camera and light placement, a sampling
   domain, the train/test split): drawn to scale by code from the run's resolved
   config, with matplotlib or a function that writes SVG, in an analysis run.
@@ -211,43 +267,7 @@ for SVG), fix overlaps, clipping, misalignment, and stray arrows, and look again
 in the report at its displayed width. For a neural network, compare the drawing
 against `print(model)` and the shapes of one forward pass.
 
-## Comments
-
-**Always watch.** At the start of every session in a project with reports, start
-one watcher in the background, in a way that wakes you when it exits (in Claude
-Code, Bash with `run_in_background`; not the Monitor tool, which times out):
-
-```bash
-pixi run cairn comments watch 'reports/**' --json --once
-```
-
-It waits until a thread has a comment sent after its last reply, prints the
-threads as one JSON line, and exits. Handle them, then start it again. Keep
-exactly one watcher; check for one you started before starting another. Without
-background processes, check `pixi run cairn comments list 'reports/**' --json`
-at checkpoints and before ending each turn.
-
-A thread can hold unsent drafts: act only on sent messages (`sent_at` set) and
-use the rest as context. Its anchor says where it points: an agent block
-(`path` is the slot), a passage (quote and lines), or a figure (`media_key`,
-with a region or time). A comment on an agent block is a request or refinement
-for that block. A comment on a passage or figure of an agent report is feedback
-on your text; on the user's report, it asks for exactly what it says.
-
-Do the work, then reply in the thread with the outcome, and resolve the root
-only when everything it asked is done:
-
-```bash
-pixi run cairn comments reply c_ROOT "Added the 3D case; it does not hold there (see Status)" --by agent
-pixi run cairn comments resolve c_ROOT --note "3D results in the block" --by agent
-```
-
-Leave blocked or ambiguous requests open and ask a focused question in a reply.
-Comments are guidance, not scientific evidence.
-
 ## Viewing
 
-Reports show in the Cairn UI of the selected repository: `pixi run ui` for a
-local one, or the remote server's UI. Give the user the report's URL,
-`<ui>/p/<project>/r/<name>`. The report list shows the user's reports and,
-under them, the tree of agent reports.
+Reports show in cairn-ui: the one `ui` names, or `pixi run ui` for a local
+repository. Give the user the report's URL, `<ui>/p/<project>/r/<name>`.
