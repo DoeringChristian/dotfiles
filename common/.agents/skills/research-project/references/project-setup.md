@@ -160,24 +160,28 @@ root. Use `Path(HydraConfig.get().runtime.output_dir)` for optional scratch spac
 
 ### Run names
 
-A run name identifies what ran. Cairn's lists show a run's name and version,
-not its config, so someone who sees only the names must be able to tell the
-runs apart and find the one they mean. A name has two parts,
-`<computation>/<subject>`:
+A run name describes the run and what it runs on. Cairn's lists show a run's
+name and version, not its config, so someone who knows the project must
+recognize each run from its name alone and tell it from every other run.
 
-- the computation: one to three lowercase words for the method or question and
-  the stage: `weightnet-train`, `tv-baseline`, `prior-eval`, `error-maps`;
-- the subject: what tells this run from the others of the same computation, in
-  the words someone would use to ask for it: the dataset or scene, the model
-  variant, the value of the setting under study:
-  `weightnet-train/bunny-w256-fp16`, `prior-eval/bunny-w256-fp16`,
-  `noise-sweep/sigma-0.10`, `error-maps/bunny-main`.
+Choose names that make sense in the project's context, in the words the
+project already uses. A name mentions:
 
-Build the name in config by interpolation from the values that define the
-subject, so it cannot drift from what ran:
-`name: weightnet-train/${data.name}-w${model.width}-${precision}`. A run that
-reads another run's result carries the same subject (the evaluation of a model
-has the model's subject).
+- what the run is: the method or its role (`ours`, `baseline`, `reference`),
+  and the computation where it is not the obvious one (`eval-...`,
+  `frames-...`, or a figure's content such as `error-maps-...`);
+- what it runs on: the scene or dataset as the project calls it (`ai57_008`,
+  `bunny`);
+- what tells it from its siblings: the few settings that differ between the
+  project's runs, written short (`w64`, `fp16`, `m16`, `sigma0.1`).
+
+For example `ours-ai57_008-w64`, `baseline-ai57_008-w128-fp32`,
+`eval-ours-ai57_008-w64`, `reference-ai57_008`, `error-maps-ai57_008-widths`.
+
+Build the name in config by interpolation from the values it mentions
+(`name: ours-${scene.name}-w${model.width}`), so it cannot drift from what
+ran. A run that reads another run's result repeats that run's name
+(`eval-<name>`).
 
 - Two runs that someone will compare, or ask for separately, have different
   names. Every trial of a multirun has its own name, ending in the varied
@@ -185,19 +189,18 @@ has the model's subject).
 - A rerun of the same thing is the next version of the same name
   (`runs/<name>@v2`): after a bug fix, a failure or an interruption. The
   version number tells reruns apart and nothing else.
-- For an analysis run, the subject is what its figure or table covers
-  (`error-maps/bunny-main`), never a figure or table number.
-- A value that does not tell runs apart stays out of the name; it is in the
-  config. The purpose goes in `run.description`.
-- Never a counter, a date or a status word: `exp3`, `run-2`, `v2`, `final`,
-  `fixed`, `new`, `test`.
+- A setting that does not tell the project's runs apart stays out of the name;
+  it is in the config. The purpose goes in `run.description`.
+- Never a counter, a date or a status word (`exp3`, `run-2`, `v2`, `final`,
+  `fixed`, `new`, `test`), and never only a word that fits every run of its
+  kind (`train`, `experiment`).
 
 Give every run tags as well, for the facts people filter by
 (`run.annotate({"tags": ["bunny", "w256", "fp16"]})` right after the run
 starts): Cairn's lists show tags beside the name. Tags add to the name; they do
 not replace it.
 
-Keep the set of computations small and stable across the project. Before
+Keep the vocabulary of the names small and stable across the project. Before
 starting a run, list the project's existing run names; if the same thing ran
 before, reuse its name, so the run becomes its next version.
 
