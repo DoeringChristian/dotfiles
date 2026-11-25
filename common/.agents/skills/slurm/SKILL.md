@@ -129,7 +129,7 @@ the paths, quotas, and purge rules:
 | Code, configs, `pixi.lock` | the project directory under `/home`: small, backed up, never purged |
 | `outputs/`: Hydra's runs and sweeps, the inputs runs download (checkpoints, datasets from a tracking server), launcher logs | `/scratch/$USER/<project>/outputs`, linked as the project's `outputs/` (`setup` creates the link; `push` never overwrites it) |
 | pixi environments (`.pixi/`) and pixi's cache (`~/.cache/rattler`) | `/home`, together: environments are hardlinked from the cache, so projects on the same versions share one copy. Never move only one of them: across filesystems every environment becomes a full copy. |
-| Kernel and model caches (Dr.Jit, Triton, TorchInductor, CUDA, torch hub, Hugging Face) | the profile's `CACHE_ROOT` on `/scratch`: `cluster.sh` exports their variables for every remote command, and Slurm passes them into every job |
+| Kernel, model and tracking caches (Dr.Jit, Triton, TorchInductor, CUDA, torch hub, Hugging Face, Cairn's download cache and upload outbox) | the profile's `CACHE_ROOT` on `/scratch`: `cluster.sh` exports their variables for every remote command, and Slurm passes them into every job |
 | Checkpoints, renders, intermediate arrays, datasets | `/scratch/$USER/<project>/`: bulky and re-creatable; record the path in the run |
 | Job-local temporaries and staged inputs | `/tmp` inside the job (node-local) |
 
@@ -160,6 +160,20 @@ measured numbers.
      the login node, heavy CPU preprocessing as a CPU-only job (the cluster's
      build QoS or CPU partition). Store them under `/scratch/$USER/<project>/`.
    - A GPU job must never wait on an install, a download, or a cold cache.
+   - **Check that every input a trial reads is already on the cluster** before
+     each `submit` or `pack`, not only when the project is set up: the input
+     datasets and models the experiment downloads at start (from a tracking
+     server such as Cairn, or the web), and their size. `/scratch` is purged,
+     so data staged weeks ago may be gone, and links into it (cache folders
+     linked from the project) may dangle; a dangling link makes the run fail at
+     start, and missing data makes it download inside the GPU job. Stage
+     anything missing first, on the login node or as a CPU-only job, and wait
+     for it to finish.
+     *Example of the failure:* two 30k fits submitted to Kuma without this
+     check each held an L40S idle for 40 minutes while their 65 GB input
+     dataset (assumed to be 26 GB, not measured) streamed from the lab's
+     Cairn hub, after two submissions had already failed on dangling cache
+     links into purged `/scratch` folders.
 2. **Measure one representative trial first** with `smoke`. Use the smallest
    config that still shows production behaviour. Record:
    - time per step or iteration

@@ -28,13 +28,15 @@ Environment and runs
       and errors were inspected; required missing files (including Hydra runtime
       files when relevant) were explicitly added. Backend status is the completion
       record, and only completed, validated runs count as evidence.
-- [ ] Run names are one to three words naming the experiment, reused across
-      reruns and multirun trials (no hyperparameters, seeds, dates, or
-      `v2`/`final`); descriptions explain purpose and interpretation limits.
+- [ ] Run names say what ran, `<computation>/<subject>`: the names alone tell
+      the runs apart, every variant and multirun trial has its own, a rerun of
+      the same thing is the next version (no counters, dates, or
+      `v2`/`final`); runs carry tags; descriptions explain purpose and
+      interpretation limits.
 - [ ] Runs split by computation: one per expensive computation (training,
       evaluation, preparation) and one analysis run per figure or table group,
-      named after what it shows and reading upstream runs with `run.use`; no
-      numbered or near-duplicate run names.
+      named after what it shows and covers and reading upstream runs with
+      `run.use`; no numbered run names, and no variants hidden under one name.
 - [ ] Each run logs images over steps of everything cheap to compute (output
       next to reference and input, error map, image-valued parameters and
       intermediate quantities) under stable keys, so it is inspectable in the

@@ -40,8 +40,8 @@ skill itself.
 3. **Entry points are standard Hydra functions.** Each executable uses
    `@hydra.main` and a `main(cfg: DictConfig)` function. Its body constructs
    components and runs the method inside `with cairn.init(...) as run:`. Pass
-   `cfg.run.name` (one to three words naming the experiment, reused across
-   reruns and trials; see Run names in project-setup.md) and the explicitly
+   `cfg.run.name` (it says what ran, `<computation>/<subject>`, so the name
+   alone tells this run from the others; see Run names in project-setup.md) and the explicitly
    resolved config to `cairn.init`; use
    `run.use/log/track/add` or `cairn.*` inside the block. Use this native context
    instead of the run decorator. No Experiment base class or custom tracking
@@ -121,23 +121,32 @@ any run's recorded files directly. Keep expensive computation in experiment runs
 and cheap analysis in analysis runs. Dependencies record provenance, not
 automatic scheduling, cache hits, or permission to rerun upstream work.
 
-**Split runs by computation, not by attempt.** A project has a few named runs,
-each a distinct computation someone would rerun on its own, for example:
+**Split runs by computation, and name each run after what it ran.** A project
+has a few computations, each something someone would rerun on its own. A run's
+name is `<computation>/<subject>`: the computation, and what tells this run
+from the others of that computation, for example:
 
-- one run per expensive computation: `<method>-train` (every trial of a sweep
-  shares this name), `<method>-eval`, `dataset-prep`;
+- an expensive computation on one subject: `<method>-train/<subject>`,
+  `<method>-eval/<subject>`, `dataset-prep/<dataset>`. The subject is the
+  dataset or scene, the model variant, or the setting under study, built from
+  the config: `cache-train/bedroom-3x128-fp32`,
+  `cache-train/bedroom-3x1024-nvfp4`, `cache-eval/bedroom-3x1024-nvfp4`;
 - one analysis run per figure or table, or per small group drawn from the same
-  data, named after what it shows (`error-maps`, `convergence`,
-  `curvature-views`). It declares the runs it reads with `run.use` and is cheap,
-  so changing the figure means rerunning only it.
+  data, named after what it shows and covers (`error-maps/bedroom-main`,
+  `convergence/width-sweep`). It declares the runs it reads with `run.use` and
+  is cheap, so changing the figure means rerunning only it.
 
-Twenty runs called `exp1` … `exp20`, `run-3`, `fig-7` or `test-final-2` are
-wrong. A rerun or a fix is the next version of the same name. A variant is a
-config difference, or a sweep under one name. A figure run is named after its
+Someone who sees only the list of run names can tell which run is which. Runs
+that will be compared, or asked for separately, have different names: every
+variant and every trial of a sweep has its own. Twenty variants under one name
+(`train@v1` … `@v20`) are as wrong as twenty runs called `exp1` … `exp20`,
+`run-3`, `fig-7` or `test-final-2`. A version is a rerun of the same thing:
+after a fix, a failure or an interruption. A figure run is named after its
 content, never its position in a report. When
 one run does both an expensive computation and the figures from it, split it in
 two. Before starting a run, list the project's run names
-(`cairn artifact list --namespace runs`) and reuse a fitting one. Names follow
+(`cairn artifact list --namespace runs`); if the same thing ran before, reuse
+its name. Names follow
 Run names in [project-setup.md](references/project-setup.md).
 
 Document each entry point's inputs, outputs, and command. Pin stage inputs for

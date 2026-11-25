@@ -70,6 +70,14 @@ Kuma paths and limits:
 
 Keep `/home` under about 70 GB (`pixi run kuma storage`).
 
+The 30-day purge also empties folders that a project links to from `/home`
+(`outputs/`, a tracking server's cache, extracted datasets): the links then
+dangle, and a run fails at start when it tries to create the folder. Before
+submitting to a project that has not run for weeks, list dangling links
+(`pixi run kuma ssh find . -maxdepth 3 -xtype l -not -path './.pixi/*'`),
+recreate their targets, and stage the inputs again (the `slurm` skill's gate,
+point 1).
+
 ## Notes
 
 - Heavy CPU preprocessing runs as a `build`-QoS job without GPUs.

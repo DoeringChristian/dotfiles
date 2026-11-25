@@ -23,8 +23,8 @@ Follow the `slurm` skill's "Set up a project", with these files:
 - [`assets/hydra-launcher/lyra.yaml`](assets/hydra-launcher/lyra.yaml) and
   [`lyra_debug.yaml`](assets/hydra-launcher/lyra_debug.yaml) → `configs/hydra/launcher/`;
 - the pixi task `lyra = "bash experiments/cluster.sh lyra"`;
-- PyTorch with CUDA ≥ 12.8: Blackwell GPUs (B200, RTX PRO 6000) need it, so use
-  the `cu128` (or newer) wheel index. A project that also runs on Kuma (CUDA ≤
+- PyTorch with CUDA ≥ 12.8: Blackwell GPUs (B200, RTX PRO 6000) need it; the
+  driver allows up to CUDA 13.0, so `cu128` or `cu130` wheels. A project that also runs on Kuma (CUDA ≤
   12.6) needs a separate pixi environment per cluster.
 
 `LYRA_HOST` and `LYRA_DIR` override the profile's host and project directory,
@@ -41,6 +41,8 @@ Confirmed with `sinfo` and `sacctmgr` on the login node:
 | Partitions | **`rtx6000` (default)**: 12 nodes × 8 RTX PRO 6000 Blackwell Server Edition, 128 cores and ~770 GB RAM per node (16 cores per GPU) · `b200`: 8 nodes × 8 B200, 96 cores and ~1.5 TB RAM per node (12 cores per GPU) · `rtx6000_1g.24gb`: 1 node, 32 slices of 24 GB · `rtx6000_2g.48gb`: 1 node, 16 slices of 48 GB |
 | QoS | `normal` (3 d) · `long` (7 d, low priority) · `debug` (1 h, one job at a time; only smoke tests and measurement) · `build` (4 h, one job; CPU work) |
 | Login nodes | Internet access (pixi installs work). No GPUs: only for pushing, `pixi install`, and the waiting Hydra launcher process; never for computation. |
+| Driver | 580.126.09 on the `rtx6000` nodes, CUDA ≤ 13.0 (`nvidia-smi` in a debug job, 2026-11-09): PyTorch `cu130` wheels work. |
+| Home vs scratch | `/home` is shared with Kuma (same `~/projects`, `~/.config`), `/scratch` is not: links into Kuma's `/scratch` dangle on Lyra. Deploy a project for Lyra under its own directory name. |
 | Storage | `/home` and `/scratch` are shared filesystems; `/work/<group>` exists for paid lab storage. **`/home` holds code and pixi environments only, never data**: run outputs, downloaded inputs, checkpoints, caches, and datasets go to `/scratch/cdoering/<project>/` (`outputs/` linked there by `lyra setup`). |
 
 Choose `b200` only when one of these holds: the job needs more GPU memory than
@@ -56,9 +58,6 @@ Check these before relying on them, from the SCITAS documentation
 (<https://scitas-doc.epfl.ch/supercomputers/>) or on the cluster, and then
 record them in this skill:
 
-- **The driver and its highest CUDA version.** Login nodes have no GPU; read
-  it in the first `smoke` (`nvidia-smi` in a job, or `pixi run lyra gpu <jobid>`
-  while it runs).
 - **The `/home` quota and the `/scratch` purge rule.** The `/home` quota is
   small: on 2026-10-24 about 100 GB of run outputs and downloaded checkpoints in
   one project's `outputs/` made every write fail ("Disk quota exceeded"). Treat

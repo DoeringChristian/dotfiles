@@ -78,7 +78,8 @@ quiet() { grep -v -E "$BANNER" >&2 || true; }
 CACHES="export DRJIT_CACHE_DIR=$CACHE_ROOT/drjit \
     TRITON_CACHE_DIR=$CACHE_ROOT/triton TORCHINDUCTOR_CACHE_DIR=$CACHE_ROOT/torchinductor \
     CUDA_CACHE_PATH=$CACHE_ROOT/nv HF_HOME=$CACHE_ROOT/huggingface \
-    TORCH_HOME=$CACHE_ROOT/torch"
+    TORCH_HOME=$CACHE_ROOT/torch CAIRN_CACHE_DIR=$CACHE_ROOT/cairn \
+    CAIRN_STATE_DIR=$CACHE_ROOT/cairn-state"
 
 remote() {
     ssh -q "$HOST" "export PATH=\$HOME/.pixi/bin:\$PATH; $CACHES; cd $(printf '%q' "$DIR") || exit 1; $1"

@@ -160,25 +160,46 @@ root. Use `Path(HydraConfig.get().runtime.output_dir)` for optional scratch spac
 
 ### Run names
 
-A run name says which experiment this is, so a person can find it in a list of
-hundreds. Cairn versions repeated names (`runs/<name>@v1`, `@v2`, ...) and keeps
-every run's full ID and config, so the name carries nothing else:
+A run name identifies what ran. Cairn's lists show a run's name and version,
+not its config, so someone who sees only the names must be able to tell the
+runs apart and find the one they mean. A name has two parts,
+`<computation>/<subject>`:
 
-- one to three lowercase words for the method or question and the stage:
-  `weightnet-train`, `tv-baseline`, `noise-sweep`, `prior-eval`;
-- the same name for every rerun of the same experiment, including after a bug
-  fix or a config change; the version number tells reruns apart;
-- the same name for every trial of a multirun; the trial label and the varied
-  values live in config;
-- for an analysis run, what its figure or table shows (`error-maps`,
-  `convergence`), never a figure or table number or a counter;
-- never hyperparameter values, seeds, dates, trial indices, `v2`, `final`,
-  `fixed`, `new`, `test`, or a sentence about the purpose. Put the purpose in
-  `run.description` and the differences in config.
+- the computation: one to three lowercase words for the method or question and
+  the stage: `weightnet-train`, `tv-baseline`, `prior-eval`, `error-maps`;
+- the subject: what tells this run from the others of the same computation, in
+  the words someone would use to ask for it: the dataset or scene, the model
+  variant, the value of the setting under study:
+  `weightnet-train/bunny-w256-fp16`, `prior-eval/bunny-w256-fp16`,
+  `noise-sweep/sigma-0.10`, `error-maps/bunny-main`.
 
-Keep the set of names small and stable across the project; reuse an existing
-name rather than coining a near-duplicate. Before starting a run, list the
-project's existing run names and pick from them where one fits.
+Build the name in config by interpolation from the values that define the
+subject, so it cannot drift from what ran:
+`name: weightnet-train/${data.name}-w${model.width}-${precision}`. A run that
+reads another run's result carries the same subject (the evaluation of a model
+has the model's subject).
+
+- Two runs that someone will compare, or ask for separately, have different
+  names. Every trial of a multirun has its own name, ending in the varied
+  values.
+- A rerun of the same thing is the next version of the same name
+  (`runs/<name>@v2`): after a bug fix, a failure or an interruption. The
+  version number tells reruns apart and nothing else.
+- For an analysis run, the subject is what its figure or table covers
+  (`error-maps/bunny-main`), never a figure or table number.
+- A value that does not tell runs apart stays out of the name; it is in the
+  config. The purpose goes in `run.description`.
+- Never a counter, a date or a status word: `exp3`, `run-2`, `v2`, `final`,
+  `fixed`, `new`, `test`.
+
+Give every run tags as well, for the facts people filter by
+(`run.annotate({"tags": ["bunny", "w256", "fp16"]})` right after the run
+starts): Cairn's lists show tags beside the name. Tags add to the name; they do
+not replace it.
+
+Keep the set of computations small and stable across the project. Before
+starting a run, list the project's existing run names; if the same thing ran
+before, reuse its name, so the run becomes its next version.
 
 Use a config per entry point when needed (`configs/train.yaml`,
 `configs/evaluate.yaml`), selected with `config_name` on its `@hydra.main`
@@ -655,8 +676,8 @@ supported, and both must keep every configuration's result inspectable:
   ablations, or competing settings. Each trial is a complete Cairn run with
   its own provenance, config, logs, and results recorded on the run. Save the expected
   trial roster when launching; fill in full run IDs from the backend and match each resolved config to its
-  planned trial (record a trial label in config; all trials share one run
-  name, see Run names). Do not infer the expected roster from only successful jobs.
+  planned trial (record a trial label in config; each trial has its own run
+  name ending in the varied values, see Run names). Do not infer the expected roster from only successful jobs.
   Finalize explicitly with the helper below; no automatic study callback is
   assumed. A report embeds the summary run's tables or an analysis run over
   the trials. Failures stay visible and prevent a completed study summary.
