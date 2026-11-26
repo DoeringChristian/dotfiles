@@ -174,6 +174,9 @@ brew upgrade
 brew upgrade --cask --greedy
 echo "==> rebuild --HEAD formulae (neovim, resh) from latest git"
 brew upgrade --fetch-HEAD "$TAP/neovim" "$TAP/resh" 2>/dev/null || true
+# A failed link (e.g. leftovers from the core neovim swap) leaves the keg
+# installed but off PATH, so make sure the HEAD formulae are linked.
+brew link --overwrite "$TAP/neovim" "$TAP/resh" >/dev/null 2>&1 || true
 # Bundle's npm entries only install if missing, so bump npm globals. Invoke npm
 # through Homebrew's Node explicitly to avoid an old distro Node on PATH.
 echo "==> npm globals -> latest"

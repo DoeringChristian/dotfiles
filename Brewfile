@@ -9,6 +9,7 @@
 # --- language runtimes ---
 brew "python@3.13"          # `python3`; brew doesn't link a bare `python` on macOS
 brew "node"
+brew "pnpm"
 brew "rust"
 
 # --- editors ---
