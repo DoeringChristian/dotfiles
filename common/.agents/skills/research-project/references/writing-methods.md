@@ -40,8 +40,8 @@ spine, adapted to the question rather than followed to the letter:
 
 While exploring, a direction's report can be just the header, the setup, the
 method in a few sentences, and the evidence; breadth matters more than polish.
-Write the full spine once the user wants the direction pursued (they comment
-so, or take it over and ask for it), in two passes. Before or alongside the
+Write the full spine once the user wants the direction pursued (they say
+so), in two passes. Before or alongside the
 next runs, write the Abstract, Introduction, Background and related work, and
 Methods in full: the Abstract states the question, the approach, and what
 the experiments will show, and the summary and Conclusion state what is planned
@@ -49,7 +49,7 @@ and pending. Give each planned result section its heading and a `note` callout
 naming the runs it waits for and the question it will answer. Write this
 draft to the report with `proposed` status, and refer back to it while you run
 the experiments. Then, as each run completes and passes validation, replace its
-pending note with the embedded result, and revise the header, the Abstract, and
+pending note with the result, and revise the header, the Abstract, and
 the Conclusion once the evidence supports an answer. Never fill a pending
 section with expected or typed results.
 
@@ -109,8 +109,8 @@ introduced, saying what to see in it:
   single equation needs no graph.
 - **A toy example of a key operation**: before and after on a small input, a
   one-dimensional slice, a small grid, the geometry of a constraint. Compute it
-  with the project's own code in an illustration run that adds the figure for
-  the report to embed, never with
+  with the project's own code in an illustration run that logs the figure for
+  the report to show, never with
   a separate reimplementation or a hand-drawn approximation, so the figure
   shows what the code does.
 - **Internal behavior over steps** when the method's point lies in how its
@@ -160,12 +160,9 @@ sources, and cross-reference the project's other direction reports on related
 ideas. Flag prior art where the reader needs it:
 
 ```markdown
-::: {.callout}
-**Prior art: <short name>**
-
-<Source, with link> already does <what>. This report differs only in
-<difference>, so it is a replication or an extension, not a new idea.
-:::
+> [!important] Prior art: <short name>
+> <Source, with link> already does <what>. This report differs only in
+> <difference>, so it is a replication or an extension, not a new idea.
 ```
 
 Use an explicit prior-art callout whenever the idea, or a close variant, already exists. Name what

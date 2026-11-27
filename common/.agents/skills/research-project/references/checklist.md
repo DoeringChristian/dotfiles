@@ -10,16 +10,16 @@ Environment and runs
       pixi tasks on every listed platform.
 - [ ] `.pixi/`, `.cairn/`, `outputs/`, `artifacts/`, and `data/` are ignored and
       excluded from formatting and other source tooling.
-- [ ] Cairn is the pinned `cairn2[media,ui]` v0.16.0 dependency, imported as
-      `cairn`; reports live in its repository, not in the project.
-      No Cairn internals are copied or patched; entry points use Cairn’s native tracking APIs. Settings live in `.cairn.toml`; no JSON `.cairn` file is assumed.
+- [ ] Cairn is the pinned `cairn2[media,ui]` v0.18.0 dependency, imported as
+      `cairn`; reports live in cairn-ui, not in the project or the repository.
+      No Cairn internals are copied or patched; Settings live in `.cairn.toml`.
 - [ ] No experiment-tracking service or custom run database is used; Cairn's
       repo (runs and artifacts) is the record.
 - [ ] `experiments/run.py` and `experiments/research_cairn.py` come from the
       skill's assets; each entry point is a standard `@hydra.main` function
-      using `with cairn.init(...) as run:` inside the function, with the name
+      using `with cairn.run(...) as run:` inside the function, with the name
       from config and an explicitly resolved config passed to Cairn.
-      Hydra is installed separately; no removed resolver/callback is imported.
+      Hydra is installed separately; no Cairn resolver or callback is assumed.
 - [ ] Hydra keeps job bookkeeping and optional scratch files under ignored `outputs/`; each job gets one full Cairn
       run ID. Studies retain their expected roster and are finalized explicitly
       only when every expected trial is present and completed.
@@ -43,8 +43,7 @@ Environment and runs
       UI without a report.
 - [ ] Metrics and intermediate outputs are recorded during the run at a configured
       cadence, with stable fields and observation axes alongside media.
-- [ ] Evidence is recorded with `run.log`, `run.track`, and
-      `run.add`. Separate result publication is optional. Reusable stage outputs remain on runs by default; a separate artifact
+- [ ] Evidence is recorded with `run.log` and `run.add`. Separate result publication is optional. Reusable stage outputs remain on runs by default; a separate artifact
       has an independent identity/lifecycle purpose. Scientific tables
       and arrays are retained completely,
       and the producer's provenance identifies the source and environment.
@@ -68,23 +67,23 @@ Artifacts and repo
       inputs are referenced rather than redundantly copied into every trial.
 - [ ] Imported datasets have documented origin/validation, without a fabricated
       producer. Reports distinguish imported inputs from computed evidence.
-- [ ] Every result a report embeds was recorded on a completed, scientifically
+- [ ] Every result a report shows was recorded on a completed, scientifically
       validated run. Any separately published result artifact has a verified
-      completed producer. `latest` is not a success filter: after a rerun, the
-      claims that rest on it were re-read. No experiment output was published
-      through the run-less explicit-project import API.
+      completed producer. `latest` is the newest completed version, not a
+      validated one: after a rerun, the claims that rest on it were re-read. No
+      experiment output was disguised as an imported dataset.
 - [ ] Datasets and models experiments read are artifacts, used with
       `run.use` (exact `@vN` refs in configs for cited evidence), so each
       run lists them as inputs.
 - [ ] The project selects one local repo (created on first access) or a remote server
-      through the current configuration API/environment. A remote is selected
+      in `.cairn.toml` or the environment. A remote is selected
       only for a server the user runs and named; the project namespace is
       separate from its URL. No token is in the repository, configs, scripts,
       logs, or the handoff.
 - [ ] On a cluster: one `cairn --repo <path> server` on a local disk (never
       on a compute node or a shared filesystem), jobs target its URL and
-      project with protected credentials, and durable client journals are
-      retained until acknowledged. `Client.recover()` retries them; backend reads
+      project with protected credentials, and outboxes are
+      kept until sent (`cairn recover`); reads
       confirm completion and exact artifact availability before evidence handoff.
 
 Method and evidence
@@ -119,12 +118,13 @@ Method and evidence
       any change of chart is justified by a different question.
 
 Reports
-- [ ] In the user's reports, only agent blocks were written, plus any change
-      the user asked for, and only that; no sections were added or text
-      restructured on my own.
-- [ ] Each explored direction is an agent report under the block that asked
-      for it, opening with Claim / Setup where it holds / Status / Evidence,
-      and the header matches the evidence below it.
+- [ ] In the user's reports, only what the user asked for was changed, where they
+      asked; no sections were added or text restructured on my own.
+- [ ] Existing reports were changed with `report edit`, or `report write --base`,
+      on a text read right before; nothing the user wrote was lost.
+- [ ] Each explored direction is an agent report opening with Claim / Setup
+      where it holds / Status / Evidence, and the header matches the evidence
+      below it.
 - [ ] Direction reports follow the paper-like spine where the question needs
       it; inspection, validation, and comparison reports use the sections
       their question needs.
@@ -143,7 +143,7 @@ Reports
       from the baseline, what is held constant, and the fairness boundary,
       before results use its name.
 - [ ] No result number is typed into a report: every result is a table,
-      value, or figure embedded from a run, added by an analysis run that
+      value, or figure shown from a run, logged by an analysis run that
       `use`s what it reads; only design constants are typed. Table columns
       state the comparison, direction, population, and aggregation.
 - [ ] The data each figure plots is stored in full on its run, so the
@@ -160,12 +160,12 @@ Reports
       values from the project's code, not only through outputs or aggregates.
 - [ ] Callouts mark only consequential synchronization needs and are revised
       when resolved.
-- [ ] One comment watcher ran through the session; every sent request was
-      answered in its thread, and resolved only when done.
+- [ ] Every copied reference the user sent was found by its passage, and the
+      answer said in the chat what changed.
 
 Hosting
-- [ ] The UI binds to localhost by default and is not exposed unauthenticated
-      to an untrusted network.
+- [ ] cairn-ui binds to localhost by default and is not exposed unauthenticated
+      to an untrusted network; the user's Cairn server was not touched.
 - [ ] The handoff gives exact commands for the experiments, the report URLs
       (`<ui>/p/<project>/r/<name>`), and the run and artifact references the
-      reports embed.
+      reports show.

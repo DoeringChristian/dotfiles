@@ -1,0 +1,30 @@
+# Copy to configs/config.yaml; keep the `run` and `hydra` blocks in every entry
+# point's config (or in a shared file listed in each one's defaults).
+defaults:
+  - _self_
+
+run:
+  # Says what the run is and what it runs on, built from the values it names.
+  name: fit-${data.name}-n${data.n}
+
+data:
+  name: line
+  n: 200
+  noise: 0.1
+seed: 0
+steps: 100
+log_every: 10
+
+hydra:
+  run:
+    dir: runs/${run.name}/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: runs/.sweeps/${now:%Y-%m-%d_%H-%M-%S}          # multirun.yaml of the sweep
+    subdir: ../../${run.name}/${now:%Y-%m-%d_%H-%M-%S}  # each trial in runs/<its name>/
+  job:
+    chdir: false
+  callbacks:
+    git:
+      _target_: utils.hydra.GitInfo
+    latest:
+      _target_: utils.hydra.LatestLink

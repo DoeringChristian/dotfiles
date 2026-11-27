@@ -29,26 +29,24 @@ hydra-submitit-launcher = "*"
 pyyaml = "*"
 plotly = "*"
 black = "*"
-cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.16.0", extras = ["media", "ui"] }
+cairn2 = { git = "https://github.com/DoeringChristian/cairn2.git", tag = "v0.18.0", extras = ["media", "ui"] }
 
 [tasks]
 experiment = "python experiments/run.py"
 evidence = "python experiments/research_cairn.py check-artifact --project <project>"
 finalize-study = "python experiments/research_cairn.py finalize-study"
-ui = "cairn server"
+ui = "cairn-ui"
 format = "black --extend-exclude '/([.]pixi|[.]cairn|data|outputs|artifacts)/' ."
 kuma = "bash experiments/cluster.sh kuma"
 lyra = "bash experiments/cluster.sh lyra"
 ```
 
-The pin is `cairn2[media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.16.0`
-in pip or uv form. The import and command remain `cairn`. Hydra stays a separate
-dependency. `media` supplies arrays, tables and figures; `ui` supplies the
-server dependencies for the bundled React UI, where reports are read and
-written. Reports need no extra: they are part of the repository.
-Deployment extras are `postgres` and `s3`; `server` provides the API dependencies
-without the UI session dependency. For every optional feature, use `extras = ["all"]` instead. The `all` extra
-lists dependencies directly; Cairn2 is the base package, not an extra.
+The pin is `cairn2[media,ui] @ git+https://github.com/DoeringChristian/cairn2.git@v0.18.0`
+in pip or uv form. It installs the import and command `cairn` and the command
+`cairn-ui`. Hydra stays a separate dependency. `media` supplies images, arrays,
+and figures; `ui` supplies `cairn-ui`; `server` supplies `cairn server`; `all` is
+all three. Logging alone needs no extra, so the environment of a compute job can
+leave `ui` out.
 Bump the tag only when the user asks.
 
 Keep only tasks whose scripts exist and features the project uses. The cluster
@@ -61,75 +59,60 @@ Commit `pixi.lock`; ignore `.pixi/`, `.cairn/`, `outputs/`, `artifacts/`,
 caches, and `data/`. Keep the explicit Black `--extend-exclude`: every
 formatter, linter, type checker, and test runner must skip environments and
 generated artifacts. Do not add MLflow, W&B, TensorBoard-as-a-tracker, or a
-custom run database: Cairn's selected backend is the project's one record.
+custom run database: Cairn's repository is the project's one record.
 
 ## Cairn repo and credentials
 
-Choose **one repo**: a local repository path or the user's named remote
-server URL. A `cairn.Client(repo, project=...)` owns the connection; the
-project namespace is separate. Runs and results share one artifact lifecycle.
-
-```bash
-export CAIRN_REPO="$PWD/.cairn/repo"
-pixi run ui                         # API + UI, default http://127.0.0.1:8000
-```
-
-The repository is created on first access. `cairn init NAME` starts a run;
-it is not a repository-initialization command. `Client()` selects an explicit
-repo first, then `CAIRN_REPO`, then the nearest ancestor `.cairn.toml` `repo`
-setting or `.cairn/` directory (using its `repo/` subdirectory), then a local
-`.cairn/repo`. The project resolves an explicit `project=`, then
-`CAIRN_PROJECT`, then `.cairn.toml`, then `"default"`. `.cairn.toml` files merge
-upward; the nearest file setting a key wins:
+Choose **one repo**: a local folder or the URL of the server the user named. The
+project is a namespace inside it. Runs and all other artifacts share one
+lifecycle. Keep the choice in `.cairn.toml`, so that entry points, `pixi run
+cairn`, and `pixi run cairn-ui` agree:
 
 ```toml
-repo = "https://<user-named-host>"
-project = "<project>"
+repo = "http://<user-named-host>:8765"   # or a folder; .cairn/repo without
+project = "<project>"                    # "default" without
 token_file = "~/.config/cairn/<host>.token"
+ui = "http://<user-named-host>:8767"     # the cairn-ui that report and workspace ask
 ```
 
-Keep repository and project settings in `.cairn.toml` or the environment so
-entry points and `pixi run cairn` (reports, comments) use the same destination. A Hydra config key
-named `cairn.repo` or `project` is not automatically applied by `cairn.init`; pass explicit arguments or
-use normal Cairn configuration discovery.
+The nearest file upward that sets a key wins; `CAIRN_REPO`, `CAIRN_PROJECT`,
+`CAIRN_TOKEN`, and `CAIRN_UI` override it, and explicit arguments override those.
+A `.cairn/token` beside the repository is found by itself. Never put a token in
+tracked config, commands, logs, or handoffs. A Hydra key named `project` is not
+applied to `cairn.run` by itself. A local repository is created on first use.
 
-Use a server only when the user runs one and names it; never invent a server
-or upload project data to an unrequested repo:
+Two programs may run beside the project, and neither needs the other to log:
 
-```bash
-export CAIRN_REPO="https://<user-named-host>"
-export CAIRN_TOKEN_FILE="/private/path/to/existing-token"
-```
+- **`cairn server`** serves a repository to other machines. It has no pages. It
+  is the user's: use it only when they run one and name it, never invent one, and
+  never stop, restart, or upgrade it on your own. Where the user does want one:
+  `cairn --repo <local-path> server --host <host> --port 8765`, behind HTTPS, a
+  VPN, or an SSH tunnel; it writes a token file when there is none.
+- **`cairn-ui`** shows a repository, local or remote, and keeps the reports and
+  workspaces in its own state folder. `pixi run ui` shows the project's repository
+  at `http://127.0.0.1:8766`; `cairn-ui --repo <url>` shows a server's. When `ui`
+  names one, use that one and start no other: reports live in the one they were
+  written in. It may be restarted or upgraded without touching a run.
 
-There is no `cairn login` command. Authentication resolves `CAIRN_TOKEN`,
-`CAIRN_TOKEN_FILE`, the token of the level that selected the repo (its
-`token_file`, or `.cairn/token` for a local repo), and
-`~/.config/cairn/token`. Inline tokens in `.cairn.toml` are rejected. Prefer a protected token file, never a token in
-tracked config, commands, logs, or handoffs. Use HTTPS, a VPN, or an SSH tunnel.
+Writes to a server go through an outbox on disk
+(`$CAIRN_STATE_DIR`, `~/.local/state/cairn` without), so a slow or absent server
+does not stop a run. Once the outbox is full while the server is away (`outbox_gb`,
+20 without), `log` raises `cairn.Full`. `run.flush(timeout=...)` waits for
+delivery; `cairn recover` sends what a killed process left behind. Keep the outbox
+until then. `finish` with a timeout may raise `Pending`, which is not a completed
+run.
 
-For a user-authorized host, `cairn --repo <local-path> server --host <host>
---port 8000` starts API and UI; the server creates a private token file when
-needed and prints an immediate login link. Give the ordinary URL in handoffs. `--no-ui` disables UI hosting;
-`--no-auth` is for explicitly selected development access. To view a remote
-repo, open that server's UI; `cairn server` hosts a local backend,
-not a loopback proxy to another server.
-
-Remote writes use a durable outbox under
-`<state>/outbox/<repo-hash>`, where `<state>` is `$CAIRN_STATE_DIR`, else
-`$XDG_STATE_HOME/cairn` (default `~/.local/state/cairn`), or an explicit
-`Client(outbox=...)`.
-This is a retry journal, not a second queryable repository. Preserve it until
-the selected server acknowledges completion. `flush(timeout=...)` waits for
-delivery; `Client.recover()` recovers writers. Do not assume old `CAIRN_DIR`,
-`CAIRN_URL`, `CAIRN_SERVER`, `cairn sync`, or run-folder APIs.
-A disconnected finish raises Pending; it does not prove completed evidence.
+Repositories of versions before 0.18 cannot be read by this one, nor old code
+run with it: there is no `init`, `track`, `value=`, `metadata=`, `annotate`, or
+`cairn report/comments`. A project that still uses them is migrated only when the
+user asks.
 
 ## Hydra configuration and run identity
 
 Put every scientifically meaningful choice in config. Copy
 [`assets/run.py`](../assets/run.py) and
 [`assets/research_cairn.py`](../assets/research_cairn.py) into `experiments/`.
-The first is a standard Hydra entry point using `with cairn.init(...)`; the second
+The first is a standard Hydra entry point using `with cairn.run(...)`; the second
 supplies completed-evidence and study helpers, not run-lifecycle glue.
 
 ```yaml
@@ -153,8 +136,8 @@ hydra:
     subdir: ${hydra.job.num}
 ```
 
-These directories hold Hydra bookkeeping and optional scratch files. Do not use the removed
-`${cairn.run:}` or `${cairn.draft:}` resolvers or the old Cairn Hydra callbacks.
+These directories hold Hydra bookkeeping and optional scratch files. Cairn has no
+Hydra resolvers or callbacks.
 Leave `hydra.job.chdir: false` so relative paths remain relative to the project
 root. Use `Path(HydraConfig.get().runtime.output_dir)` for optional scratch space. Each job gets its own full Cairn run ID, even when names repeat.
 
@@ -196,8 +179,9 @@ ran. A run that reads another run's result repeats that run's name
   kind (`train`, `experiment`).
 
 Give every run tags as well, for the facts people filter by
-(`run.annotate({"tags": ["bunny", "w256", "fp16"]})` right after the run
-starts): Cairn's lists show tags beside the name. Tags add to the name; they do
+(`client.tag(run, "bunny", "w256", precision="fp16")`, or `cairn tag REF bunny
+w256` in the shell): Cairn's lists show tags beside the name, and
+`tag:bunny` finds them. Tags add to the name; they do
 not replace it.
 
 Keep the vocabulary of the names small and stable across the project. Before
@@ -216,7 +200,7 @@ intentionally: entries after `_self_` override the current config. Inspect
 `--cfg job --resolve` to verify the composed parameters.
 
 Pass `OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)` as
-`config=` to `cairn.init` so the resolved Hydra config is recorded. Add Hydra's `.hydra` folder explicitly with `cairn.add`
+`config=` to `cairn.run` so the resolved Hydra config is recorded. Add Hydra's `.hydra` folder explicitly with `run.add`
 if its runtime config and override files are needed; ignored output folders
 are not automatically part of the source archive. The backend
 run status is the authoritative completion record. A run counts as evidence
@@ -224,8 +208,8 @@ only when it completed and its scientific validation passed; a job that raises
 is failed. Do not duplicate the full resolved config into another status schema.
 
 Name runs as in Run names above; a result artifact may share its run's name.
-Put a concise description in `cairn.init` argument
-`metadata={"description": "..."}` so a reader understands what was tested and
+Put a concise description in the `cairn.run` argument
+`about={"description": "..."}` so a reader understands what was tested and
 how to interpret it.
 
 ### Snapshot source and runtime state
@@ -237,6 +221,8 @@ from read-only plugin caches, shared installations, or dotfiles mounts.
 Leave Cairn's native provenance and console capture enabled. It records
 Python/platform/executable/cwd, launch arguments, installed packages, Git state
 and a dirty diff, dependency manifests/lockfiles, and a bounded source archive.
+All of it is below `_about` on the run (`run["_about"]`,
+`run.files("_about/**")`), the config below `_config`, the output in `_console`.
 It captures these when entering the run context, before components are constructed. Do not implement a
 second source scanner, provenance store, or lifecycle wrapper in the project.
 
@@ -244,7 +230,7 @@ Native provenance is best-effort, not a completeness guarantee: inspect its
 omissions/errors and captured files before citing a run. Verify that the method
 source and exact `pixi.lock` are present. Outside Git the capture is limited to
 the entry script and known dependency files; initialize and commit the project
-before running it. Add required files the capture omitted through `cairn.add`,
+before running it. Add required files the capture omitted through `run.add`,
 and fix and rerun if the original evidence cannot be reconstructed. Keep secrets
 out of configs and source; never dump the complete environment. Record system
 metrics explicitly when needed. Console capture is bounded and is not a
@@ -255,15 +241,15 @@ substitute for scientific metrics or outputs.
 `outputs/` holds Hydra configs and optional scratch files. The native context
 does not create a project-specific `cairn-run.json` receipt. The output folder
 is not the authoritative evidence/status store.
-Inspect the backend with `pixi run cairn --project <project> artifact list --namespace runs`,
-`pixi run cairn --project <project> artifact inspect <full-run-id>`, or the UI. Keep failed job folders for
+Inspect it with `pixi run cairn find 'runs/**'`, `pixi run cairn show <ref>`,
+`cairn records|console|links <ref>`, or the pages. Keep failed job folders for
 diagnosis; publish scientific results only from completed, validated producers.
 
-A finished artifact can have a failed outcome, and `latest` is a movable alias.
-Top-level `cairn.log/track/add` record on the current run. A successful
+A finished artifact can have a failed outcome; `latest` is the newest completed
+version. Top-level `cairn.log/add/use` work on the run whose `with` is open. A successful
 log call is not a successful experiment. Use the completed-evidence check below
 before citing a result. Runs pin their inputs (`run.use` with `@vN` in configs
-for reviewed evidence); reports may embed `@latest` (see reports.md). Do not infer completion from a folder,
+for reviewed evidence); reports may show `@latest` (see reports.md). Do not infer completion from a folder,
 alias, or local pointer file.
 
 ## Hydra entry points: runs, inputs, and results
@@ -273,10 +259,10 @@ Use [`assets/run.py`](../assets/run.py) as the template:
 ```python
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg: DictConfig):
-    with cairn.init(
+    with cairn.run(
         cfg.run.name,
         config=OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True),
-        metadata={"description": cfg.run.description},
+        about={"description": cfg.run.description},
     ) as run:
         model = hydra.utils.instantiate(cfg.model)
         # Compute, record results, and validate before leaving this block.
@@ -287,11 +273,10 @@ function for each invocation, including each multirun job. The run name comes
 from `cfg.run.name`, so config groups and CLI overrides can adjust it. Pass the
 resolved config explicitly; repo/project use normal Cairn configuration discovery.
 Keep component construction, computation, recording, and scientific validation
-inside the block: normal exit completes the run, and an exception leaving it
-marks it failed. Do not swallow validation failures and then exit normally.
+inside the block: normal exit completes the run, an exception leaving it
+marks it failed, and Ctrl-C or SIGTERM (a scheduler's) marks it cancelled. Do not swallow validation failures and then exit normally.
 
-Use `with cairn.init(...)`, not `@cairn.run`, for project entry points. No
-Experiment class or custom tracking wrapper is needed. The explicit handle and
+No Experiment class or custom tracking wrapper is needed. The explicit handle and
 top-level `cairn.*` API target the same current run, so helper functions can log
 without receiving a handle.
 
@@ -306,43 +291,41 @@ from pathlib import Path
 from hydra.core.hydra_config import HydraConfig
 
 output_dir = Path(HydraConfig.get().runtime.output_dir)
-data = cairn.use("datasets/crops@v3")        # records the exact input ID
-data.download(to=output_dir / "inputs" / "crops")
+data = run.use("datasets/crops@v3")          # records the exact input
+data.download(output_dir / "inputs" / "crops")
 for step in range(cfg.steps):
     # ... perform the method and compute loss ...
-    cairn.log(loss=loss, step=step)
+    run.log(loss=loss, step=step)
 
 # ... scientifically validate scores, cases, and errors ...
-cairn.log({"scores": scores})
-cairn.track(cairn.Table(cases), key="cases")
+run.log(scores=scores, cases=cairn.Table(cases))
 rows = error_rows(errors)                  # every value the figure plots
-cairn.track(cairn.Table(rows), key="error_histogram")
 figure = error_histogram(rows)             # cheap: redrawable from the table
-cairn.track(cairn.Figure(figure), key="error_histogram")
+run.log(error_rows=cairn.Table(rows), error_histogram=cairn.Figure(figure))
 plt.close(figure)
 ```
 
 Write metrics, tables, figures, arrays, and files directly to the run with
-`log`, `track`, and `add`. For a library that requires a filesystem path,
+`log` (`add(path, name)` and `use(ref, role)` are shorthand for it). Logging a key
+again replaces its current value; the earlier records remain. For a library that requires a filesystem path,
 use `output_dir` as optional scratch space and explicitly add the resulting
 file. Hydra keeps its configuration there; Cairn does not
 require evidence to pass through that directory. Cairn does not scan
 `output_dir/result` or automatically create a second artifact.
 
-A report can embed a completed run's files directly. Create a separate
+A report can show what a completed run logged directly. Create a separate
 result artifact only when it needs an identity or lifecycle independent of
 that execution. Reuse alone is not a reason to create another artifact. For example,
-explicitly add a result directory with `cairn.add(path, name="result")`,
+explicitly add a result directory with `run.add(path, "result")`,
 then after the run finishes call `publish_result(client, client.get(run_id))`.
 That optional helper reuses the stored value in the same repository without
-downloading or re-uploading its payload and records a `producer` dependency. There is no need to do this for every experiment.
+downloading or re-uploading its payload and records the run it `use`d as
+`producer`. There is no need to do this for every experiment.
 
-**Backend rule versus research policy:** Cairn2 accepts dependencies only on
-finished artifacts. Thus a separate artifact with its run as a dependency must
-wait until that run finishes. Recording results on the live run is unrestricted
-by that rule. Requiring the outcome to be `completed` and the science to be
-validated is this skill's evidence policy; Cairn2 also retains finished failed
-artifacts.
+`use` takes completed artifacts only, so a separate artifact made from a run waits
+until that run finishes. `use(ref, incomplete=True)` also takes a finished one that
+did not complete: for continuing from a cancelled run's checkpoint, never to cite
+it. Requiring that the science was validated is this skill's policy.
 
 ### Stage handoffs
 
@@ -352,10 +335,10 @@ run context, consume its recorded output directly:
 ```python
 source = run.use(cfg.input_run, role="prepared-data")
 require_completed_run(source)              # plus the stage's scientific checks
-with source.file("prepared.json").open() as stream:
+with source.open("prepared.json") as stream:
     prepared = json.load(stream)
 # ... compute and validate ...
-run.add(checkpoint_path, name="model.pkl")
+run.add(checkpoint_path, "model.pkl")
 ```
 
 A later stage can similarly `use` this run with role `base-model`, then open or
@@ -364,18 +347,16 @@ trusted checkpoints. Persist optimizer/RNG state as well as weights when exact
 continuation needs it. Multiple input runs support branches and combined models;
 no extra dataset/model artifact is required to connect them.
 
-A report embeds what analysis runs recorded; each analysis run `use`s the
+A report shows what analysis runs recorded; each analysis run `use`s the
 completed runs it reads. Store invariant inputs once and record output
 values plus stable IDs where needed to join them; do not repeat whole input
 arrays in every trial or store identical data in JSON, tables, and added files
 without a consumer that needs those representations.
 
-Cairn readers require finished artifacts. Split independently reusable passes
-into completed runs when appropriate; a live run's checkpoint file is not yet
-a readable finished input. A separately published checkpoint while training
-continues has different lineage constraints; do not invent a dependency on a
-live producing run. Scheduling and deciding which stages to rerun remain
-project tasks, not automatic behavior inferred from Cairn dependencies.
+A live run can be read (`client.get("runs/a@live")`, `follow()`), also its files,
+but not `use`d. Split independently reusable passes into runs that complete.
+Scheduling and deciding which stages to rerun remain project tasks, not automatic
+behavior inferred from Cairn's links.
 
 ### Log results during the run
 
@@ -401,10 +382,10 @@ run already has:
 - at the end, a small figure per diagnostic (loss terms over steps, a histogram
   of errors) from the logged data.
 
-Use the same `key`, samples, image size, and colour scale at every step so the
+Use the same key, samples, image size, and colour scale at every step so the
 UI's step slider shows a sequence. Log with `cairn.Image` (arrays scaled to
 `[0, 1]` or `uint8`, tonemapped if HDR, downsampled for previews) and the
-step, sample, and split as metadata. A non-iterative run still logs its inputs,
+step, sample, and split in the same record. A non-iterative run still logs its inputs,
 outputs, and errors as images once. Skip only what is genuinely expensive to
 compute (an extra full render per step), and then log it at a coarser
 interval rather than not at all.
@@ -414,7 +395,7 @@ needed to interpret each observation in the same record: `step`, `epoch`,
 `elapsed_seconds`, `split`, `sample_id`, or `camera`, as applicable. Use separate
 records for separate samples or conditions. Avoid encoding steps or sample IDs
 into field names, or logging a whole time series only as one final list.
-Cairn supplies `_wall_time` (Unix seconds); log elapsed time explicitly if needed.
+Cairn supplies `_time` (Unix seconds); log elapsed time explicitly if needed.
 
 ```python
 # Inside the run, as each observation becomes available:
@@ -422,16 +403,14 @@ run.log(step=step, split="train", loss=float(loss), elapsed_seconds=elapsed)
 run.log(step=step, split="validation", loss=float(validation_loss))
 run.log(step=step, sample_id=sample_id, camera=camera,
         reconstruction=cairn.Image(image_array))
-run.track(cairn.Figure(figure), {"step": step, "split": "validation"},
-          key="diagnostic")
+run.log(step=step, split="validation", diagnostic=cairn.Figure(figure))
 ```
 
 Wrap media/large arrays with `Image`, `Figure`, `Array`, or `Table`; Cairn stores
 their payloads as blobs referenced by the record. Do not embed base64 images or
 large numeric lists in JSON. Preserve the data behind each diagnostic figure as
-well as its rendered preview. `track(value, metadata, key=...)` places the value
-and its coordinates in one record; `log` can combine multiple typed values and
-scalars in a record. Added files alone do not provide these observation axes.
+well as its rendered preview. One record combines typed values, files, and scalars.
+An `add`ed file has no observation axes; log it with them when it has some.
 Remote writes may be queued: use `run.flush(timeout=...)` when a delivery
 checkpoint is needed, rather than flushing every scalar. A live observation is
 progress information; completed, validated runs are still required for evidence.
@@ -439,30 +418,39 @@ progress information; completed, validated runs are still required for evidence.
 ### Record evidence with the public API
 
 ```python
-cairn.log({"loss": loss, "psnr": psnr}, step=step)
-cairn.track(cairn.Figure(plotly_figure), {"step": step}, key="running_rmse")
-cairn.track(cairn.Image(array), {"step": step}, key="reconstruction")
-cairn.track(cairn.Table([{"condition": c, "rmse": r} for c, r in rows]), key="trials")
-cairn.track({"solver_log": solver_log})
-cairn.add("checkpoints/best.pt", name="best-checkpoint")
-cairn.add("optimization.mp4", name="optimization")
+run.log(loss=loss, psnr=psnr, step=step)
+run.log(running_rmse=cairn.Figure(plotly_figure), step=step)
+run.log(reconstruction=cairn.Image(array), step=step)
+run.log({"trials": cairn.Table([{"condition": c, "rmse": r} for c, r in rows])})
+run.log({"preview": cairn.File("optimization.mp4"), "step": step})
+run.add("checkpoints/best.pt", "best-checkpoint")
+run.log(checkpoints=cairn.Directory("checkpoints"))
 ```
 
-`track` uses `key=`, not `name=`; metadata such as step goes in its second
-argument. Audio/video/text can be added as files; there are no `Video`,
-`Audio`, or `Text` wrapper classes in this release. Typed values select
-interpretation; ordinary dictionaries/lists are JSON, never implicit pickle.
+Values are null, booleans, numbers, text, bytes, lists, maps, `File`, `Directory`,
+`Ref`, and the typed `Image`, `Array`, `Table`, `Figure` (Matplotlib or Plotly).
+Audio and video are `File`s. Keys starting with `_` are Cairn's. Nothing is pickled.
+A file may change once `log` returns; `File(path, immutable=True)` saves a copy
+when it will not change before the run ends.
 Preserve complete scientific tables and arrays, not just presentation subsets.
 The output of every expensive stage is recorded completely enough that every
 figure, table, and number derived from it can be recomputed from the record
 alone (SKILL.md: "Store what is expensive; recompute only what is cheap").
 
-Run records retain repeated steps. Read `client.get(run_id).records()`; each
-row is the logged dictionary, including metrics and optional `step`. Config is
-`reader.config`; `reader.files` lists
-added files and `reader.file(name)` returns one (`.load()`, `.open()`). There
-are no implicit `metrics.jsonl` or `summary.json` snapshot folders. Cairn captures bounded console output by default. Record scientific metrics
-and system measurements explicitly; console capture does not supply them.
+```python
+with cairn.Client() as client:
+    run = client.get("runs/a@v1")
+    run["loss"], run.config, run.outcome      # current values
+    run["trials"].load(); run["reconstruction"].array()
+    run.series("loss", x="step")              # pairs
+    for ordinal, record in run.records(): ...
+    run.files("checkpoints/**"); run.read("best-checkpoint"); run.download("copy")
+    client.find("runs/ours-*", where=["min(loss) < 0.1", "_config/lr = 0.001"], order="-psnr", values=["psnr"])
+```
+
+There are no `metrics.jsonl` or `summary.json` snapshot folders. Console output is
+captured by default; it does not supply scientific metrics or system
+measurements, so log those explicitly.
 
 Use stable file names, columns, and units across experiments. Record the
 generating module/function and material plotting settings beside each figure
@@ -473,78 +461,67 @@ directly. Separate result artifacts are optional.
 
 ## Artifacts: datasets, models, and results
 
-References are `namespace/name@vN`, `namespace/name@alias`, or full plain
-artifact IDs, resolved inside the selected project. Names may contain slashes.
-Use full IDs for cross-project inputs and exact `@vN` references or IDs for
-reviewed evidence a run reads. Report embeds are not inputs and may use
-`@latest`. A run keeps its ID when it finishes and receives a version
-label like any other artifact. There are no `artifact:`/`run:` prefixes,
-separate revision IDs, or snapshot-digest suffixes.
+References are `namespace/name@vN`, `namespace/name@alias`, `@live`, `@latest`
+(the newest completed version, also without a selector), or an ID, inside the
+selected project. Names may contain slashes. Use IDs for cross-project inputs and
+exact `@vN` references for reviewed evidence a run reads. What a report shows is
+not an input and may use `@latest`. A run gets its version when it finishes.
 
-Finished content is immutable. Mutable `annotations` hold tags, titles or
-review status; they do not change captured evidence. `latest` is a movable
-alias, not evidence of successful validation. Check outcomes and producers.
+A finished artifact never changes. Tags (`client.tag`) and aliases
+(`client.alias(run, "best")`, one version of a name) may. Check outcomes and
+producers.
 
 ### Register and consume datasets without redundant copies
 
 Choose storage by ownership, lifetime, and where consumers run. Importing a
-small portable dataset by value (`finish(value=Directory(path))`) copies its
-bytes into Cairn. For an existing immutable archive whose files must remain in
+small portable dataset with `add(path)` copies its bytes into Cairn. For an existing immutable archive whose files must remain in
 place, use native linked-file registration instead of a JSON path/checksum
 manifest. Register once, document origin/license/validation, and retain its exact
 reference:
 
 ```python
-from pathlib import Path
-from cairn import Client
+import cairn
 
-with Client(project="<project>") as client:
-    with client.start("datasets", "measurements") as dataset:
-        dataset.add(Path("data/measurements").resolve(), name="files", link=True)
-        dataset.update({"origin": "<source>", "validation": "<checks>"})
-    print(str(client.get(dataset.id)))       # datasets/measurements@vN
+with cairn.artifact("datasets", "measurements") as dataset:
+    dataset.log(files=cairn.Directory("data/measurements", link=True),
+                origin="<source>", validation="<checks>")
+print(dataset.ref)                           # datasets/measurements@vN
 ```
 
 Consumers declare the artifact; local linked access leaves bytes in place:
 
 ```python
 source = run.use(cfg.dataset, role="observations")
-with source.file("files").open("part-01.csv") as stream:
+with source.open("files/part-01.csv") as stream:
     # Stream or parse only the needed file.
     ...
 # For a library requiring a path, select one file rather than the whole archive:
-path = source.file("files").download(name="part-01.csv")
+[path] = source.download(output_dir / "inputs", "files/part-01.csv")
 ```
 
 Dataset inspections are analysis runs too: they read the dataset with these
-operations and add the tables and figures a report embeds. Imported datasets need documented source and
+operations and log the tables and figures a report shows. Imported datasets need documented source and
 validation, not an invented producer run. Computed results stay on the producing
 run by default.
 
 Important access and storage distinctions:
 
 - **Linking** hashes files at registration and retains their locations instead
-  of storing another copy. Keep those locations persistent and immutable;
-  local reads check recorded size/mtime, not a full hash on every access.
-  Local downloads of linked content create symlinks. Do not edit through them.
-- **Remote access** requires the server to see the paths under its configured
-  `--link-root` folders. `link=True` can warn and fall back to copying when
-  linking is unsupported; it is not a strict no-copy option. Where copying is
-  unacceptable, verify server path visibility/link roots before registration
-  or report the access constraint. Remote readers transfer bytes; they do not
-  automatically reuse a client's shared-filesystem mount. Exports copy bytes.
-- **Deduplication** reuses identical stored blob bytes. It does not eliminate
-  repeated hashing, different encodings of the same data, or all downloads.
-  Normal downloads use a content-addressed cache and hard links where possible;
-  a different filesystem may require a copy. Prefer `.open(name)` or selective
-  `.download(name=...)` over downloading an entire dataset for each run.
+  of storing another copy. Keep those locations persistent and immutable: reads
+  check size and time, and a changed file counts as missing. `open` reads in
+  place; `download` copies.
+- **Remote access** requires the server to see the paths below its `--link-root`
+  folders; the client uploads anything else. `link=True` is therefore not a strict
+  no-copy option. Where copying is unacceptable, verify the server's link roots
+  before registration or report the constraint. Remote readers transfer bytes.
+- **Deduplication** stores identical bytes once. It does not eliminate repeated
+  hashing, different encodings of the same data, or downloads. Prefer
+  `.open(path)` or `.download(to, pattern)` over downloading a whole dataset for
+  each run.
 - **Generated data** should have one durable recorded representation unless
   distinct consumers justify more. Link generated outputs only when their
   location is retained and immutable; temporary scratch is not durable storage.
-- **Many-file directories** are stored as paged indexes (version 2
-  directories), so large datasets upload and page in bounded parts; see the
-  large-datasets guide in Cairn's `docs/datasets.md`. Prefer one dataset
-  directory over hand-made shards.
+- **Many files** are one `Directory`; do not shard by hand.
 
 Ignore raw archives and generated data before the first commit and run, including
 custom directory names outside `data/`, so native provenance does not copy them.
@@ -552,15 +529,12 @@ A hand-written external path manifest does not replace a linked dataset: it
 bypasses native retrieval and integrity behavior. Keep path handling in the
 Cairn API instead of building a second data registry.
 
-Download a whole artifact only when needed with
-`client.get(ref).download(to="artifacts/dataset-v1")`. Without `to`, downloads use
-`<cache>/artifacts/<id>/` (`$CAIRN_CACHE_DIR`, default `~/.cache/cairn`).
-Remove an artifact only when the user asks: `pixi run cairn --project <project>
-remove <ref>` hides that exact version, `latest` falls back, and dependents keep
-it readable by ID; `pixi run cairn gc --apply` later reclaims storage, on the
-server when the repo is a URL.
+Download a whole artifact only when needed, with
+`client.get(ref).download("artifacts/dataset-v1")`. Delete one only when the user
+asks: `cairn delete <ref>` hides that version (`cairn restore` brings it back),
+and `cairn collect` frees the space for good, so confirm that separately.
 Record experiment outputs on their run by default. If publishing a separate
-result artifact, retain a `producer` dependency on the completed run; do not
+result artifact, keep `use(run, role="producer")` of the completed run; do not
 disguise experiment results as runless dataset imports. Register external files as stored bytes or native links before reports consume
 them; do not substitute untracked filesystem reads.
 
@@ -576,13 +550,12 @@ They can be valid evidence without that gate: check their completed outcome,
 source, integrity, and fitness for the question. Do not fabricate producer runs
 just to make an import pass a computed-results check.
 
-Use `run.use(ref)` for exact input dependencies, `result.use(run.id,
-role="producer")` after run completion, and `summary.use(trial.id, role="trial")`
-for studies. The UI shows dataset → run lineage, with a separate result node
-when explicitly published. Reports are not part of the lineage: their `cairn:`
-embeds are resolved when the page is shown.
-A report embeds whatever version a reference names, including failed
-outcomes; the project's completed-evidence policy is intentionally stricter.
+Use `run.use(ref, role=...)` for inputs, `result.use(run, role="producer")` after the
+run completed, and `summary.use(trial_id, role="trial")` for studies.
+`reader.uses()` and `used_by()` give `(path, artifact)` pairs, where the path is
+`_use/<role>`; the pages show them both ways. Reports are not part of this: their
+references are resolved when shown, and may name a failed version. The project's
+completed-evidence policy is intentionally stricter.
 
 ### The sample artifact
 
@@ -591,25 +564,25 @@ result. Import it into the selected project, one file per name:
 
 ```python
 from pathlib import Path
-from cairn import Client
+import cairn
 root = Path("<skill-directory>/assets/sample-run")
-with Client(project="<project>") as client:
-    sample = client.start("datasets", "sample-run")
+about = {"origin": "research-project skill sample", "synthetic": True}
+with cairn.artifact("datasets", "sample-run", about=about) as sample:
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        sample.add(path, name=path.relative_to(root).as_posix())
-    sample.finish(metadata={"origin": "research-project skill sample", "synthetic": True})
+        sample.add(path, path.relative_to(root).as_posix())
 ```
 
-As a smoke test of the repository and the UI, create a scratch report that
-embeds one of its figures, open it in `pixi run ui`, then delete it:
+As a smoke test, open the sample in the pages and look at one of its figures.
+When a cairn-ui runs, also check reports (a scratch report of your own, deleted
+again):
 
 ```bash
 printf '# Scratch\n\n![Sample grid](cairn:datasets/sample-run@latest#figures/grid.svg)\n' \
-  | pixi run cairn report new scratch - --owner agent
-pixi run cairn report delete scratch
+  | pixi run cairn-ui report write scratch
+pixi run cairn-ui report delete scratch
 ```
 
-The sample may remain stored, but no real report may embed it.
+The sample may remain stored, but no real report may show it.
 
 ## Running on a cluster
 
@@ -630,43 +603,40 @@ The lab's own GPU workstations (fermat, kerr, gabor, arago) form a HyperQueue
 cluster with no billing and no shared filesystem: the `hyperqueue` skill
 supplies `pixi run hq ...` and a Hydra launcher in `hydra_plugins/`. Each
 checkout must target the same user-authorized Cairn server/project, with its
-own durable journal and protected credentials.
+own outbox and protected credentials.
 
-**Legacy adapter compatibility is not automatic.** HyperQueue assets may still
-use old Cairn distribution/extras, `remote set`, `${cairn.run:}`, or
-`finalize-study`. Those calls do not work with Cairn2 0.13.1.
-Preserve their scheduling, storage, and GPU-efficiency rules, but adapt and
-test the project's tracking glue with the current public helper/commands
-before submitting work. Do not silently edit the adjacent skills or claim
-that copying their old files produces a working integration.
+**Scheduler assets may be written for an older Cairn.** The HyperQueue skill's
+files still use `${cairn.run:}`, drafts, callbacks, `remote set`, and its own hub on
+port 4320, none of which work with v0.18. Keep their scheduling, storage, and
+GPU-efficiency rules, but adapt and test the project's tracking glue before
+submitting; Cairn's `examples/` has a Hydra sweep for Slurm, PBS, and HyperQueue.
+Do not edit the adjacent skills, and do not touch that hub.
 
 Each cluster trial uses the same run/provenance/completed-evidence contract as
 a local job, with its own `outputs/` bookkeeping/scratch folder. When a launcher dies,
-confirm its jobs have left the queue, sync their journals, and explicitly
+confirm its jobs have left the queue, run `cairn recover` where they ran, and explicitly
 finalize the saved expected roster. Missing or non-completed trials prevent
 a successful summary. Commit before submitting runs a report will cite;
 initial provenance records the actual source and Git state.
 
-**Getting cluster runs out.** Keep the project's source and recoverable
-journals on storage permitted by the cluster skill. Use an explicit remote
+**Getting cluster runs out.** Keep the project's source and outbox on storage permitted by the cluster skill. Use an explicit remote
 server for shared/network project filesystems; do not place a multi-host
 SQLite repository there:
 
 - **One server on a machine with a local disk.** The user runs `cairn --repo <path> server` on a workstation or service host, never on a compute node or
   with its local repository on a shared filesystem, behind HTTPS or a VPN.
   Use its actual configured port; the project is a separate namespace.
-- **The project names it.** Configure `CAIRN_REPO` or the `.cairn.toml` `repo`
-  as the server URL and authenticate with a protected token file.
+- **The project names it.** Set `repo` in `.cairn.toml` (or `CAIRN_REPO`) to the
+  server's URL, with a protected token file.
   Never put credentials in tracked configs or job scripts.
-- **Jobs retain durable journals.** Each job's uploader retries automatically.
-  Preserve the repo-specific outbox under `<state>/outbox/`
-  until confirmed; `Client.recover()` and `flush()` retry on a host that can
-  reach the server, using the same recovered outbox location. Verify the finished backend runs and exact artifacts before building
-  or publishing evidence. A node-local scratch journal must be recovered
-  before the allocation deletes it.
+- **Jobs keep an outbox.** It sends by itself while the job runs. What a killed
+  job left is sent by `cairn recover` with the same `CAIRN_STATE_DIR`, on a host
+  that reaches the server. Verify that the runs are finished before citing them. A
+  node-local `CAIRN_STATE_DIR` must be recovered before the allocation deletes it.
+- **Checkpoint for cancellation.** A job that the scheduler ends is `cancelled`; its
+  continuation reads the checkpoint with `use(ref, incomplete=True)`.
 
-Reports live in the evidence repository with the runs; nothing about them is
-built or moved locally.
+Reports are not involved: nothing about them is built or moved.
 
 ## Parameter studies
 
@@ -682,7 +652,7 @@ supported, and both must keep every configuration's result inspectable:
   planned trial (record a trial label in config; each trial has its own run
   name ending in the varied values, see Run names). Do not infer the expected roster from only successful jobs.
   Finalize explicitly with the helper below; no automatic study callback is
-  assumed. A report embeds the summary run's tables or an analysis run over
+  assumed. A report shows the summary run's tables or an analysis run over
   the trials. Failures stay visible and prevent a completed study summary.
 - **An in-run grid** when the configurations are evaluation conditions of one
   experiment, such as noise levels or contamination rates applied to the same

@@ -12,8 +12,8 @@ checks are reproducible; R6 applies only when baselines/variants are relevant.
 Mark an item not applicable with a short reason when necessary; do not invent a
 method, baseline, literature review, or architecture figure to satisfy it.
 
-Read the report as its reader sees it: in the Cairn UI, with its embedded
-figures and tables, not only the Markdown from `cairn report show`. Pretend you have
+Read the report as its reader sees it: in cairn-ui, with its
+figures and tables, not only the Markdown from `cairn-ui report show`. Pretend you have
 not seen the code or the conversation. Open every figure that the Methods
 section relies on and look at it.
 
@@ -61,13 +61,13 @@ alone.
 - **R8 claims**: the header's claim and status, the abstract, and the
   conclusion claim no more than the evidence shown supports, and the setup says
   where it was tested. Smoke tests and proxies are not presented as evidence,
-  every result is a table, value, or figure embedded from a completed run, and
+  every result is a table, value, or figure shown from a completed run, and
   no result number is typed into the text (a typed design constant is fine).
 - **R9 concise**: there is no padding, filler, or repetition between sections,
   and the length fits the content.
 
 ## After the review
 
-Fix every failed item and write the report again. Fix the problem, not
+Fix every failed item in the report. Fix the problem, not
 the wording that revealed it: never pad a section to make an item pass. Then
 finish, and tell the user which items, if any, you left open and why.
