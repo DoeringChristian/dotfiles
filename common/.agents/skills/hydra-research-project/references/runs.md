@@ -91,6 +91,7 @@ A standard Hydra function (`assets/run.py`):
 
 ```python
 import logging
+import time
 from pathlib import Path
 import hydra
 from hydra.core.hydra_config import HydraConfig
@@ -102,10 +103,11 @@ log = logging.getLogger(__name__)
 def main(cfg: DictConfig) -> None:
     out = Path(HydraConfig.get().runtime.output_dir)
     model = hydra.utils.instantiate(cfg.model)
+    start = time.monotonic()
     for step in range(cfg.steps):
         ...
         if step % cfg.log_every == 0:
-            log.info("step %d loss %.4g", step, loss)
+            log.info("step %d/%d loss %.4g elapsed %.0fs", step, cfg.steps, loss, time.monotonic() - start)
     ...                    # write outputs into `out`
     validate(...)          # raise on failure: the job fails and latest stays
 ```
@@ -138,6 +140,9 @@ small and stable across the project.
 
 Write with the libraries the project already uses, in formats anyone can open:
 
+- **Progress**: each `log_every` line carries the step out of the total and the
+  elapsed time (`step 12000/20000 ... elapsed 16800s`), so anyone can read the
+  rate and an ETA from the log.
 - **Scalars over time**: `log.info` for the log, plus a file to plot from: a CSV
   with one row per observation (`step, split, loss, ...`), or the framework's
   own logger pointed at `out` (Lightning's `CSVLogger` or `TensorBoardLogger`

@@ -2,6 +2,7 @@
 output folder."""
 
 import logging
+import time
 from pathlib import Path
 
 import hydra
@@ -21,12 +22,13 @@ def main(cfg: DictConfig) -> None:
     y = 2.0 * x + 0.5 + rng.normal(0.0, cfg.data.noise, x.shape)
 
     w = np.zeros(2)
+    start = time.monotonic()
     history = []
     for step in range(cfg.steps + 1):
         residual = w[0] * x + w[1] - y
         loss = float(np.mean(residual**2))
         if step % cfg.log_every == 0:
-            log.info("step %d loss %.4g", step, loss)
+            log.info("step %d/%d loss %.4g elapsed %.1fs", step, cfg.steps, loss, time.monotonic() - start)
             history.append((step, loss))
         if step < cfg.steps:
             w -= 0.5 * np.array([np.mean(2 * residual * x), np.mean(2 * residual)])

@@ -101,6 +101,52 @@ Read the reference a step needs before doing that step.
     Never hide failed trials or cells; a study summary checks that every
     expected trial finished. Start coarse and size the study to the decision.
 
+## Before starting a run
+
+When the user asks for a run or a sweep, first show what will run as a short
+table and wait for their go-ahead; start only after they confirm (they may
+change values first). Build it from the composed config
+(`pixi run <task> <overrides> --cfg job --resolve`), not from memory, and
+describe each part in a few words, in the project's terms. Use the rows the
+task has; a training run might show:
+
+| Part        | Setting                                  | Note                       |
+| ----------- | ---------------------------------------- | -------------------------- |
+| Run         | `ours-ai57_008-w64` on Kuma              | 3 jobs, about 2 h each     |
+| Input       | scene `ai57_008`, 64 views, 512×512      |                            |
+| Model       | MLP, width 64, 4 layers, hash encoding   | width was 128 last run     |
+| Objective   | L1 on RGB + 0.01 TV                      |                            |
+| Optimizer   | Adam, lr 1e-3                            |                            |
+| Schedule    | cosine to 1e-5, 20k steps, batch 4096    |                            |
+| Seeds       | 0, 1, 2                                  | 3 trials                   |
+| Validation  | PSNR ≥ 30 dB on held-out views           | the run fails otherwise    |
+
+A renderer, a solver, or an analysis run has other parts (integrator and sample
+count, mesh and tolerances, which run folders it reads); leave out parts the
+task does not have. In the Note column, mark what differs from the defaults or
+from the last run of the same name, and give the sweep's values and trial count.
+Below the table, give the exact command that will run.
+
+**ETAs for large experiments.** Anything longer than a few minutes (a long run,
+a sweep, a cluster submission) gets a time estimate:
+
+- **Before:** in the table, the expected duration and finish time (clock time,
+  `~2 h, done about 16:30`; for a sweep, per trial and in total with how many run
+  at once, plus queue wait on a cluster if known). Base it on a measured time per
+  step or trial from a smoke run or an earlier run of the same name, and say
+  which; if nothing was measured, say it is a guess.
+- **While it runs:** whenever you report on it, give progress and an updated
+  ETA (`trial 7/24, step 12k/20k, ~1.4 s/step, done about 17:10`), computed from
+  the log, not from the original estimate. Say when it is running much slower
+  than expected, or stuck in a queue.
+- **After:** the actual duration next to the estimate, so later estimates improve.
+
+Runs therefore log their step and elapsed time at `log_every`, so progress can
+be read from the log.
+Smoke tests and short debugging runs you start yourself need no table, but
+say what they are. After starting, give the run folder (or the remote launch
+log or job ID) so the user can find it.
+
 ## Project layout
 
 Illustrative; add only the entry points and modules the work needs.
